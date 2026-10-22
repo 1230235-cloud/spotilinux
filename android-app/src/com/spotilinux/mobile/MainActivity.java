@@ -1,0 +1,550 @@
+package com.spotilinux.mobile;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.ContentResolver;
+import android.content.ContentUris;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.provider.OpenableColumns;
+import android.view.Window;
+import android.view.WindowManager;
+import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+
+public class MainActivity extends Activity {
+    private static MainActivity instance;
+    private WebView webView;
+    private ValueCallback<Uri[]> filePathCallback;
+    private static final int FILE_CHOOSER_RESULT_CODE = 1001;
+    private static final int PERMISSIONS_REQUEST_CODE = 1002;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        instance = this;
+
+        Window window = getWindow();
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.setStatusBarColor(Color.parseColor("#000000"));
+        window.setNavigationBarColor(Color.parseColor("#000000"));
+
+        requestNecessaryPermissions();
+
+        webView = new WebView(this);
+        webView.setBackgroundColor(Color.parseColor("#000000"));
+
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // User-Agent compatible con inicio de sesión OAuth de Google
+        settings.setUserAgentString(
+                "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        );
+
+        webView.addJavascriptInterface(new AndroidMediaBridge(), "AndroidMedia");
+
+        webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(
+                    WebView webView,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams) {
+                if (MainActivity.this.filePathCallback != null) {
+                    MainActivity.this.filePathCallback.onReceiveValue(null);
+                }
+                MainActivity.this.filePathCallback = filePathCallback;
+
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("audio/*");
+                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+
+                try {
+                    startActivityForResult(Intent.createChooser(intent, "Seleccionar música"), FILE_CHOOSER_RESULT_CODE);
+                } catch (Exception e) {
+                    MainActivity.this.filePathCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        setContentView(webView);
+        webView.loadUrl("file:///android_asset/www/index.html");
+    }
+
+    private void requestNecessaryPermissions() {
+        List<String> perms = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.POST_NOTIFICATIONS);
+            }
+            if (checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.READ_MEDIA_AUDIO);
+            }
+        } else {
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            }
+        }
+        if (!perms.isEmpty()) {
+            requestPermissions(perms.toArray(new String[0]), PERMISSIONS_REQUEST_CODE);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSIONS_REQUEST_CODE) {
+            // Al otorgar permisos de audio, rastrear automáticamente los archivos del dispositivo
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    final String json = performDeviceScanAndSave();
+                    dispatchJs("if(window.onDeviceMusicScanned) window.onDeviceMusicScanned(" + json + ");");
+                }
+            }).start();
+        }
+    }
+
+    /**
+     * Carpeta persistente propia de la aplicación donde se guardan todas las canciones
+     * importadas, rastreadas del teléfono o descargadas de Google Drive:
+     * /storage/emulated/0/Android/data/com.spotilinux.mobile/files/SpotiLinuxMusic
+     */
+    public File getAppMusicFolder() {
+        File base = getExternalFilesDir(null);
+        if (base == null) {
+            base = getFilesDir();
+        }
+        File folder = new File(base, "SpotiLinuxMusic");
+        if (!folder.exists()) {
+            folder.mkdirs();
+        }
+        return folder;
+    }
+
+    private String sanitizeFilename(String name) {
+        if (name == null || name.trim().isEmpty()) return "track_" + System.currentTimeMillis() + ".mp3";
+        String clean = name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        if (!clean.contains(".")) {
+            clean += ".mp3";
+        }
+        return clean;
+    }
+
+    private String buildSavedTracksJson() {
+        JSONArray arr = new JSONArray();
+        File folder = getAppMusicFolder();
+        File[] files = folder.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isFile() && f.length() > 1024) {
+                    String fname = f.getName();
+                    String lower = fname.toLowerCase();
+                    if (lower.endsWith(".mp3") || lower.endsWith(".flac") || lower.endsWith(".wav")
+                            || lower.endsWith(".m4a") || lower.endsWith(".ogg") || lower.endsWith(".opus") || lower.endsWith(".aac")) {
+                        try {
+                            JSONObject obj = new JSONObject();
+                            String stem = fname.replaceFirst("\\.[^.]+$", "").replace("_", " ");
+                            boolean fromDrive = fname.startsWith("gd_");
+                            if (fromDrive && stem.startsWith("gd ")) {
+                                stem = stem.substring(3).trim();
+                            }
+                            String artist = fromDrive ? "Google Drive (Descargada) ✔" : "Carpeta SpotiLinux 📱";
+                            String title = stem;
+                            if (stem.contains(" - ")) {
+                                String[] parts = stem.split(" - ", 2);
+                                artist = parts[0].trim();
+                                title = parts[1].trim();
+                            }
+                            obj.put("id", "saved_" + Math.abs(f.getAbsolutePath().hashCode()));
+                            obj.put("title", title);
+                            obj.put("artist", artist);
+                            obj.put("album", fromDrive ? "Google Drive Offline" : "Biblioteca Guardada");
+                            obj.put("genre", fromDrive ? "Cloud Offline" : "Local");
+                            obj.put("src", f.getAbsolutePath());
+                            obj.put("savedPath", f.getAbsolutePath());
+                            obj.put("cloud", fromDrive);
+                            obj.put("downloaded", true);
+                            arr.put(obj);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+            }
+        }
+        return arr.toString();
+    }
+
+    private String performDeviceScanAndSave() {
+        File destFolder = getAppMusicFolder();
+        ContentResolver resolver = getContentResolver();
+        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+        String[] projection = new String[]{
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.DISPLAY_NAME
+        };
+
+        try (Cursor cursor = resolver.query(uri, projection, null, null, MediaStore.Audio.Media.DATE_ADDED + " DESC")) {
+            if (cursor != null) {
+                int idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
+                int titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
+                int artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
+                int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME);
+
+                int count = 0;
+                while (cursor.moveToNext() && count < 150) {
+                    long id = cursor.getLong(idCol);
+                    String title = cursor.getString(titleCol);
+                    String artist = cursor.getString(artistCol);
+                    String displayName = cursor.getString(nameCol);
+
+                    String ext = ".mp3";
+                    if (displayName != null && displayName.contains(".")) {
+                        ext = displayName.substring(displayName.lastIndexOf('.')).toLowerCase();
+                    }
+
+                    String baseName;
+                    if (artist != null && !artist.equals("<unknown>") && title != null && !title.isEmpty()) {
+                        baseName = artist + " - " + title + ext;
+                    } else if (displayName != null && !displayName.isEmpty()) {
+                        baseName = displayName;
+                    } else {
+                        baseName = "Track_" + id + ext;
+                    }
+
+                    File targetFile = new File(destFolder, sanitizeFilename(baseName));
+                    if (!targetFile.exists() || targetFile.length() < 1024) {
+                        Uri trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
+                        copyUriToFile(trackUri, targetFile);
+                    }
+                    count++;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        return buildSavedTracksJson();
+    }
+
+    private boolean copyUriToFile(Uri uri, File targetFile) {
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             FileOutputStream out = new FileOutputStream(targetFile)) {
+            if (in == null) return false;
+            byte[] buf = new byte[65536];
+            int len;
+            while ((len = in.read(buf)) > 0) {
+                out.write(buf, 0, len);
+            }
+            return targetFile.exists() && targetFile.length() > 512;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String getDisplayNameFromUri(Uri uri) {
+        String result = null;
+        if ("content".equals(uri.getScheme())) {
+            try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (idx >= 0) result = cursor.getString(idx);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (result == null) {
+            result = uri.getLastPathSegment();
+        }
+        return sanitizeFilename(result);
+    }
+
+    public class AndroidMediaBridge {
+        @JavascriptInterface
+        public void playSource(String src, String title, String artist, String album, String authToken) {
+            Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
+            serviceIntent.setAction(MediaPlaybackService.ACTION_PLAY_SOURCE);
+            serviceIntent.putExtra("src", src);
+            serviceIntent.putExtra("title", title);
+            serviceIntent.putExtra("artist", artist);
+            serviceIntent.putExtra("album", album);
+            serviceIntent.putExtra("authToken", authToken != null ? authToken : "");
+            startMediaServiceSafely(serviceIntent);
+        }
+
+        @JavascriptInterface
+        public void togglePlayPause() {
+            Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
+            serviceIntent.setAction(MediaPlaybackService.ACTION_PLAY_PAUSE);
+            startMediaServiceSafely(serviceIntent);
+        }
+
+        @JavascriptInterface
+        public void seekTo(int posMs) {
+            Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
+            serviceIntent.setAction(MediaPlaybackService.ACTION_SEEK);
+            serviceIntent.putExtra("posMs", posMs);
+            startMediaServiceSafely(serviceIntent);
+        }
+
+        @JavascriptInterface
+        public void setRepeat(boolean repeat) {
+            Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
+            serviceIntent.setAction(MediaPlaybackService.ACTION_SET_REPEAT);
+            serviceIntent.putExtra("repeat", repeat);
+            startMediaServiceSafely(serviceIntent);
+        }
+
+        @JavascriptInterface
+        public void setEqBand(int band, float gainDb) {
+            Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
+            serviceIntent.setAction(MediaPlaybackService.ACTION_SET_EQ);
+            serviceIntent.putExtra("band", band);
+            serviceIntent.putExtra("gain", gainDb);
+            startMediaServiceSafely(serviceIntent);
+        }
+
+        @JavascriptInterface
+        public String getSavedTracks() {
+            return buildSavedTracksJson();
+        }
+
+        @JavascriptInterface
+        public String getAppMusicFolderPath() {
+            return getAppMusicFolder().getAbsolutePath();
+        }
+
+        @JavascriptInterface
+        public void scanDeviceMusicAsync() {
+            requestNecessaryPermissions();
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    final String json = performDeviceScanAndSave();
+                    dispatchJs("if(window.onDeviceMusicScanned) window.onDeviceMusicScanned(" + json + ");");
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void downloadDriveTrack(final String fileId, final String title, final String authToken, final String apiKey) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        File folder = getAppMusicFolder();
+                        String safeName = sanitizeFilename("gd_" + title + ".mp3");
+                        File outFile = new File(folder, safeName);
+
+                        String urlStr = "https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media";
+                        if (apiKey != null && !apiKey.isEmpty() && (authToken == null || authToken.isEmpty())) {
+                            urlStr += "&key=" + apiKey;
+                        }
+
+                        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                        conn.setConnectTimeout(15000);
+                        conn.setReadTimeout(30000);
+                        if (authToken != null && !authToken.isEmpty()) {
+                            conn.setRequestProperty("Authorization", "Bearer " + authToken);
+                        }
+
+                        int code = conn.getResponseCode();
+                        if (code != 200) {
+                            // Respaldo enlace directo
+                            conn = (HttpURLConnection) new URL("https://drive.google.com/uc?export=download&id=" + fileId).openConnection();
+                        }
+
+                        try (InputStream in = conn.getInputStream();
+                             FileOutputStream out = new FileOutputStream(outFile)) {
+                            byte[] buf = new byte[65536];
+                            int r;
+                            while ((r = in.read(buf)) > 0) {
+                                out.write(buf, 0, r);
+                            }
+                        }
+
+                        if (outFile.exists() && outFile.length() > 1024) {
+                            String escPath = outFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+                            String escId = fileId.replace("'", "\\'");
+                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true);");
+                        } else {
+                            outFile.delete();
+                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false);");
+                        }
+                    } catch (Exception e) {
+                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false);");
+                    }
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void saveAppStateJson(String json) {
+            try {
+                File f = new File(getFilesDir(), "spotilinux_state.json");
+                try (FileOutputStream out = new FileOutputStream(f)) {
+                    out.write(json.getBytes(StandardCharsets.UTF_8));
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        @JavascriptInterface
+        public String loadAppStateJson() {
+            try {
+                File f = new File(getFilesDir(), "spotilinux_state.json");
+                if (!f.exists()) return "";
+                try (FileInputStream in = new FileInputStream(f);
+                     ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[16384];
+                    int r;
+                    while ((r = in.read(buf)) > 0) {
+                        bos.write(buf, 0, r);
+                    }
+                    return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                }
+            } catch (Exception e) {
+                return "";
+            }
+        }
+    }
+
+    private void startMediaServiceSafely(Intent serviceIntent) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (Exception e) {
+            try {
+                startService(serviceIntent);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    public static void dispatchJs(final String jsCode) {
+        final MainActivity act = instance;
+        if (act != null && act.webView != null) {
+            act.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    act.webView.evaluateJavascript(jsCode, null);
+                }
+            });
+        }
+    }
+
+    public static void dispatchMediaCommandToWeb(final String command) {
+        String safeCmd = command.replace("'", "\\'");
+        dispatchJs("if (window.onNativeMediaCommand) { window.onNativeMediaCommand('" + safeCmd + "'); }");
+    }
+
+    public static void notifyWebProgress(final long posMs, final long durMs, final boolean playing) {
+        dispatchJs("if (window.onNativeProgress) { window.onNativeProgress(" + posMs + ", " + durMs + ", " + playing + "); }");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (webView != null) {
+            webView.resumeTimers();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_RESULT_CODE) {
+            if (filePathCallback != null) {
+                filePathCallback.onReceiveValue(null);
+                filePathCallback = null;
+            }
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                final List<Uri> uris = new ArrayList<>();
+                if (data.getClipData() != null) {
+                    int count = data.getClipData().getItemCount();
+                    for (int i = 0; i < count; i++) {
+                        uris.add(data.getClipData().getItemAt(i).getUri());
+                    }
+                } else if (data.getData() != null) {
+                    uris.add(data.getData());
+                }
+
+                // Copiar permanentemente los archivos seleccionados a la carpeta SpotiLinuxMusic de la app
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        File destFolder = getAppMusicFolder();
+                        for (Uri u : uris) {
+                            String fname = getDisplayNameFromUri(u);
+                            File target = new File(destFolder, fname);
+                            copyUriToFile(u, target);
+                        }
+                        final String json = buildSavedTracksJson();
+                        dispatchJs("if(window.onDeviceMusicScanned) window.onDeviceMusicScanned(" + json + ");");
+                    }
+                }).start();
+            }
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (instance == this) {
+            instance = null;
+        }
+        super.onDestroy();
+    }
+}

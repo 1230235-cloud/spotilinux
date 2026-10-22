@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>SpotiLinux Mobile — Maomao, Playlists &amp; Google Drive</title>
+<style>
+  :root {
+    --bg: #000000;
+    --card: #121212;
+    --card-elev: #1e1e24;
+    --green: #1DB954;
+    --green-bright: #1ed760;
+    --text: #ffffff;
+    --muted: #b3b3b3;
+    --crimson: #a22044;
+    --jade: #2a7666;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  body { display: flex; flex-direction: column; }
+
+  /* Header superior */
+  .top-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px 7px;
+    background: linear-gradient(180deg, #1b3b2b 0%, #090c0a 100%);
+    flex-shrink: 0;
+  }
+  .logo-box { display: flex; align-items: center; gap: 8px; }
+  .logo-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .logo-title { font-size: 17px; font-weight: 900; letter-spacing: 0.4px; }
+  .maomao-pill {
+    background: #1d3c30; color: var(--green-bright);
+    font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;
+    border: 1px solid rgba(29, 185, 84, 0.35); cursor: pointer;
+  }
+
+  /* Contenedor principal adaptable (Vertical = 1 columna, Horizontal = 2 columnas) */
+  .workspace-body {
+    flex: 1; display: flex; flex-direction: column;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 6px 12px 150px; gap: 10px;
+  }
+  .stage-pane { flex-shrink: 0; }
+  .content-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  /* Buscador y acciones rápidas */
+  .search-row { padding: 0 0 8px 0; display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+  .search-input {
+    flex: 1; background: #242429; border: 1px solid #35353d; color: #fff;
+    padding: 8px 12px; border-radius: 20px; font-size: 12px; outline: none; min-width: 0;
+    user-select: text;
+  }
+  .btn-chip {
+    background: #23232a; color: #fff; border: 1px solid #363640;
+    border-radius: 18px; padding: 6px 11px; font-size: 11px; font-weight: 700; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-chip.active { background: var(--green); color: #000; border-color: var(--green); }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Escenario de Maomao + Espectro */
+  .stage-card {
+    background: linear-gradient(180deg, #15241f 0%, #101215 100%);
+    border: 1px solid #243830; border-radius: 14px; padding: 9px;
+    display: flex; flex-direction: column;
+  }
+  .stage-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+  .stage-label { font-size: 11px; font-weight: 800; color: var(--green-bright); letter-spacing: 0.6px; }
+  canvas#maomaoCanvas {
+    width: 100%; height: 175px; display: block; border-radius: 10px;
+    background: radial-gradient(circle at 50% 60%, rgba(29,185,84,0.18), rgba(12,14,16,0.95));
+  }
+  canvas#visCanvas {
+    width: 100%; height: 56px; display: block; margin-top: 6px; border-radius: 8px;
+    background: #0d0e11;
+  }
+
+  /* Lista de canciones */
+  .section-title { font-size: 14px; font-weight: 800; margin: 8px 0 7px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .track-list { display: flex; flex-direction: column; gap: 6px; }
+  .track-item {
+    display: flex; align-items: center; gap: 9px;
+    background: var(--card); padding: 8px 9px; border-radius: 10px;
+    border: 1px solid transparent;
+  }
+  .track-item.playing { border-color: rgba(29, 185, 84, 0.55); background: #18241d; }
+  .track-thumb {
+    width: 42px; height: 42px; border-radius: 8px; background: #282830;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0;
+  }
+  .track-meta { flex: 1; overflow: hidden; min-width: 0; }
+  .track-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-item.playing .track-title { color: var(--green-bright); }
+  .track-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon-action-btn {
+    background: #202028; border: 1px solid #32323e; color: #e0e0e6;
+    font-size: 13px; font-weight: 700; border-radius: 8px; padding: 5px 8px; cursor: pointer; flex-shrink: 0;
+  }
+  .like-btn {
+    background: none; border: none; color: var(--muted); font-size: 18px; padding: 4px 5px; cursor: pointer; flex-shrink: 0;
+  }
+  .like-btn.liked { color: var(--green); }
+
+  /* Tarjetas de Playlists */
+  .playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .playlist-card {
+    background: var(--card-elev); border: 1px solid #2e2e3a; border-radius: 10px;
+    padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+  }
+  .playlist-card.active { border-color: var(--green); background: #182820; }
+  .playlist-card-title { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .playlist-card-sub { font-size: 11px; color: var(--muted); }
+
+  /* Tarjetas de Google Drive y Ecualizador */
+  .cloud-box {
+    background: var(--card-elev); border-radius: 12px; padding: 12px; margin-bottom: 12px;
+    border: 1px solid #30303c;
+  }
+  .cloud-box h3 { color: var(--green-bright); font-size: 14px; margin-bottom: 5px; }
+  .cloud-box p { color: var(--muted); font-size: 11px; margin-bottom: 8px; line-height: 1.35; }
+  .field-group { margin-bottom: 8px; }
+  .field-group label { display: block; font-size: 11px; font-weight: 700; color: #d0d0d8; margin-bottom: 3px; }
+  .field-group input, .field-group textarea {
+    width: 100%; background: #141418; border: 1px solid #383846; color: #fff;
+    padding: 7px 10px; border-radius: 8px; font-size: 12px; user-select: text;
+  }
+
+  /* Ecualizador */
+  .eq-sliders {
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 12px 6px; background: #16161b; border-radius: 12px; margin-top: 6px;
+  }
+  .eq-col { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .eq-col input[type=range] {
+    writing-mode: bt-lr; -webkit-appearance: slider-vertical;
+    width: 24px; height: 100px; accent-color: var(--green);
+  }
+  .eq-val { font-size: 10px; color: var(--green-bright); font-weight: 700; }
+  .eq-freq { font-size: 10px; color: var(--muted); }
+
+  /* Barra reproductora inferior */
+  .player-dock {
+    position: fixed; bottom: 52px; left: 8px; right: 8px;
+    background: rgba(24, 24, 31, 0.97); border: 1px solid #2e2e3a; border-radius: 12px;
+    padding: 7px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.75); z-index: 20;
+  }
+  .dock-top { display: flex; align-items: center; gap: 10px; }
+  .dock-title-box { flex: 1; overflow: hidden; min-width: 0; }
+  .dock-title { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dock-artist { font-size: 11px; color: var(--green-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dock-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .ctrl-btn { background: none; border: none; color: #fff; font-size: 16px; padding: 4px 5px; cursor: pointer; }
+  .ctrl-btn.active { color: var(--green-bright); }
+  .play-circle {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: #000;
+    border: none; font-size: 14px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+  }
+  .seek-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .seek-row span { font-size: 10px; color: var(--muted); min-width: 28px; }
+  .seek-row input[type=range] { flex: 1; accent-color: var(--green); height: 4px; }
+
+  /* Navegación inferior */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 50px;
+    background: #09090b; border-top: 1px solid #1f1f26;
+    display: flex; justify-content: space-around; align-items: center; z-index: 25;
+  }
+  .nav-item {
+    background: none; border: none; color: var(--muted); font-size: 10px; font-weight: 700;
+    display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
+    padding: 4px 10px;
+  }
+  .nav-item .ico { font-size: 15px; }
+  .nav-item.active { color: var(--green-bright); }
+
+  /* Modales flotantes (Inicio de sesión Google Drive / Crear Playlist / Agregar a Playlist) */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-card {
+    background: #1b1b22; border: 1px solid #343444; border-radius: 16px;
+    width: 100%; max-width: 400px; padding: 18px; box-shadow: 0 12px 36px rgba(0,0,0,0.85);
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal-card h3 { color: var(--green-bright); font-size: 16px; margin-bottom: 6px; }
+  .modal-card p { color: var(--muted); font-size: 12px; margin-bottom: 12px; line-height: 1.4; }
+
+  /* Modo Horizontal (Landscape) en Celulares */
+  @media (orientation: landscape), (max-height: 500px) and (min-width: 540px) {
+    .top-header { padding: 5px 14px; }
+    .logo-title { font-size: 15px; }
+    .maomao-pill { padding: 3px 9px; font-size: 10px; }
+    .workspace-body {
+      flex-direction: row; align-items: stretch; overflow: hidden;
+      padding: 6px 12px 94px; gap: 12px;
+    }
+    .stage-pane { width: 42%; max-width: 340px; display: flex; flex-direction: column; }
+    .stage-card { flex: 1; padding: 7px; justify-content: space-between; }
+    canvas#maomaoCanvas { flex: 1; height: calc(100vh - 195px); min-height: 95px; max-height: 165px; }
+    canvas#visCanvas { height: 40px; margin-top: 4px; flex-shrink: 0; }
+    .content-pane { flex: 1; height: 100%; overflow-y: auto; padding-right: 4px; padding-bottom: 16px; }
+    .player-dock {
+      bottom: 38px; left: 8px; right: 8px; padding: 4px 12px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .dock-top { flex: 5; }
+    .seek-row { flex: 4; margin-top: 0; }
+    .play-circle { width: 30px; height: 30px; font-size: 13px; }
+    .bottom-nav { height: 36px; }
+    .nav-item { flex-direction: row; gap: 6px; font-size: 11px; }
+    .nav-item .ico { font-size: 14px; }
+    .eq-col input[type=range] { height: 75px; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Cabecera -->
+  <div class="top-header">
+    <div class="logo-box">
+      <div class="logo-dot"></div>
+      <div class="logo-title">SpotiLinux Mobile</div>
+    </div>
+    <div style="display:flex; gap:6px; align-items:center;">
+      <button class="btn-chip" style="padding:3px 9px; font-size:10px;" onclick="scanPhoneMusic()">🔍 Rastrear Celular</button>
+      <div class="maomao-pill" onclick="cycleMaomaoStyle()">🌿 <span id="lblDanceStyle">Imperial</span></div>
+    </div>
+  </div>
+
+  <!-- Cuerpo principal adaptable -->
+  <div class="workspace-body">
+
+    <!-- Escenario de Maomao + Espectro -->
+    <div class="stage-pane">
+      <div class="stage-card">
+        <div class="stage-top">
+          <span class="stage-label">🌿 MAOMAO BAILANDO AL COMPÁS</span>
+          <div style="display:flex; gap:5px;">
+            <button class="btn-chip" style="padding:3px 8px; font-size:10px;" onclick="cycleMaomaoStyle()">Paso 🐾</button>
+            <button class="btn-chip" style="padding:3px 8px; font-size:10px;" onclick="cycleVisMode()">FFT 📊</button>
+          </div>
+        </div>
+        <canvas id="maomaoCanvas" width="360" height="175" onclick="cycleMaomaoStyle()"></canvas>
+        <canvas id="visCanvas" width="360" height="56" onclick="cycleVisMode()"></canvas>
+      </div>
+    </div>
+
+    <!-- Buscador + Pestañas -->
+    <div class="content-pane">
+      <div class="search-row">
+        <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar canción, artista, playlist..." oninput="renderTracks()" />
+        <button class="btn-chip" onclick="scanPhoneMusic()" title="Rastrear música del dispositivo y guardar en carpeta">📲 Auto-Importar</button>
+        <button class="btn-chip" onclick="document.getElementById('filePicker').click()">📂 Archivos</button>
+        <input type="file" id="filePicker" accept="audio/*" multiple style="display:none" onchange="importLocalFiles(event)" />
+      </div>
+
+      <!-- PESTAÑA 1: INICIO / BIBLIOTECA -->
+      <div id="tab-home" class="tab-pane active">
+        <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;">
+          <button class="btn-chip active" id="flt-all" onclick="setFilter('all')">Todo</button>
+          <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">📱 Guardadas en App</button>
+          <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">♥ Favoritos</button>
+          <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">☁️ Google Drive</button>
+        </div>
+        <div class="section-title">
+          <span id="listHeading">Tu Biblioteca Musical</span>
+          <div style="display:flex; gap:5px;">
+            <button class="btn-chip" style="font-size:10px; padding:4px 9px;" onclick="openCreatePlaylistModal()">＋ Playlist</button>
+            <button class="btn-chip" style="font-size:10px; padding:4px 9px;" onclick="shufflePlayAll()">🔀 Aleatorio</button>
+          </div>
+        </div>
+        <div id="scanBanner" style="font-size:11px; color:var(--green-bright); margin-bottom:6px; display:none;"></div>
+        <div id="trackList" class="track-list"></div>
+      </div>
+
+      <!-- PESTAÑA 2: PLAYLISTS PERSONALIZADAS -->
+      <div id="tab-playlists" class="tab-pane">
+        <div class="section-title">
+          <span>🎵 Mis Playlists</span>
+          <button class="btn-chip active" style="font-size:11px; padding:5px 12px;" onclick="openCreatePlaylistModal()">＋ Crear Nueva Playlist</button>
+        </div>
+        <div id="playlistGrid" class="playlist-grid"></div>
+
+        <div id="activePlaylistBox" class="cloud-box" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div>
+              <h3 id="plViewTitle">Mi Playlist</h3>
+              <p id="plViewDesc" style="margin-bottom:0;">0 canciones</p>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn-chip active" onclick="playSelectedPlaylist()">▶ Reproducir</button>
+              <button class="btn-chip" style="background:#3a1822; border-color:#6e2438;" onclick="deleteSelectedPlaylist()">🗑</button>
+            </div>
+          </div>
+          <div id="playlistTracksList" class="track-list" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 3: GOOGLE DRIVE PRIVADO -->
+      <div id="tab-drive" class="tab-pane">
+        <div class="cloud-box">
+          <h3>☁️ Mi Cuenta de Google Drive</h3>
+          <p>Accede a tu cuenta de Google para buscar automáticamente tu carpeta de música en Drive e importar tus canciones para <b>escucharlas en línea (Stream)</b> o <b>descargarlas a la carpeta de la app</b>.</p>
+
+          <div style="display:flex; gap:6px; margin-bottom:10px;">
+            <button class="btn-chip active" style="flex:1; padding:9px;" onclick="openGoogleSignInPopup()">
+              🔑 Iniciar sesión con cuenta de Google
+            </button>
+            <button class="btn-chip" style="padding:9px;" onclick="autoDiscoverDriveMusic()">
+              🔍 Buscar carpeta Música
+            </button>
+          </div>
+
+          <div class="field-group">
+            <label>Modo predeterminado al importar desde tu Drive:</label>
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <button class="btn-chip active" id="modeStreamBtn" style="flex:1;" onclick="setDriveImportMode('stream')">🎧 Escuchar en Línea</button>
+              <button class="btn-chip" id="modeDownloadBtn" style="flex:1;" onclick="setDriveImportMode('download')">⬇️ Descargar a la App</button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label>Token de Acceso de Google (se autocompleta al iniciar sesión o pégalo aquí):</label>
+            <input type="text" id="gdToken" placeholder="ya29.a0AfH6SM..." />
+          </div>
+          <div class="field-group">
+            <label>Client ID OAuth de Google Cloud (opcional para flujo automático):</label>
+            <input type="text" id="gdClientId" placeholder="123456789-abc.apps.googleusercontent.com" />
+          </div>
+          <div class="field-group">
+            <label>Carpeta de Música en Drive (se detecta sola o pega enlace/ID):</label>
+            <input type="text" id="gdFolder" placeholder="Automático (busca 'Music' / 'Música' en tu Drive)" />
+          </div>
+          <div class="field-group">
+            <label>API Key o Enlaces directos (opcional):</label>
+            <input type="text" id="gdApiKey" placeholder="API Key (AIzaSy...) o enlace https://drive.google.com/..." />
+          </div>
+
+          <div style="display:flex; gap:6px;">
+            <button class="btn-chip active" style="flex:1; padding:9px; font-size:12px;" onclick="autoDiscoverDriveMusic()">
+              ☁️ Auto-Escanear e Importar Drive
+            </button>
+            <button class="btn-chip" style="padding:9px; font-size:12px;" onclick="downloadAllCloudTracks()">
+              ⬇️ Descargar Todas
+            </button>
+          </div>
+          <div id="gdStatus" style="margin-top:7px; font-size:11px; color:var(--green-bright);"></div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 4: ECUALIZADOR DE 5 BANDAS -->
+      <div id="tab-eq" class="tab-pane">
+        <div class="cloud-box">
+          <h3>🎚 Ecualizador Nativo de 5 Bandas</h3>
+          <p>Controla el ecualizador de hardware de Android en tiempo real (funciona incluso con pantalla apagada y audífonos).</p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+            <button class="btn-chip" onclick="applyEqPreset([0,0,0,0,0])">Plano</button>
+            <button class="btn-chip" onclick="applyEqPreset([7.5,5,0,-1,1.5])">Bass Boost</button>
+            <button class="btn-chip" onclick="applyEqPreset([6,3.5,-1.5,3,5.5])">Electrónica</button>
+            <button class="btn-chip" onclick="applyEqPreset([5,3,-2,3.5,5])">Rock</button>
+            <button class="btn-chip" onclick="applyEqPreset([-2,1.5,5.5,4,1])">Vocal</button>
+          </div>
+          <div class="eq-sliders">
+            <div class="eq-col">
+              <span class="eq-val" id="eqv0">0 dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" oninput="setEqBand(0, this.value)" />
+              <span class="eq-freq">60 Hz</span>
+            </div>
+            <div class="eq-col">
+              <span class="eq-val" id="eqv1">0 dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" oninput="setEqBand(1, this.value)" />
+              <span class="eq-freq">230 Hz</span>
+            </div>
+            <div class="eq-col">
+              <span class="eq-val" id="eqv2">0 dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" oninput="setEqBand(2, this.value)" />
+              <span class="eq-freq">910 Hz</span>
+            </div>
+            <div class="eq-col">
+              <span class="eq-val" id="eqv3">0 dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" oninput="setEqBand(3, this.value)" />
+              <span class="eq-freq">3.6 kHz</span>
+            </div>
+            <div class="eq-col">
+              <span class="eq-val" id="eqv4">0 dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" oninput="setEqBand(4, this.value)" />
+              <span class="eq-freq">14 kHz</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL DE BIENVENIDA: ACCESO A CUENTA DE GOOGLE DRIVE AL INICIO + RASTREO DE DISPOSITIVO -->
+  <div id="welcomeModal" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>🌿 ¡Bienvenido a SpotiLinux!</h3>
+      <p>Conecta tu cuenta de <b>Google Drive</b> desde el inicio para buscar automáticamente tu carpeta de música en la nube (para escuchar en línea o descargar), o rastrea la música guardada en tu teléfono.</p>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button class="btn-chip active" style="padding:11px; font-size:13px;" onclick="closeWelcomeAndConnectGoogle()">
+          ☁️ Acceder a mi cuenta de Google Drive
+        </button>
+        <button class="btn-chip" style="padding:10px; font-size:12px;" onclick="closeWelcomeAndScanPhone()">
+          📲 Rastrear y Guardar Música de mi Celular
+        </button>
+        <button class="btn-chip" style="padding:8px; font-size:11px; color:var(--muted);" onclick="closeWelcomeModal()">
+          Continuar ahora
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CREAR NUEVA PLAYLIST -->
+  <div id="createPlaylistModal" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>🎵 Crear Nueva Playlist</h3>
+      <p>Organiza tus canciones locales y de Google Drive en listas personalizadas.</p>
+      <div class="field-group">
+        <label>Nombre de la Playlist:</label>
+        <input type="text" id="newPlName" placeholder="Ej. Favoritas de Maomao 🌿" />
+      </div>
+      <div class="field-group">
+        <label>Descripción (opcional):</label>
+        <input type="text" id="newPlDesc" placeholder="Música para estudiar, viajar o entrenar" />
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn-chip active" style="flex:1; padding:9px;" onclick="confirmCreatePlaylist()">Guardar Playlist</button>
+        <button class="btn-chip" style="padding:9px;" onclick="closeCreatePlaylistModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AÑADIR CANCIÓN A PLAYLIST -->
+  <div id="addToPlaylistModal" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>＋ Añadir a una Playlist</h3>
+      <p id="addTrackToPlSubtitle">Selecciona la playlist donde quieres guardar esta canción:</p>
+      <div id="modalPlaylistChoices" style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;"></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-chip active" style="flex:1; padding:8px;" onclick="closeAddToPlaylistAndCreateNew()">＋ Nueva Playlist</button>
+        <button class="btn-chip" style="padding:8px;" onclick="closeAddToPlaylistModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de Reproducción Flotante -->
+  <div class="player-dock">
+    <div class="dock-top">
+      <div class="dock-title-box">
+        <div class="dock-title" id="nowTitle">Midnight Horizon</div>
+        <div class="dock-artist" id="nowArtist">Neon Pulse • Synthwave</div>
+      </div>
+      <div class="dock-controls">
+        <button class="ctrl-btn" id="btnShuffle" onclick="toggleShuffle()">🔀</button>
+        <button class="ctrl-btn" onclick="prevTrack()">⏮</button>
+        <button class="play-circle" id="btnPlay" onclick="togglePlay()">▶</button>
+        <button class="ctrl-btn" onclick="nextTrack()">⏭</button>
+        <button class="ctrl-btn" id="btnRepeat" onclick="toggleRepeat()">🔁</button>
+      </div>
+    </div>
+    <div class="seek-row">
+      <span id="lblCurTime">0:00</span>
+      <input type="range" id="seekBar" min="0" max="1000" value="0" oninput="seekAudio(this.value)" />
+      <span id="lblDurTime">0:28</span>
+    </div>
+  </div>
+
+  <!-- Barra de Navegación Inferior con 4 Pestañas (Inicio, Playlists, Mi Drive, Ecualizador) -->
+  <div class="bottom-nav">
+    <button class="nav-item active" id="nav-home" onclick="switchTab('home')">
+      <span class="ico">🏠</span><span>Inicio</span>
+    </button>
+    <button class="nav-item" id="nav-playlists" onclick="switchTab('playlists')">
+      <span class="ico">🎵</span><span>Playlists</span>
+    </button>
+    <button class="nav-item" id="nav-drive" onclick="switchTab('drive')">
+      <span class="ico">☁️</span><span>Mi Drive</span>
+    </button>
+    <button class="nav-item" id="nav-eq" onclick="switchTab('eq')">
+      <span class="ico">🎚</span><span>Ecualizador</span>
+    </button>
+  </div>
+
+  <!-- Respaldo WebAudio solo cuando se abre fuera de Android -->
+  <audio id="audioPlayer" crossorigin="anonymous"></audio>
+
+<script>
+const hasNativeAndroid = Boolean(window.AndroidMedia && typeof window.AndroidMedia.playSource === "function");
+
+const DEMO_TRACKS = [
+  { id: "t1", title: "Midnight Horizon", artist: "Neon Pulse", album: "Outrun Dreams 1984", genre: "Synthwave", src: "tracks/01_midnight_horizon.mp3", liked: true, cloud: false, downloaded: true, color: "#ec38bc" },
+  { id: "t2", title: "Rainy Tokyo Coffee", artist: "Kuroshio Beats", album: "Late Night Study", genre: "Lo-Fi Chill", src: "tracks/02_rainy_tokyo_lofi.mp3", liked: true, cloud: false, downloaded: true, color: "#f2994a" },
+  { id: "t3", title: "Emerald Groove", artist: "Solstice Club", album: "Ibiza Sunset", genre: "Deep House", src: "tracks/03_emerald_deep_house.mp3", liked: false, cloud: false, downloaded: true, color: "#1db954" },
+  { id: "t4", title: "Cybernetic Odyssey", artist: "Valkyrie Protocol", album: "Neo-Veracruz 2099", genre: "Electro", src: "tracks/04_cybernetic_odyssey.mp3", liked: false, cloud: false, downloaded: true, color: "#ff2a54" },
+  { id: "t5", title: "Aurora Borealis", artist: "Nordic Echoes", album: "Glacier Reflections", genre: "Ambient", src: "tracks/05_aurora_borealis.mp3", liked: false, cloud: false, downloaded: true, color: "#00d2ff" },
+  { id: "t6", title: "Velvet Starlight", artist: "The Midnight Cruisers", album: "Coastline Drive", genre: "Indie Synthpop", src: "tracks/06_velvet_starlight.mp3", liked: false, cloud: false, downloaded: true, color: "#9b51e0" }
+];
+
+let tracks = [...DEMO_TRACKS];
+let playlists = [
+  { id: "pl_synth", name: "Night Drive & Synthwave", desc: "Sintetizadores retro y bajos profundos", trackIds: ["t1", "t3", "t4", "t6"] },
+  { id: "pl_chill", name: "Botica de Maomao 🌿", desc: "Beats relajantes Lo-Fi y Ambient", trackIds: ["t2", "t5"] }
+];
+let selectedPlaylistId = "pl_synth";
+let pendingTrackIdForPlaylist = null;
+
+let currentIndex = 0;
+let isPlaying = false;
+let shuffleMode = false;
+let repeatMode = false;
+let activeFilter = "all";
+let driveImportMode = "stream"; // "stream" | "download"
+let maomaoStyle = 0;
+const MAOMAO_STYLES = ["Imperial", "Hierbas 🌿", "Neko :3 🐾"];
+let visMode = 0;
+let nativeDurationMs = 28000;
+let currentEqValues = [0, 0, 0, 0, 0];
+
+const audio = document.getElementById("audioPlayer");
+
+/* ---------------- PERSISTENCIA DE ESTADO Y PLAYLISTS ---------------- */
+function savePersistentState() {
+  const cloudTracksOnly = tracks.filter(t => t.cloud && !t.downloaded);
+  const likedIds = tracks.filter(t => t.liked).map(t => t.id);
+  const stateObj = {
+    playlists,
+    likedIds,
+    cloudTracksOnly,
+    gdToken: document.getElementById("gdToken").value.trim(),
+    gdClientId: document.getElementById("gdClientId").value.trim(),
+    gdFolder: document.getElementById("gdFolder").value.trim(),
+    gdApiKey: document.getElementById("gdApiKey").value.trim(),
+    driveImportMode,
+    welcomeDone: localStorage.getItem("welcome_done") === "1"
+  };
+  const raw = JSON.stringify(stateObj);
+  localStorage.setItem("spotilinux_mobile_state", raw);
+  if (hasNativeAndroid && window.AndroidMedia.saveAppStateJson) {
+    try { window.AndroidMedia.saveAppStateJson(raw); } catch (_e) {}
+  }
+}
+
+function loadPersistentState() {
+  let raw = "";
+  if (hasNativeAndroid && window.AndroidMedia.loadAppStateJson) {
+    try { raw = window.AndroidMedia.loadAppStateJson(); } catch (_e) {}
+  }
+  if (!raw) raw = localStorage.getItem("spotilinux_mobile_state") || "";
+  if (raw) {
+    try {
+      const st = JSON.parse(raw);
+      if (Array.isArray(st.playlists) && st.playlists.length > 0) playlists = st.playlists;
+      if (Array.isArray(st.cloudTracksOnly)) {
+        st.cloudTracksOnly.forEach(ct => {
+          if (!tracks.some(x => x.id === ct.id)) tracks.unshift(ct);
+        });
+      }
+      if (Array.isArray(st.likedIds)) {
+        tracks.forEach(t => { if (st.likedIds.includes(t.id)) t.liked = true; });
+      }
+      if (st.gdToken) document.getElementById("gdToken").value = st.gdToken;
+      if (st.gdClientId) document.getElementById("gdClientId").value = st.gdClientId;
+      if (st.gdFolder) document.getElementById("gdFolder").value = st.gdFolder;
+      if (st.gdApiKey) document.getElementById("gdApiKey").value = st.gdApiKey;
+      if (st.driveImportMode) setDriveImportMode(st.driveImportMode);
+      if (st.welcomeDone) localStorage.setItem("welcome_done", "1");
+    } catch (_e) {}
+  }
+
+  // Cargar canciones ya guardadas en la carpeta SpotiLinuxMusic del celular
+  if (hasNativeAndroid && window.AndroidMedia.getSavedTracks) {
+    try {
+      const savedJson = window.AndroidMedia.getSavedTracks();
+      mergeScannedDeviceTracks(JSON.parse(savedJson));
+    } catch (_e) {}
+  }
+}
+
+/* ---------------- ESCANEO AUTOMÁTICO DE MÚSICA DEL CELULAR Y CARPETA DE LA APP ---------------- */
+function mergeScannedDeviceTracks(savedList) {
+  if (!Array.isArray(savedList)) return;
+  let newCount = 0;
+  savedList.forEach(item => {
+    const exists = tracks.some(t => t.src === item.src || t.id === item.id);
+    if (!exists) {
+      tracks.unshift({
+        id: item.id,
+        title: item.title || "Canción del dispositivo",
+        artist: item.artist || "Carpeta SpotiLinux 📱",
+        album: item.album || "Biblioteca Guardada",
+        genre: item.genre || "Local",
+        src: item.src,
+        liked: false,
+        cloud: Boolean(item.cloud),
+        downloaded: true,
+        color: item.cloud ? "#00d2ff" : "#1db954"
+      });
+      newCount++;
+    }
+  });
+  renderTracks();
+  renderPlaylists();
+  if (newCount > 0) {
+    const banner = document.getElementById("scanBanner");
+    banner.style.display = "block";
+    banner.textContent = `✔ ${savedList.length} canciones disponibles en la carpeta de la aplicación (SpotiLinuxMusic).`;
+  }
+}
+
+window.onDeviceMusicScanned = function(savedList) {
+  mergeScannedDeviceTracks(savedList);
+  savePersistentState();
+};
+
+function scanPhoneMusic() {
+  const banner = document.getElementById("scanBanner");
+  banner.style.display = "block";
+  banner.textContent = "🔍 Rastreando música del dispositivo y guardándola en la carpeta SpotiLinuxMusic...";
+  if (hasNativeAndroid && window.AndroidMedia.scanDeviceMusicAsync) {
+    window.AndroidMedia.scanDeviceMusicAsync();
+  } else {
+    document.getElementById("filePicker").click();
+  }
+}
+
+function importLocalFiles(ev) {
+  const files = Array.from(ev.target.files || []);
+  files.forEach((f, i) => {
+    const url = URL.createObjectURL(f);
+    const cleanName = f.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    tracks.unshift({
+      id: "local_" + Date.now() + "_" + i,
+      title: cleanName,
+      artist: "Mi Celular 📱",
+      album: "Archivos Locales",
+      genre: "Local",
+      src: url,
+      liked: false,
+      cloud: false,
+      downloaded: true,
+      color: "#1db954"
+    });
+  });
+  renderTracks();
+  if (files.length > 0) playTrackIndex(0);
+}
+
+/* ---------------- MOTOR DE REPRODUCCIÓN NATIVO ANDROID + CONTROLES ---------------- */
+function playTrackIndex(idx) {
+  if (idx < 0 || idx >= tracks.length) return;
+  currentIndex = idx;
+  const t = tracks[currentIndex];
+  const token = document.getElementById("gdToken").value.trim();
+
+  if (hasNativeAndroid) {
+    isPlaying = true;
+    updatePlayerUI();
+    window.AndroidMedia.playSource(t.src, t.title, t.artist, t.album, t.authToken || token);
+  } else {
+    audio.src = t.src;
+    audio.play().then(() => {
+      isPlaying = true;
+      updatePlayerUI();
+    }).catch(() => {
+      isPlaying = true;
+      updatePlayerUI();
+    });
+  }
+}
+
+function togglePlay() {
+  if (hasNativeAndroid) {
+    if (!isPlaying && currentIndex === 0 && document.getElementById("lblCurTime").textContent === "0:00") {
+      playTrackIndex(currentIndex);
+    } else {
+      window.AndroidMedia.togglePlayPause();
+    }
+    return;
+  }
+  if (!audio.src && tracks.length > 0) {
+    playTrackIndex(currentIndex);
+    return;
+  }
+  if (audio.paused) { audio.play(); isPlaying = true; }
+  else { audio.pause(); isPlaying = false; }
+  updatePlayerUI();
+}
+
+function nextTrack() {
+  if (!tracks.length) return;
+  if (shuffleMode && tracks.length > 1) {
+    let nxt = Math.floor(Math.random() * tracks.length);
+    if (nxt === currentIndex) nxt = (nxt + 1) % tracks.length;
+    playTrackIndex(nxt);
+  } else {
+    playTrackIndex((currentIndex + 1) % tracks.length);
+  }
+}
+
+function prevTrack() {
+  playTrackIndex((currentIndex - 1 + tracks.length) % tracks.length);
+}
+
+function seekAudio(val) {
+  if (hasNativeAndroid) {
+    const targetMs = Math.floor((val / 1000) * nativeDurationMs);
+    window.AndroidMedia.seekTo(targetMs);
+  } else {
+    const dur = audio.duration || 28;
+    audio.currentTime = (val / 1000) * dur;
+  }
+}
+
+function toggleShuffle() {
+  shuffleMode = !shuffleMode;
+  document.getElementById("btnShuffle").classList.toggle("active", shuffleMode);
+}
+
+function toggleRepeat() {
+  repeatMode = !repeatMode;
+  document.getElementById("btnRepeat").classList.toggle("active", repeatMode);
+  if (hasNativeAndroid) {
+    window.AndroidMedia.setRepeat(repeatMode);
+  } else {
+    audio.loop = repeatMode;
+  }
+}
+
+function shufflePlayAll() {
+  shuffleMode = true;
+  document.getElementById("btnShuffle").classList.add("active");
+  nextTrack();
+}
+
+/* Callbacks desde MediaPlaybackService nativo de Android */
+window.onNativeProgress = function(posMs, durMs, playingState) {
+  isPlaying = Boolean(playingState);
+  nativeDurationMs = durMs > 0 ? durMs : 28000;
+  document.getElementById("lblCurTime").textContent = fmtTime(posMs / 1000);
+  document.getElementById("lblDurTime").textContent = fmtTime(nativeDurationMs / 1000);
+  document.getElementById("seekBar").value = Math.min(1000, Math.floor((posMs / nativeDurationMs) * 1000));
+  document.getElementById("btnPlay").textContent = isPlaying ? "⏸" : "▶";
+};
+
+window.onNativeMediaCommand = function(cmd) {
+  if (cmd === "next" || cmd === "ended_next") {
+    nextTrack();
+  } else if (cmd === "prev") {
+    prevTrack();
+  } else if (cmd === "play") {
+    playTrackIndex(currentIndex);
+  } else if (cmd === "toggle") {
+    togglePlay();
+  }
+};
+
+function updatePlayerUI() {
+  const t = tracks[currentIndex];
+  if (t) {
+    const badge = t.cloud ? (t.downloaded ? " ✔" : " ☁️") : "";
+    document.getElementById("nowTitle").textContent = t.title + badge;
+    document.getElementById("nowArtist").textContent = `${t.artist} • ${t.album}`;
+  }
+  document.getElementById("btnPlay").textContent = isPlaying ? "⏸" : "▶";
+  renderTracks();
+}
+
+function fmtTime(sec) {
+  if (!sec || isNaN(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m + ":" + (s < 10 ? "0" : "") + s;
+}
+
+/* ---------------- RENDERIZADO DE CANCIONES Y ACCIONES ---------------- */
+function getFilteredTracks() {
+  const q = (document.getElementById("searchInput").value || "").toLowerCase();
+  return tracks.filter(t => {
+    if (activeFilter === "saved" && !t.downloaded) return false;
+    if (activeFilter === "liked" && !t.liked) return false;
+    if (activeFilter === "cloud" && !t.cloud) return false;
+    if (q && !(t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q) || t.album.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function renderTracks() {
+  const listEl = document.getElementById("trackList");
+  const filtered = getFilteredTracks();
+  listEl.innerHTML = "";
+  const curTrack = tracks[currentIndex];
+
+  filtered.forEach((t) => {
+    const realIdx = tracks.indexOf(t);
+    const div = document.createElement("div");
+    div.className = "track-item" + (curTrack && curTrack.id === t.id ? " playing" : "");
+    div.onclick = () => playTrackIndex(realIdx);
+
+    const thumb = document.createElement("div");
+    thumb.className = "track-thumb";
+    thumb.style.background = `linear-gradient(135deg, ${t.color || '#1db954'}, #181824)`;
+    thumb.textContent = t.cloud ? (t.downloaded ? "✔" : "☁️") : "♪";
+
+    const modeBadge = t.cloud ? (t.downloaded ? " • Guardada Offline ✔" : " • En línea ☁️") : "";
+    const meta = document.createElement("div");
+    meta.className = "track-meta";
+    meta.innerHTML = `<div class="track-title">${t.title}</div>
+                      <div class="track-sub">${t.artist} • ${t.album}${modeBadge}</div>`;
+
+    div.appendChild(thumb);
+    div.appendChild(meta);
+
+    // Si es una pista de Google Drive en línea aún no descargada, mostrar botón ⬇️ Descargar
+    if (t.cloud && !t.downloaded && t.driveId) {
+      const dlBtn = document.createElement("button");
+      dlBtn.className = "icon-action-btn";
+      dlBtn.textContent = "⬇️";
+      dlBtn.title = "Descargar a la carpeta de la aplicación";
+      dlBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        downloadSingleDriveTrack(t, dlBtn);
+      };
+      div.appendChild(dlBtn);
+    }
+
+    // Botón ＋ para agregar a Playlist
+    const plBtn = document.createElement("button");
+    plBtn.className = "icon-action-btn";
+    plBtn.textContent = "＋";
+    plBtn.title = "Añadir a Playlist";
+    plBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      openAddToPlaylistModal(t.id);
+    };
+    div.appendChild(plBtn);
+
+    // Botón ♥ Favorito
+    const likeBtn = document.createElement("button");
+    likeBtn.className = "like-btn" + (t.liked ? " liked" : "");
+    likeBtn.textContent = t.liked ? "♥" : "♡";
+    likeBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      t.liked = !t.liked;
+      savePersistentState();
+      renderTracks();
+    };
+    div.appendChild(likeBtn);
+
+    listEl.appendChild(div);
+  });
+}
+
+/* ---------------- GESTIÓN DE PLAYLISTS EN EL APK ---------------- */
+function renderPlaylists() {
+  const grid = document.getElementById("playlistGrid");
+  grid.innerHTML = "";
+
+  playlists.forEach(pl => {
+    const card = document.createElement("div");
+    card.className = "playlist-card" + (pl.id === selectedPlaylistId ? " active" : "");
+    card.onclick = () => {
+      selectedPlaylistId = pl.id;
+      renderPlaylists();
+    };
+    card.innerHTML = `<div class="playlist-card-title">🎵 ${pl.name}</div>
+                      <div class="playlist-card-sub">${pl.trackIds.length} canciones</div>`;
+    grid.appendChild(card);
+  });
+
+  const activeBox = document.getElementById("activePlaylistBox");
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  if (!curPl) {
+    activeBox.style.display = "none";
+    return;
+  }
+
+  activeBox.style.display = "block";
+  document.getElementById("plViewTitle").textContent = "🎵 " + curPl.name;
+  document.getElementById("plViewDesc").textContent = `${curPl.desc || 'Playlist personalizada'} • ${curPl.trackIds.length} pistas`;
+
+  const plListEl = document.getElementById("playlistTracksList");
+  plListEl.innerHTML = "";
+  curPl.trackIds.forEach(tid => {
+    const t = tracks.find(x => x.id === tid);
+    if (!t) return;
+    const realIdx = tracks.indexOf(t);
+    const row = document.createElement("div");
+    row.className = "track-item";
+    row.onclick = () => playTrackIndex(realIdx);
+    row.innerHTML = `
+      <div class="track-thumb" style="width:36px;height:36px;font-size:14px;background:linear-gradient(135deg,${t.color || '#1db954'},#181824)">♪</div>
+      <div class="track-meta">
+        <div class="track-title">${t.title}</div>
+        <div class="track-sub">${t.artist}</div>
+      </div>
+    `;
+    const rmBtn = document.createElement("button");
+    rmBtn.className = "icon-action-btn";
+    rmBtn.textContent = "✕";
+    rmBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      curPl.trackIds = curPl.trackIds.filter(id => id !== tid);
+      savePersistentState();
+      renderPlaylists();
+    };
+    row.appendChild(rmBtn);
+    plListEl.appendChild(row);
+  });
+}
+
+function openCreatePlaylistModal() {
+  document.getElementById("newPlName").value = "";
+  document.getElementById("newPlDesc").value = "";
+  document.getElementById("createPlaylistModal").classList.add("open");
+}
+
+function closeCreatePlaylistModal() {
+  document.getElementById("createPlaylistModal").classList.remove("open");
+}
+
+function confirmCreatePlaylist() {
+  const name = document.getElementById("newPlName").value.trim() || ("Mi Playlist #" + (playlists.length + 1));
+  const desc = document.getElementById("newPlDesc").value.trim();
+  const newPl = {
+    id: "pl_" + Date.now(),
+    name,
+    desc,
+    trackIds: pendingTrackIdForPlaylist ? [pendingTrackIdForPlaylist] : []
+  };
+  pendingTrackIdForPlaylist = null;
+  playlists.unshift(newPl);
+  selectedPlaylistId = newPl.id;
+  savePersistentState();
+  closeCreatePlaylistModal();
+  renderPlaylists();
+  switchTab("playlists");
+}
+
+function openAddToPlaylistModal(trackId) {
+  pendingTrackIdForPlaylist = trackId;
+  const t = tracks.find(x => x.id === trackId);
+  document.getElementById("addTrackToPlSubtitle").textContent = t ? `Guardar «${t.title}» en:` : "Selecciona una playlist:";
+  const container = document.getElementById("modalPlaylistChoices");
+  container.innerHTML = "";
+  playlists.forEach(pl => {
+    const btn = document.createElement("button");
+    btn.className = "btn-chip";
+    btn.style.textAlign = "left";
+    btn.style.padding = "9px 12px";
+    const already = pl.trackIds.includes(trackId);
+    btn.textContent = `🎵 ${pl.name} (${pl.trackIds.length})` + (already ? " ✔" : "");
+    btn.onclick = () => {
+      if (!pl.trackIds.includes(trackId)) pl.trackIds.push(trackId);
+      pendingTrackIdForPlaylist = null;
+      savePersistentState();
+      renderPlaylists();
+      closeAddToPlaylistModal();
+    };
+    container.appendChild(btn);
+  });
+  document.getElementById("addToPlaylistModal").classList.add("open");
+}
+
+function closeAddToPlaylistModal() {
+  document.getElementById("addToPlaylistModal").classList.remove("open");
+}
+
+function closeAddToPlaylistAndCreateNew() {
+  closeAddToPlaylistModal();
+  openCreatePlaylistModal();
+}
+
+function playSelectedPlaylist() {
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  if (!curPl || !curPl.trackIds.length) return;
+  const firstTrack = tracks.find(x => x.id === curPl.trackIds[0]);
+  if (firstTrack) playTrackIndex(tracks.indexOf(firstTrack));
+}
+
+function deleteSelectedPlaylist() {
+  if (playlists.length <= 1) return;
+  playlists = playlists.filter(p => p.id !== selectedPlaylistId);
+  selectedPlaylistId = playlists[0] ? playlists[0].id : "";
+  savePersistentState();
+  renderPlaylists();
+}
+
+/* ---------------- GOOGLE DRIVE: ACCESO DESDE EL INICIO + AUTO-BÚSQUEDA DE CARPETA MÚSICA + ONLINE/OFFLINE ---------------- */
+function setDriveImportMode(mode) {
+  driveImportMode = mode;
+  document.getElementById("modeStreamBtn").classList.toggle("active", mode === "stream");
+  document.getElementById("modeDownloadBtn").classList.toggle("active", mode === "download");
+}
+
+function openGoogleSignInPopup() {
+  const cid = document.getElementById("gdClientId").value.trim();
+  const st = document.getElementById("gdStatus");
+  if (cid) {
+    const redirect = encodeURIComponent(window.location.href.split("#")[0]);
+    const scope = encodeURIComponent("https://www.googleapis.com/auth/drive.readonly");
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(cid)}&redirect_uri=${redirect}&response_type=token&scope=${scope}&include_granted_scopes=true`;
+    window.location.href = authUrl;
+  } else {
+    // Abrir selector de token OAuth2 de Google para obtener acceso inmediato a Google Drive
+    st.textContent = "🔑 Ingresa o pega tu Token de Google Drive (o Client ID) y pulsa Auto-Escanear.";
+    window.open("https://developers.google.com/oauthplayground/#step1&apisSelect=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.readonly", "_blank");
+  }
+}
+
+function extractDriveId(str) {
+  str = (str || "").trim();
+  let m = str.match(/\/folders\/([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  m = str.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  m = str.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  return str;
+}
+
+async function autoDiscoverDriveMusic() {
+  const token = document.getElementById("gdToken").value.trim();
+  let folderInput = document.getElementById("gdFolder").value.trim();
+  const apiKey = document.getElementById("gdApiKey").value.trim();
+  const st = document.getElementById("gdStatus");
+
+  savePersistentState();
+
+  if (!token && !apiKey && !folderInput) {
+    st.textContent = "⚠️ Inicia sesión con tu cuenta de Google o ingresa tu Token / enlace de carpeta.";
+    return;
+  }
+
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+  let targetFolderId = extractDriveId(folderInput);
+
+  // 1. Si no se especificó carpeta, buscar automáticamente la carpeta "Music" / "Música" / "Musica" en el Drive del usuario
+  if (!targetFolderId && (token || apiKey)) {
+    st.textContent = "🔍 Buscando automáticamente tu carpeta de Música en Google Drive...";
+    try {
+      const folderQuery = "mimeType = 'application/vnd.google-apps.folder' and trashed = false and (name contains 'Music' or name contains 'Musica' or name contains 'Música' or name contains 'SpotiLinux')";
+      let fUrl = `https://www.googleapis.com/drive/v3/files?pageSize=10&fields=files(id,name)&q=${encodeURIComponent(folderQuery)}`;
+      if (apiKey && !token) fUrl += `&key=${encodeURIComponent(apiKey)}`;
+      const fResp = await fetch(fUrl, { headers });
+      if (fResp.ok) {
+        const fData = await fResp.json();
+        if (fData.files && fData.files.length > 0) {
+          targetFolderId = fData.files[0].id;
+          document.getElementById("gdFolder").value = targetFolderId;
+          st.textContent = `📂 Carpeta encontrada automáticamente: «${fData.files[0].name}». Importando canciones...`;
+        }
+      }
+    } catch (_e) {}
+  }
+
+  // 2. Listar archivos de audio (dentro de la carpeta encontrada o en todo el Drive)
+  let added = 0;
+  if (token || apiKey) {
+    try {
+      let q = "trashed = false and (mimeType contains 'audio/' or name contains '.mp3' or name contains '.flac' or name contains '.wav' or name contains '.m4a' or name contains '.ogg')";
+      if (targetFolderId) {
+        q = `'${targetFolderId}' in parents and trashed = false`;
+      }
+      let url = `https://www.googleapis.com/drive/v3/files?pageSize=100&fields=files(id,name,mimeType)&q=${encodeURIComponent(q)}`;
+      if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
+
+      const resp = await fetch(url, { headers });
+      if (resp.ok) {
+        const data = await resp.json();
+        const files = (data.files || []).filter(f =>
+          (f.mimeType && f.mimeType.startsWith("audio/")) ||
+          /\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(f.name || "")
+        );
+
+        for (const f of files) {
+          let streamUrl = `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`;
+          if (apiKey && !token) streamUrl += `&key=${encodeURIComponent(apiKey)}`;
+
+          const cleanTitle = (f.name || f.id).replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+          const trackObj = {
+            id: "gd_" + f.id,
+            driveId: f.id,
+            title: cleanTitle,
+            artist: "Google Drive Cloud ☁️",
+            album: "Mi Google Drive",
+            genre: "Cloud",
+            src: streamUrl,
+            authToken: token,
+            liked: false,
+            cloud: true,
+            downloaded: false,
+            color: "#00d2ff"
+          };
+
+          const existingIdx = tracks.findIndex(x => x.id === trackObj.id);
+          if (existingIdx >= 0) tracks[existingIdx] = trackObj;
+          else tracks.unshift(trackObj);
+          added++;
+
+          if (driveImportMode === "download") {
+            downloadSingleDriveTrack(trackObj, null);
+          }
+        }
+      } else {
+        st.textContent = `Aviso de Google Drive (${resp.status}): Verifica tu sesión o permisos.`;
+        return;
+      }
+    } catch (err) {
+      st.textContent = "Error al conectar con Google Drive: " + err.message;
+      return;
+    }
+  } else if (targetFolderId) {
+    // Si pegó un enlace directo de archivo
+    const streamUrl = `https://drive.google.com/uc?export=download&id=${targetFolderId}`;
+    const trackObj = {
+      id: "gd_" + targetFolderId,
+      driveId: targetFolderId,
+      title: "Canción de Drive " + targetFolderId.substring(0, 6),
+      artist: "Google Drive Cloud ☁️",
+      album: "Mi Google Drive",
+      genre: "Cloud",
+      src: streamUrl,
+      liked: false,
+      cloud: true,
+      downloaded: false,
+      color: "#00d2ff"
+    };
+    tracks.unshift(trackObj);
+    if (driveImportMode === "download") downloadSingleDriveTrack(trackObj, null);
+    added++;
+  }
+
+  savePersistentState();
+  renderTracks();
+  st.textContent = `✔ ${added} canciones de Google Drive listas (${driveImportMode === 'download' ? 'Descargando a la app...' : 'Modo En Línea'}).`;
+  if (added > 0) switchTab("home");
+}
+
+function downloadSingleDriveTrack(trackObj, btnEl) {
+  if (!trackObj || !trackObj.driveId) return;
+  if (btnEl) btnEl.textContent = "⏳";
+  const token = document.getElementById("gdToken").value.trim();
+  const apiKey = document.getElementById("gdApiKey").value.trim();
+
+  if (hasNativeAndroid && window.AndroidMedia.downloadDriveTrack) {
+    window.AndroidMedia.downloadDriveTrack(trackObj.driveId, trackObj.title, token, apiKey);
+  }
+}
+
+function downloadAllCloudTracks() {
+  const cloudPending = tracks.filter(t => t.cloud && !t.downloaded && t.driveId);
+  if (!cloudPending.length) {
+    document.getElementById("gdStatus").textContent = "Todas las pistas de Drive ya están descargadas o no hay pistas pendientes.";
+    return;
+  }
+  document.getElementById("gdStatus").textContent = `⬇️ Descargando ${cloudPending.length} canciones a la carpeta SpotiLinuxMusic...`;
+  cloudPending.forEach(t => downloadSingleDriveTrack(t, null));
+}
+
+window.onDriveTrackDownloaded = function(fileId, savedPath, ok) {
+  if (!ok || !savedPath) return;
+  const t = tracks.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
+  if (t) {
+    t.src = savedPath;
+    t.downloaded = true;
+    t.artist = "Google Drive (Descargada) ✔";
+  }
+  savePersistentState();
+  renderTracks();
+};
+
+/* ---------------- MODAL DE BIENVENIDA AL INICIAR LA APP ---------------- */
+function closeWelcomeModal() {
+  localStorage.setItem("welcome_done", "1");
+  document.getElementById("welcomeModal").classList.remove("open");
+  savePersistentState();
+}
+
+function closeWelcomeAndConnectGoogle() {
+  closeWelcomeModal();
+  switchTab("drive");
+}
+
+function closeWelcomeAndScanPhone() {
+  closeWelcomeModal();
+  scanPhoneMusic();
+}
+
+/* ---------------- ECUALIZADOR NATIVO ---------------- */
+function setEqBand(idx, val) {
+  const num = parseFloat(val);
+  currentEqValues[idx] = num;
+  document.getElementById("eqv" + idx).textContent = (num > 0 ? "+" : "") + num + " dB";
+  if (hasNativeAndroid && window.AndroidMedia.setEqBand) {
+    window.AndroidMedia.setEqBand(idx, num);
+  }
+}
+
+function applyEqPreset(vals) {
+  const sliders = document.querySelectorAll(".eq-col input[type=range]");
+  vals.forEach((v, i) => {
+    if (sliders[i]) sliders[i].value = v;
+    setEqBand(i, v);
+  });
+}
+
+/* ---------------- NAVEGACIÓN Y FILTROS ---------------- */
+function switchTab(tab) {
+  ["home", "playlists", "drive", "eq"].forEach(k => {
+    document.getElementById("tab-" + k).classList.toggle("active", k === tab);
+    document.getElementById("nav-" + k).classList.toggle("active", k === tab);
+  });
+  if (tab === "playlists") renderPlaylists();
+}
+
+function setFilter(flt) {
+  activeFilter = flt;
+  ["all", "saved", "liked", "cloud"].forEach(k => {
+    document.getElementById("flt-" + k).classList.toggle("active", k === flt);
+  });
+  renderTracks();
+}
+
+function cycleMaomaoStyle() {
+  maomaoStyle = (maomaoStyle + 1) % MAOMAO_STYLES.length;
+  document.getElementById("lblDanceStyle").textContent = MAOMAO_STYLES[maomaoStyle];
+}
+
+function cycleVisMode() {
+  visMode = (visMode + 1) % 2;
+}
+
+/* ---------------- LIENZOS ADAPTATIVOS Y ANIMACIÓN 60 FPS ---------------- */
+const mmCanvas = document.getElementById("maomaoCanvas");
+const mmCtx = mmCanvas.getContext("2d");
+const vCanvas = document.getElementById("visCanvas");
+const vCtx = vCanvas.getContext("2d");
+let phase = 0;
+
+function syncCanvasDimensions() {
+  const rectM = mmCanvas.getBoundingClientRect();
+  if (rectM.width > 20 && rectM.height > 20) {
+    mmCanvas.width = Math.round(rectM.width);
+    mmCanvas.height = Math.round(rectM.height);
+  }
+  const rectV = vCanvas.getBoundingClientRect();
+  if (rectV.width > 20 && rectV.height > 15) {
+    vCanvas.width = Math.round(rectV.width);
+    vCanvas.height = Math.round(rectV.height);
+  }
+}
+
+window.addEventListener("resize", syncCanvasDimensions);
+window.addEventListener("orientationchange", () => setTimeout(syncCanvasDimensions, 120));
+
+function animateLoop() {
+  requestAnimationFrame(animateLoop);
+
+  let bass = 0, mid = 0, high = 0;
+  if (isPlaying) {
+    const eqBoostBass = Math.max(0.5, 1 + currentEqValues[0] / 18);
+    const eqBoostMid = Math.max(0.5, 1 + currentEqValues[2] / 18);
+    const eqBoostHigh = Math.max(0.5, 1 + currentEqValues[4] / 18);
+    bass = Math.min(1.0, (0.45 + 0.38 * Math.abs(Math.sin(phase * 2.1))) * eqBoostBass);
+    mid = Math.min(1.0, (0.36 + 0.28 * Math.abs(Math.cos(phase * 1.6))) * eqBoostMid);
+    high = Math.min(1.0, (0.30 + 0.24 * Math.abs(Math.sin(phase * 3.2))) * eqBoostHigh);
+  }
+
+  const speed = isPlaying ? (0.095 + (bass * 0.45 + mid * 0.35) * 0.22) : 0.03;
+  phase += speed;
+
+  drawMaomaoStage(bass, mid, high);
+  drawSpectrum(bass, mid, high);
+}
+
+function drawMaomaoStage(bass, mid, high) {
+  const w = mmCanvas.width, h = mmCanvas.height;
+  mmCtx.clearRect(0, 0, w, h);
+
+  const cx = w / 2;
+  const floorY = h - 12;
+  const scaleFactor = Math.min(w / 240, (h - 18) / 168);
+
+  const grad = mmCtx.createRadialGradient(cx, floorY - 55 * scaleFactor, 6, cx, floorY - 55 * scaleFactor, (65 + bass * 40) * scaleFactor);
+  grad.addColorStop(0, `rgba(29, 185, 84, ${0.22 + bass * 0.45})`);
+  grad.addColorStop(0.6, `rgba(162, 32, 68, ${0.12 + mid * 0.25})`);
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  mmCtx.fillStyle = grad;
+  mmCtx.beginPath();
+  mmCtx.arc(cx, floorY - 55 * scaleFactor, 90 * scaleFactor, 0, Math.PI * 2);
+  mmCtx.fill();
+
+  const bounce = isPlaying ? Math.abs(Math.sin(phase * 2)) * (5 + bass * 11) : Math.sin(phase) * 1.5;
+  const swayX = isPlaying ? Math.sin(phase) * (8 + mid * 13) : 0;
+  const headTilt = isPlaying ? Math.sin(phase) * (0.11 + mid * 0.16) : Math.sin(phase * 0.5) * 0.03;
+  const armL = isPlaying ? Math.sin(phase * 2) * (0.42 + mid * 0.60) : 0.1;
+  const armR = isPlaying ? Math.cos(phase * 2) * (0.42 + mid * 0.60) : -0.1;
+
+  mmCtx.save();
+  mmCtx.translate(cx + swayX * scaleFactor, floorY - bounce * scaleFactor);
+  mmCtx.scale(scaleFactor, scaleFactor);
+
+  // Falda carmesí (Hanfu)
+  mmCtx.fillStyle = "#a22044";
+  mmCtx.strokeStyle = "#480d1e";
+  mmCtx.lineWidth = 2;
+  mmCtx.beginPath();
+  mmCtx.moveTo(-17, -52);
+  mmCtx.lineTo(17, -52);
+  mmCtx.lineTo(25, -6);
+  mmCtx.lineTo(-25, -6);
+  mmCtx.closePath();
+  mmCtx.fill();
+  mmCtx.stroke();
+
+  // Chaqueta verde jade de boticaria
+  mmCtx.fillStyle = "#2a7666";
+  mmCtx.beginPath();
+  mmCtx.roundRect(-18, -86, 36, 36, 7);
+  mmCtx.fill();
+  mmCtx.stroke();
+
+  // Cuello cruzado crema
+  mmCtx.strokeStyle = "#eeeae0";
+  mmCtx.lineWidth = 2.8;
+  mmCtx.beginPath();
+  mmCtx.moveTo(-9, -85); mmCtx.lineTo(4, -66);
+  mmCtx.moveTo(9, -85); mmCtx.lineTo(-2, -70);
+  mmCtx.stroke();
+
+  // Cinturón
+  mmCtx.fillStyle = "#ebd2c3";
+  mmCtx.fillRect(-19, -56, 38, 6);
+
+  // Manga izquierda
+  mmCtx.save();
+  mmCtx.translate(-17, -79);
+  mmCtx.rotate(-0.6 + armL);
+  mmCtx.fillStyle = "#2e7e6c";
+  mmCtx.beginPath();
+  mmCtx.roundRect(-28, -5, 28, 13, 5);
+  mmCtx.fill();
+  mmCtx.fillStyle = "#ffe2ce";
+  mmCtx.beginPath(); mmCtx.arc(-29, 1, 5, 0, Math.PI * 2); mmCtx.fill();
+  mmCtx.restore();
+
+  // Manga derecha
+  mmCtx.save();
+  mmCtx.translate(17, -79);
+  mmCtx.rotate(0.6 + armR);
+  mmCtx.fillStyle = "#2e7e6c";
+  mmCtx.beginPath();
+  mmCtx.roundRect(0, -5, 28, 13, 5);
+  mmCtx.fill();
+  mmCtx.fillStyle = "#ffe2ce";
+  mmCtx.beginPath(); mmCtx.arc(29, 1, 5, 0, Math.PI * 2); mmCtx.fill();
+  mmCtx.restore();
+
+  // Cabeza de Maomao
+  mmCtx.save();
+  mmCtx.translate(0, -90);
+  mmCtx.rotate(headTilt);
+
+  if (maomaoStyle === 2) {
+    mmCtx.fillStyle = "#1e583e";
+    mmCtx.beginPath();
+    mmCtx.moveTo(-24, -34); mmCtx.lineTo(-32, -52 - bass * 5); mmCtx.lineTo(-10, -42); mmCtx.fill();
+    mmCtx.beginPath();
+    mmCtx.moveTo(24, -34); mmCtx.lineTo(32, -52 - bass * 5); mmCtx.lineTo(10, -42); mmCtx.fill();
+  }
+
+  const bunBounce = bass * 5;
+  [-1, 1].forEach(sign => {
+    mmCtx.fillStyle = "#ee6c8a";
+    mmCtx.beginPath(); mmCtx.arc(sign * 24, -23 - bunBounce, 7, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.fillStyle = "#1e583e";
+    mmCtx.beginPath(); mmCtx.arc(sign * 31, -23 - bunBounce, 10.5, 0, Math.PI * 2); mmCtx.fill();
+  });
+
+  // Rostro
+  mmCtx.fillStyle = "#ffe8d6";
+  mmCtx.beginPath();
+  mmCtx.roundRect(-24, -42, 48, 40, 18);
+  mmCtx.fill();
+
+  // Ojos violeta/índigo de Maomao
+  [-10.5, 10.5].forEach(ex => {
+    mmCtx.fillStyle = "#5c48a8";
+    mmCtx.beginPath(); mmCtx.arc(ex, -20, 4.8, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.fillStyle = "#261a52";
+    mmCtx.beginPath(); mmCtx.arc(ex, -20, 2.4, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.fillStyle = "#ffffff";
+    mmCtx.beginPath(); mmCtx.arc(ex - 1.5, -21.5, 1.6, 0, Math.PI * 2); mmCtx.fill();
+  });
+
+  // Pecas y rubor
+  mmCtx.fillStyle = "rgba(245, 145, 155, 0.45)";
+  mmCtx.beginPath(); mmCtx.ellipse(-14, -13, 4.5, 2.2, 0, 0, Math.PI * 2); mmCtx.fill();
+  mmCtx.beginPath(); mmCtx.ellipse(14, -13, 4.5, 2.2, 0, 0, Math.PI * 2); mmCtx.fill();
+
+  // Boca :3
+  mmCtx.strokeStyle = "#91464b";
+  mmCtx.lineWidth = 1.8;
+  mmCtx.beginPath();
+  mmCtx.moveTo(-4.5, -8.5);
+  mmCtx.quadraticCurveTo(-2.2, -5.5, 0, -8.5);
+  mmCtx.quadraticCurveTo(2.2, -5.5, 4.5, -8.5);
+  mmCtx.stroke();
+
+  // Flequillo verde oscuro
+  mmCtx.fillStyle = "#226044";
+  mmCtx.beginPath();
+  mmCtx.arc(0, -28, 25, Math.PI, 0);
+  mmCtx.fill();
+
+  mmCtx.restore();
+  mmCtx.restore();
+
+  if (isPlaying) {
+    mmCtx.fillStyle = "#1ed760";
+    mmCtx.font = "bold 12px sans-serif";
+    ["♪", "♫", "🌿", "✦"].forEach((sym, i) => {
+      const t = (phase * 0.7 + i * 1.5) % (Math.PI * 2);
+      const nx = cx + Math.cos(t + i) * (46 + i * 10) * scaleFactor;
+      const ny = floorY - (40 + (t / (Math.PI * 2)) * 75) * scaleFactor;
+      mmCtx.fillText(sym, nx, ny);
+    });
+  }
+}
+
+function drawSpectrum(bass, mid, high) {
+  const w = vCanvas.width, h = vCanvas.height;
+  vCtx.clearRect(0, 0, w, h);
+
+  if (visMode === 1) {
+    vCtx.strokeStyle = "#1ed760";
+    vCtx.lineWidth = 2;
+    vCtx.beginPath();
+    const len = 64;
+    for (let i = 0; i < len; i++) {
+      const x = 6 + (i / (len - 1)) * (w - 12);
+      const sample = isPlaying ? 0.48 * Math.sin(phase * 3 + i * 0.25) * (0.6 + bass * 0.6) : 0;
+      const y = (h / 2) - sample * (h * 0.38);
+      if (i === 0) vCtx.moveTo(x, y);
+      else vCtx.lineTo(x, y);
+    }
+    vCtx.stroke();
+    return;
+  }
+
+  const n = 28;
+  const gap = 3;
+  const barW = Math.max(2, (w - 16 - gap * (n - 1)) / n);
+
+  for (let i = 0; i < n; i++) {
+    let val = 0.06;
+    if (isPlaying) {
+      const bandEnv = i < 8 ? bass : (i < 18 ? mid : high);
+      val = Math.min(1.0, 0.12 + bandEnv * (0.55 + 0.45 * Math.abs(Math.sin(phase * 2.3 + i * 0.42))));
+    }
+    const bh = val * (h - 10);
+    const x = 8 + i * (barW + gap);
+    const y = h - 4 - bh;
+    vCtx.fillStyle = i % 2 === 0 ? "#1DB954" : "#00d2ff";
+    vCtx.fillRect(x, y, barW, bh);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  // Capturar access_token si regresó del flujo OAuth2 de Google en el hash de la URL
+  if (window.location.hash && window.location.hash.includes("access_token=")) {
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    const tok = params.get("access_token");
+    if (tok) {
+      document.getElementById("gdToken").value = tok;
+      localStorage.setItem("welcome_done", "1");
+      setTimeout(() => autoDiscoverDriveMusic(), 400);
+    }
+  }
+
+  loadPersistentState();
+  renderTracks();
+  renderPlaylists();
+  syncCanvasDimensions();
+  animateLoop();
+
+  // Mostrar modal de inicio de sesión con Google Drive si aún no se ha configurado
+  const hasToken = Boolean(document.getElementById("gdToken").value.trim());
+  const welcomeDone = localStorage.getItem("welcome_done") === "1";
+  if (!hasToken && !welcomeDone) {
+    document.getElementById("welcomeModal").classList.add("open");
+  } else if (hasToken) {
+    // Si ya tenía cuenta conectada, sincronizar automáticamente su carpeta de música de Drive
+    setTimeout(() => autoDiscoverDriveMusic(), 600);
+  }
+});
+</script>
+</body>
+</html>

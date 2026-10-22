@@ -1,0 +1,15 @@
+# Entorno virtual de Python y cachés
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Android SDK local y artefactos intermedios de compilación
+.android-sdk/
+android-app/build/
+dist/*.idsig
+
+# Cachés temporales de audio y tokens privados del usuario
+data/eq_cache/
+data/gdrive_cache/
+data/library.json
