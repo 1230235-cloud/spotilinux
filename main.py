@@ -575,6 +575,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         # Cargar vista inicial y preparar primera canción
         self.switch_view("home")
+        self._update_shuffle_ui()
         if self.displayed_tracks:
             first = self.displayed_tracks[0]
             self.engine.context_tracks = list(self.displayed_tracks)
@@ -1592,7 +1593,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.engine.shuffle = True
         self.store.shuffle = True
         self.store.save()
-        self._refresh_button_active(self.btn_shuffle, True)
+        self._update_shuffle_ui()
         chosen = random.choice(self.displayed_tracks)
         self._play_track_or_stream_from_cloud(chosen, self.displayed_tracks)
 
@@ -1812,8 +1813,22 @@ class SpotiLinuxWindow(QMainWindow):
         self.engine.shuffle = not self.engine.shuffle
         self.store.shuffle = self.engine.shuffle
         self.store.save()
-        self._refresh_button_active(self.btn_shuffle, self.engine.shuffle)
+        self._update_shuffle_ui()
         self._refresh_queue_ui()
+
+    def _update_shuffle_ui(self) -> None:
+        is_shuf = bool(self.engine.shuffle)
+        self._refresh_button_active(self.btn_shuffle, is_shuf)
+        if is_shuf:
+            self.btn_shuffle.setText("🔀 •")
+            self.btn_shuffle.setToolTip("Modo aleatorio: ACTIVADO (clic para desactivar)")
+            self.hero_banner.btn_shuffle_banner.setText("🔀 Aleatorio: ACTIVADO")
+            self._refresh_button_active(self.hero_banner.btn_shuffle_banner, True)
+        else:
+            self.btn_shuffle.setText("🔀")
+            self.btn_shuffle.setToolTip("Modo aleatorio: DESACTIVADO (clic para activar)")
+            self.hero_banner.btn_shuffle_banner.setText("🔀 Aleatorio")
+            self._refresh_button_active(self.hero_banner.btn_shuffle_banner, False)
 
     def cycle_repeat_mode(self) -> None:
         modes = ["off", "all", "one"]

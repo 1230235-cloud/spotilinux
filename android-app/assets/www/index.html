@@ -160,8 +160,58 @@
   .dock-title { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dock-artist { font-size: 11px; color: var(--green-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dock-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-  .ctrl-btn { background: none; border: none; color: #fff; font-size: 16px; padding: 4px 5px; cursor: pointer; }
-  .ctrl-btn.active { color: var(--green-bright); }
+  .ctrl-btn { 
+    position: relative;
+    background: none; 
+    border: none; 
+    color: #fff; 
+    font-size: 16px; 
+    padding: 4px 6px; 
+    cursor: pointer; 
+    border-radius: 8px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+  .ctrl-btn.active { 
+    color: var(--green-bright); 
+    background: rgba(29, 185, 84, 0.22);
+    box-shadow: 0 0 10px rgba(29, 185, 84, 0.45);
+    border: 1px solid rgba(29, 185, 84, 0.5);
+  }
+  .ctrl-btn .active-dot {
+    display: inline-block;
+    width: 4px;
+    height: 4px;
+    background-color: var(--green-bright);
+    border-radius: 50%;
+    margin-top: 2px;
+    box-shadow: 0 0 4px var(--green-bright);
+  }
+  .toast-popup {
+    position: fixed;
+    bottom: 85px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1ED760;
+    color: #000;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 7px 16px;
+    border-radius: 20px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.65);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 9999;
+    white-space: nowrap;
+  }
+  .toast-popup.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
   .play-circle {
     width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: #000;
     border: none; font-size: 14px; font-weight: 900; display: flex; align-items: center; justify-content: center;
@@ -279,7 +329,7 @@
           <span id="listHeading">Tu Biblioteca Musical</span>
           <div style="display:flex; gap:5px;">
             <button class="btn-chip" style="font-size:10px; padding:4px 9px;" onclick="openCreatePlaylistModal()">＋ Playlist</button>
-            <button class="btn-chip" style="font-size:10px; padding:4px 9px;" onclick="shufflePlayAll()">🔀 Aleatorio</button>
+            <button class="btn-chip" id="btnShuffleChip" style="font-size:10px; padding:4px 9px;" onclick="toggleShuffle(true)">🔀 Aleatorio</button>
           </div>
         </div>
         <div id="scanBanner" style="font-size:11px; color:var(--green-bright); margin-bottom:6px; display:none;"></div>
@@ -726,14 +776,56 @@ function seekAudio(val) {
   }
 }
 
-function toggleShuffle() {
+function showToast(msg) {
+  let t = document.getElementById("toastMessage");
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => {
+    t.classList.remove("show");
+  }, 1800);
+}
+
+function updateShuffleUI() {
+  const btn = document.getElementById("btnShuffle");
+  const chip = document.getElementById("btnShuffleChip");
+  if (btn) {
+    btn.classList.toggle("active", shuffleMode);
+    btn.setAttribute("title", shuffleMode ? "Modo aleatorio: ACTIVADO" : "Modo aleatorio: Desactivado");
+    btn.innerHTML = shuffleMode ? `🔀<span class="active-dot"></span>` : `🔀`;
+  }
+  if (chip) {
+    chip.classList.toggle("active", shuffleMode);
+    chip.textContent = shuffleMode ? "🔀 Aleatorio: ACTIVADO" : "🔀 Aleatorio";
+    chip.style.backgroundColor = shuffleMode ? "var(--green)" : "";
+    chip.style.color = shuffleMode ? "#000" : "";
+    chip.style.borderColor = shuffleMode ? "var(--green-bright)" : "";
+  }
+}
+
+function updateRepeatUI() {
+  const btn = document.getElementById("btnRepeat");
+  if (btn) {
+    btn.classList.toggle("active", repeatMode);
+    btn.setAttribute("title", repeatMode ? "Repetir canción: ACTIVADO" : "Repetir canción: Desactivado");
+    btn.innerHTML = repeatMode ? `🔁<span class="active-dot"></span>` : `🔁`;
+  }
+}
+
+function toggleShuffle(forcePlayIfOff = false) {
   shuffleMode = !shuffleMode;
-  document.getElementById("btnShuffle").classList.toggle("active", shuffleMode);
+  updateShuffleUI();
+  showToast(shuffleMode ? "🔀 Modo aleatorio: ACTIVADO" : "🔀 Modo aleatorio: Desactivado");
+  if (shuffleMode && forcePlayIfOff && !isPlaying && tracks.length > 0) {
+    nextTrack();
+  }
 }
 
 function toggleRepeat() {
   repeatMode = !repeatMode;
-  document.getElementById("btnRepeat").classList.toggle("active", repeatMode);
+  updateRepeatUI();
+  showToast(repeatMode ? "🔁 Repetición: ACTIVADA" : "🔁 Repetición: Desactivada");
   if (hasNativeAndroid) {
     window.AndroidMedia.setRepeat(repeatMode);
   } else {
@@ -743,7 +835,8 @@ function toggleRepeat() {
 
 function shufflePlayAll() {
   shuffleMode = true;
-  document.getElementById("btnShuffle").classList.add("active");
+  updateShuffleUI();
+  showToast("🔀 Modo aleatorio: ACTIVADO");
   nextTrack();
 }
 
@@ -1496,6 +1589,8 @@ window.addEventListener("DOMContentLoaded", () => {
   loadPersistentState();
   renderTracks();
   renderPlaylists();
+  updateShuffleUI();
+  updateRepeatUI();
   syncCanvasDimensions();
   animateLoop();
 
@@ -1510,5 +1605,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 </script>
+<div id="toastMessage" class="toast-popup"></div>
 </body>
 </html>

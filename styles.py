@@ -119,6 +119,8 @@ QPushButton#TransportIconBtn:hover {
 
 QPushButton#TransportIconBtn[active="true"] {
     color: #1DB954;
+    background-color: rgba(29, 185, 84, 0.22);
+    border: 1px solid rgba(29, 185, 84, 0.7);
     font-weight: bold;
 }
 
