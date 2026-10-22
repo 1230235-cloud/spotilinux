@@ -60,6 +60,7 @@ class LibraryStore:
         self.watched_folders: list[str] = []
         self.gdrive_config = GoogleDriveConfig()
         self.welcome_shown: bool = False
+        self.google_user: dict = {}
 
         # Estado del reproductor y ecualizador
         self.volume: int = 80
@@ -96,6 +97,7 @@ class LibraryStore:
                 self.watched_folders.append(str(self.music_library_dir.resolve()))
             self.gdrive_config = GoogleDriveConfig.from_dict(raw.get("gdrive_config", {}))
             self.welcome_shown = bool(raw.get("welcome_shown", False))
+            self.google_user = dict(raw.get("google_user", {}))
             self.volume = int(raw.get("volume", 80))
             self.shuffle = bool(raw.get("shuffle", False))
             self.repeat_mode = str(raw.get("repeat_mode", "off"))
@@ -129,6 +131,7 @@ class LibraryStore:
             "watched_folders": self.watched_folders,
             "gdrive_config": self.gdrive_config.to_dict(),
             "welcome_shown": self.welcome_shown,
+            "google_user": self.google_user,
             "volume": self.volume,
             "shuffle": self.shuffle,
             "repeat_mode": self.repeat_mode,
@@ -292,6 +295,19 @@ class LibraryStore:
             self.save()
             return True
         return False
+
+    def add_multiple_tracks_to_playlist(self, playlist_id: str, track_ids: list[str]) -> int:
+        pl = self.playlists.get(playlist_id)
+        if not pl:
+            return 0
+        added_count = 0
+        for tid in track_ids:
+            if tid in self.tracks and tid not in pl.track_ids:
+                pl.track_ids.append(tid)
+                added_count += 1
+        if added_count > 0:
+            self.save()
+        return added_count
 
     def remove_track_from_playlist(self, playlist_id: str, track_id: str) -> None:
         pl = self.playlists.get(playlist_id)

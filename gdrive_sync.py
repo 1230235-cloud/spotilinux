@@ -12,7 +12,9 @@ Soporta:
 
 import json
 import re
+import time
 import urllib.parse
+import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -134,7 +136,7 @@ class GDriveOAuthLoopbackWorker(QThread):
                 "client_id": self.client_id,
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
-                "scope": "https://www.googleapis.com/auth/drive.readonly",
+                "scope": "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file",
                 "access_type": "offline",
                 "prompt": "consent",
             }
@@ -470,3 +472,157 @@ def download_drive_file_to_cache(
     if not meta.artist or meta.artist == "Artista desconocido":
         meta.artist = "Google Drive Cloud ☁️"
     return meta
+
+
+def fetch_google_user_profile(token: str) -> dict:
+    """Obtiene los datos del perfil de usuario de Google Drive (nombre, correo, avatar)."""
+    if not token:
+        return {}
+    try:
+        r = requests.get(
+            "https://www.googleapis.com/drive/v3/about?fields=user",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            u = r.json().get("user", {})
+            return {
+                "name": u.get("displayName", ""),
+                "email": u.get("emailAddress", ""),
+                "photo": u.get("photoLink", ""),
+            }
+    except Exception:
+        pass
+    return {}
+
+
+def sync_cloud_playlists_with_drive(token: str, local_payload: dict) -> tuple[dict, Optional[str]]:
+    """
+    Sincroniza el archivo spotilinux_cloud_playlists.json con Google Drive.
+    Descarga los datos de la nube, combina playlists y likedIds, y actualiza Drive.
+    Retorna (merged_payload, error_message).
+    """
+    if not token:
+        return local_payload, "Token de Google no proporcionado"
+
+    headers = {"Authorization": f"Bearer {token}"}
+    file_id = None
+    try:
+        # 1. Buscar si ya existe el archivo en Drive
+        search_res = requests.get(
+            "https://www.googleapis.com/drive/v3/files?q=name%3D%27spotilinux_cloud_playlists.json%27+and+trashed%3Dfalse&fields=files(id%2Cname)",
+            headers=headers,
+            timeout=12,
+        )
+        if search_res.status_code == 200:
+            files = search_res.json().get("files", [])
+            if files:
+                file_id = files[0].get("id")
+
+        merged = dict(local_payload)
+        playlists_by_id = {p["id"]: p for p in merged.get("playlists", [])}
+        playlists_by_name = {p["name"].lower(): p for p in merged.get("playlists", [])}
+        liked_set = set(merged.get("likedIds", []))
+
+        # 2. Si existe, descargar y combinar
+        if file_id:
+            dl_res = requests.get(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media",
+                headers=headers,
+                timeout=12,
+            )
+            if dl_res.status_code == 200:
+                cloud_data = dl_res.json()
+                cloud_playlists = cloud_data.get("playlists", [])
+                for cp in cloud_playlists:
+                    pid = cp.get("id")
+                    pname = cp.get("name", "").lower()
+                    target_pl = playlists_by_id.get(pid) or playlists_by_name.get(pname)
+                    if target_pl:
+                        existing_tracks = list(target_pl.get("track_ids", target_pl.get("trackIds", [])))
+                        for tid in cp.get("track_ids", cp.get("trackIds", [])):
+                            if tid not in existing_tracks:
+                                existing_tracks.append(tid)
+                        target_pl["track_ids"] = existing_tracks
+                        if "trackIds" in target_pl:
+                            target_pl["trackIds"] = existing_tracks
+                    else:
+                        new_p = {
+                            "id": pid or str(uuid.uuid4())[:8],
+                            "name": cp.get("name", "Playlist Cloud"),
+                            "description": cp.get("description", ""),
+                            "track_ids": list(cp.get("track_ids", cp.get("trackIds", []))),
+                            "created_at": float(cp.get("created_at", time.time())),
+                        }
+                        merged.setdefault("playlists", []).append(new_p)
+                        playlists_by_id[new_p["id"]] = new_p
+                        playlists_by_name[new_p["name"].lower()] = new_p
+
+                for l_id in cloud_data.get("likedIds", []):
+                    liked_set.add(l_id)
+                merged["likedIds"] = list(liked_set)
+
+        # 3. Subir el estado combinado a Google Drive
+        json_bytes = json.dumps(merged, indent=2, ensure_ascii=False).encode("utf-8")
+        if file_id:
+            # PATCH
+            patch_res = requests.patch(
+                f"https://www.googleapis.com/upload/drive/v3/files/{file_id}?uploadType=media",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=UTF-8",
+                },
+                data=json_bytes,
+                timeout=15,
+            )
+            if patch_res.status_code not in (200, 201):
+                return merged, f"Error actualizando en Drive: HTTP {patch_res.status_code}"
+        else:
+            # Multipart POST
+            boundary = "-------314159265358979323846"
+            metadata = {
+                "name": "spotilinux_cloud_playlists.json",
+                "mimeType": "application/json",
+                "description": "SpotiLinux Playlists & Cloud Sync across devices",
+            }
+            body = (
+                f"\r\n--{boundary}\r\n"
+                f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+                f"{json.dumps(metadata)}\r\n"
+                f"--{boundary}\r\n"
+                f"Content-Type: application/json\r\n\r\n"
+            ).encode("utf-8") + json_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+            post_res = requests.post(
+                "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": f"multipart/related; boundary={boundary}",
+                },
+                data=body,
+                timeout=15,
+            )
+            if post_res.status_code not in (200, 201):
+                return merged, f"Error creando en Drive: HTTP {post_res.status_code}"
+
+        return merged, None
+    except Exception as e:
+        return local_payload, str(e)
+
+
+class GDriveCloudPlaylistSyncWorker(QThread):
+    sync_completed = pyqtSignal(dict)
+    sync_failed = pyqtSignal(str)
+
+    def __init__(self, token: str, payload: dict) -> None:
+        super().__init__()
+        self.token = token.strip()
+        self.payload = payload
+
+    def run(self) -> None:
+        merged, err = sync_cloud_playlists_with_drive(self.token, self.payload)
+        if err:
+            self.sync_failed.emit(err)
+        else:
+            self.sync_completed.emit(merged)
+

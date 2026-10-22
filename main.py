@@ -15,6 +15,7 @@ import json
 import os
 import random
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -54,6 +55,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSlider,
     QStackedWidget,
     QTableWidget,
@@ -64,16 +66,19 @@ from PyQt6.QtWidgets import (
 
 from audio_engine import AudioEngine
 from gdrive_sync import (
+    GDriveCloudPlaylistSyncWorker,
     GDriveOAuthLoopbackWorker,
     GDriveStreamDownloadWorker,
     GDriveSyncWorker,
     GoogleDriveConfig,
     extract_drive_id_from_url,
+    fetch_google_user_profile,
+    sync_cloud_playlists_with_drive,
 )
 from generate_demos import ensure_demo_tracks
 from maomao_widget import MaomaoDancerWidget
 from metadata import SUPPORTED_EXTENSIONS, TrackMetadata, format_duration
-from storage import LibraryStore
+from storage import LibraryStore, Playlist
 from styles import SPOTIFY_QSS
 from visualizer_widget import AudioVisualizerWidget, EqualizerPanel
 
@@ -186,6 +191,11 @@ class HeroBannerWidget(QFrame):
         self.btn_cloud_sync_banner.setObjectName("ActionChipButton")
         self.btn_cloud_sync_banner.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        self.btn_add_tracks = QPushButton("＋ Agregar canciones")
+        self.btn_add_tracks.setObjectName("ActionChipButton")
+        self.btn_add_tracks.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_add_tracks.setVisible(False)
+
         self.btn_edit_playlist = QPushButton("✎ Editar")
         self.btn_edit_playlist.setObjectName("ActionChipButton")
         self.btn_edit_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -199,6 +209,7 @@ class HeroBannerWidget(QFrame):
         actions_row.addWidget(self.btn_play_banner)
         actions_row.addWidget(self.btn_shuffle_banner)
         actions_row.addWidget(self.btn_cloud_sync_banner)
+        actions_row.addWidget(self.btn_add_tracks)
         actions_row.addWidget(self.btn_edit_playlist)
         actions_row.addWidget(self.btn_delete_playlist)
         actions_row.addStretch()
@@ -228,6 +239,7 @@ class HeroBannerWidget(QFrame):
         self.lbl_stats.setText(stats)
         self.lbl_cover.setPixmap(pixmap)
         self.dominant_rgb = rgb
+        self.btn_add_tracks.setVisible(is_custom_playlist)
         self.btn_edit_playlist.setVisible(is_custom_playlist)
         self.btn_delete_playlist.setVisible(is_custom_playlist)
         self.update()
@@ -351,6 +363,185 @@ class PlaylistDialog(QDialog):
 
     def get_values(self) -> tuple[str, str]:
         return self.inp_name.text().strip(), self.inp_desc.text().strip()
+
+
+class MultiTrackSelectorDialog(QDialog):
+    """Permite seleccionar múltiples canciones a la vez de la biblioteca para agregarlas a una playlist."""
+
+    def __init__(self, parent: QWidget, all_tracks: list[TrackMetadata], current_track_ids: list[str]) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("＋ Seleccionar varias canciones para la Playlist")
+        self.resize(700, 560)
+        self.all_tracks = all_tracks
+        self.current_ids = set(current_track_ids)
+        self.selected_ids: set[str] = set()
+
+        self.setStyleSheet(
+            """
+            QDialog { background-color: #181818; color: #FFFFFF; }
+            QLabel { color: #FFFFFF; font-size: 13px; font-weight: 600; }
+            QLineEdit {
+                background-color: #282828; color: #FFFFFF;
+                border: 1px solid #404040; border-radius: 6px; padding: 7px 10px; font-size: 12px;
+            }
+            QTableWidget {
+                background-color: #121212; color: #FFFFFF;
+                border: 1px solid #282828; border-radius: 6px;
+            }
+            QPushButton {
+                background-color: #1DB954; color: #000000; border: none;
+                border-radius: 15px; padding: 7px 18px; font-weight: bold; font-size: 12px;
+            }
+            QPushButton:hover { background-color: #1ED760; }
+            QPushButton#SecondaryBtn {
+                background-color: #2E2E38; color: #FFFFFF; border: 1px solid #444452;
+            }
+            QPushButton#SecondaryBtn:hover { background-color: #3E3E4C; }
+            """
+        )
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(12)
+
+        header = QLabel("Selecciona las canciones que deseas añadir a esta playlist:")
+        header.setStyleSheet("font-size: 14px; font-weight: 800; color: #1DB954;")
+        lay.addWidget(header)
+
+        top_row = QHBoxLayout()
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("🔍 Filtrar por título, artista o álbum...")
+        self.search_box.setClearButtonEnabled(True)
+        self.search_box.textChanged.connect(self._filter_table)
+        top_row.addWidget(self.search_box, stretch=1)
+
+        btn_select_all = QPushButton("☑ Seleccionar Todas")
+        btn_select_all.setObjectName("SecondaryBtn")
+        btn_select_all.clicked.connect(self._select_all)
+        top_row.addWidget(btn_select_all)
+
+        btn_deselect_all = QPushButton("☐ Desmarcar")
+        btn_deselect_all.setObjectName("SecondaryBtn")
+        btn_deselect_all.clicked.connect(self._deselect_all)
+        top_row.addWidget(btn_deselect_all)
+
+        lay.addLayout(top_row)
+
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["", "TÍTULO", "ARTISTA", "ESTADO"])
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.table.setShowGrid(False)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(0, 42)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.table.setColumnWidth(2, 190)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(3, 110)
+        lay.addWidget(self.table, stretch=1)
+
+        self._checkbox_map: dict[str, QCheckBox] = {}
+        self._current_filtered_tracks: list[TrackMetadata] = list(self.all_tracks)
+        self._populate_table(self.all_tracks)
+
+        bottom_row = QHBoxLayout()
+        self.lbl_count = QLabel("0 canciones seleccionadas")
+        self.lbl_count.setStyleSheet("color: #B3B3B3; font-size: 12px; font-weight: normal;")
+        bottom_row.addWidget(self.lbl_count)
+        bottom_row.addStretch()
+
+        btn_cancel = QPushButton("Cancelar")
+        btn_cancel.setObjectName("SecondaryBtn")
+        btn_cancel.clicked.connect(self.reject)
+        bottom_row.addWidget(btn_cancel)
+
+        self.btn_confirm = QPushButton("＋ Añadir a Playlist")
+        self.btn_confirm.clicked.connect(self.accept)
+        bottom_row.addWidget(self.btn_confirm)
+
+        lay.addLayout(bottom_row)
+
+    def _populate_table(self, tracks: list[TrackMetadata]) -> None:
+        self._current_filtered_tracks = tracks
+        self.table.setRowCount(len(tracks))
+        self._checkbox_map.clear()
+
+        for row, t in enumerate(tracks):
+            self.table.setRowHeight(row, 38)
+            chk = QCheckBox()
+            already_in = t.id in self.current_ids
+            if already_in:
+                chk.setEnabled(False)
+                chk.setToolTip("Esta canción ya está en la playlist")
+            else:
+                chk.setChecked(t.id in self.selected_ids)
+                chk.stateChanged.connect(lambda state, tid=t.id: self._on_check_changed(tid, state))
+            self._checkbox_map[t.id] = chk
+
+            cell_widget = QWidget()
+            ch_lay = QHBoxLayout(cell_widget)
+            ch_lay.setContentsMargins(12, 0, 0, 0)
+            ch_lay.addWidget(chk)
+            self.table.setCellWidget(row, 0, cell_widget)
+
+            item_title = QTableWidgetItem(t.title)
+            item_title.setForeground(QColor("#777777") if already_in else QColor("#FFFFFF"))
+            self.table.setItem(row, 1, item_title)
+
+            item_artist = QTableWidgetItem(t.artist)
+            item_artist.setForeground(QColor("#666666") if already_in else QColor("#B3B3B3"))
+            self.table.setItem(row, 2, item_artist)
+
+            status_str = "Ya añadida" if already_in else "Disponible"
+            item_status = QTableWidgetItem(status_str)
+            item_status.setForeground(QColor("#555555") if already_in else QColor("#1DB954"))
+            self.table.setItem(row, 3, item_status)
+
+    def _on_check_changed(self, tid: str, state: int) -> None:
+        if state == 2:
+            self.selected_ids.add(tid)
+        else:
+            self.selected_ids.discard(tid)
+        self.lbl_count.setText(f"{len(self.selected_ids)} canciones seleccionadas")
+        self.btn_confirm.setText(f"＋ Añadir ({len(self.selected_ids)}) a Playlist")
+
+    def _select_all(self) -> None:
+        for t in self._current_filtered_tracks:
+            if t.id not in self.current_ids:
+                self.selected_ids.add(t.id)
+                chk = self._checkbox_map.get(t.id)
+                if chk and chk.isEnabled():
+                    chk.blockSignals(True)
+                    chk.setChecked(True)
+                    chk.blockSignals(False)
+        self.lbl_count.setText(f"{len(self.selected_ids)} canciones seleccionadas")
+        self.btn_confirm.setText(f"＋ Añadir ({len(self.selected_ids)}) a Playlist")
+
+    def _deselect_all(self) -> None:
+        for t in self._current_filtered_tracks:
+            self.selected_ids.discard(t.id)
+            chk = self._checkbox_map.get(t.id)
+            if chk and chk.isEnabled():
+                chk.blockSignals(True)
+                chk.setChecked(False)
+                chk.blockSignals(False)
+        self.lbl_count.setText(f"{len(self.selected_ids)} canciones seleccionadas")
+        self.btn_confirm.setText(f"＋ Añadir ({len(self.selected_ids)}) a Playlist")
+
+    def _filter_table(self, query: str) -> None:
+        q = query.strip().lower()
+        if not q:
+            filtered = self.all_tracks
+        else:
+            filtered = [
+                t for t in self.all_tracks
+                if q in t.title.lower() or q in t.artist.lower() or q in t.album.lower()
+            ]
+        self._populate_table(filtered)
+
+    def get_selected_track_ids(self) -> list[str]:
+        return list(self.selected_ids)
 
 
 class GoogleDriveDialog(QDialog):
@@ -560,6 +751,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         self._gdrive_worker: Optional[GDriveSyncWorker] = None
         self._stream_worker: Optional[GDriveStreamDownloadWorker] = None
+        self._cloud_sync_worker: Optional[GDriveCloudPlaylistSyncWorker] = None
 
         # Estado de navegación actual
         self.current_view: str = "home"  # "home" | "library" | "gdrive" | "liked" | "recent" | "playlist:<id>"
@@ -586,6 +778,12 @@ class SpotiLinuxWindow(QMainWindow):
 
     def _check_first_run_welcome(self) -> None:
         if self.store.gdrive_config.access_token or self.store.gdrive_config.api_key:
+            if self.store.gdrive_config.access_token and not self.store.google_user.get("name"):
+                u = fetch_google_user_profile(self.store.gdrive_config.access_token)
+                if u:
+                    self.store.google_user = u
+                    self.store.save()
+            self._sync_playlists_to_cloud()
             self.start_gdrive_sync()
             return
         if self.store.welcome_shown:
@@ -772,11 +970,19 @@ class SpotiLinuxWindow(QMainWindow):
         self.hero_banner = HeroBannerWidget()
         center_lay.addWidget(self.hero_banner)
 
+        self.quick_scroll = QScrollArea()
+        self.quick_scroll.setWidgetResizable(True)
+        self.quick_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.quick_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.quick_scroll.setStyleSheet("background: transparent; border: none;")
+
         self.quick_grid_container = QWidget()
-        self.quick_grid_layout = QGridLayout(self.quick_grid_container)
-        self.quick_grid_layout.setContentsMargins(4, 2, 4, 2)
-        self.quick_grid_layout.setSpacing(10)
-        center_lay.addWidget(self.quick_grid_container)
+        self.quick_grid_container.setStyleSheet("background: transparent;")
+        self.quick_grid_main_layout = QVBoxLayout(self.quick_grid_container)
+        self.quick_grid_main_layout.setContentsMargins(4, 2, 4, 10)
+        self.quick_grid_main_layout.setSpacing(14)
+        self.quick_scroll.setWidget(self.quick_grid_container)
+        center_lay.addWidget(self.quick_scroll, stretch=1)
 
         self.track_table = QTableWidget(0, 6)
         self.track_table.setObjectName("TrackTable")
@@ -784,7 +990,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.track_table.verticalHeader().setVisible(False)
         self.track_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.track_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.track_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.track_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.track_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.track_table.setShowGrid(False)
         self.track_table.setIconSize(QSize(40, 40))
@@ -1092,6 +1298,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.search_input.textChanged.connect(self._refresh_track_table)
         self.hero_banner.btn_play_banner.clicked.connect(self.play_current_view)
         self.hero_banner.btn_shuffle_banner.clicked.connect(self.shuffle_play_current_view)
+        self.hero_banner.btn_add_tracks.clicked.connect(self._open_multi_track_picker_for_current_playlist)
         self.hero_banner.btn_edit_playlist.clicked.connect(self.edit_current_playlist)
         self.hero_banner.btn_delete_playlist.clicked.connect(self.delete_current_playlist)
 
@@ -1157,7 +1364,12 @@ class SpotiLinuxWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             cfg, direct_links, download_now = dlg.get_result()
             self.store.gdrive_config = cfg
+            if cfg.access_token:
+                u = fetch_google_user_profile(cfg.access_token)
+                if u:
+                    self.store.google_user = u
             self.store.save()
+            self._sync_playlists_to_cloud(notify=True)
             self.start_gdrive_sync(direct_links=direct_links, download_immediately=download_now)
 
     def start_gdrive_sync(
@@ -1237,7 +1449,9 @@ class SpotiLinuxWindow(QMainWindow):
         self._refresh_button_active(self.btn_nav_recent, view_key == "recent")
 
         self._refresh_playlist_sidebar()
-        self.quick_grid_container.setVisible(view_key == "home")
+        self.quick_scroll.setVisible(view_key == "home")
+        self.track_table.setVisible(view_key != "home")
+
         if view_key == "home":
             self._rebuild_quick_access_cards()
 
@@ -1256,10 +1470,76 @@ class SpotiLinuxWindow(QMainWindow):
         self.playlist_list.blockSignals(False)
 
     def _rebuild_quick_access_cards(self) -> None:
-        while self.quick_grid_layout.count():
-            child = self.quick_grid_layout.takeAt(0)
+        while self.quick_grid_main_layout.count():
+            child = self.quick_grid_main_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+            elif child.layout():
+                while child.layout().count():
+                    sub = child.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
+
+        # 1. Tarjeta de Estado de Cuenta de Google y Sincronización en la Nube
+        acc_frame = QFrame()
+        acc_frame.setStyleSheet(
+            "background-color: rgba(30, 215, 96, 0.08); border: 1px solid rgba(30, 215, 96, 0.25); "
+            "border-radius: 8px; padding: 10px;"
+        )
+        acc_lay = QHBoxLayout(acc_frame)
+        acc_lay.setContentsMargins(12, 8, 12, 8)
+        acc_lay.setSpacing(12)
+
+        has_user = bool(self.store.google_user.get("name") or self.store.google_user.get("email"))
+        has_token = bool(self.store.gdrive_config.access_token)
+
+        lbl_acc_icon = QLabel("👤" if has_user else "☁️")
+        lbl_acc_icon.setStyleSheet("font-size: 24px; background: transparent;")
+        acc_lay.addWidget(lbl_acc_icon)
+
+        acc_text_col = QVBoxLayout()
+        acc_text_col.setSpacing(2)
+        if has_user:
+            u_name = self.store.google_user.get("name", "Usuario de Google")
+            u_email = self.store.google_user.get("email", "")
+            lbl_title = QLabel(f"<b>Cuenta vinculada: {u_name}</b> ({u_email})")
+            lbl_sub = QLabel("Playlists sincronizadas en tu Google Drive • Disponibles desde Android y PC")
+        elif has_token:
+            lbl_title = QLabel("<b>Cuenta de Google Drive Vinculada</b>")
+            lbl_sub = QLabel("Playlists sincronizadas en la nube • Compatibles con SpotiLinux Android y PC")
+        else:
+            lbl_title = QLabel("<b>Vincular Cuenta de Google / Google Drive</b>")
+            lbl_sub = QLabel(
+                "Inicia sesión para sincronizar tus Playlists en la nube y acceder a ellas desde cualquier "
+                "dispositivo como en Spotify"
+            )
+
+        lbl_title.setStyleSheet("color: #FFFFFF; font-size: 13px; background: transparent;")
+        lbl_sub.setStyleSheet("color: #B3B3B3; font-size: 11px; background: transparent;")
+        acc_text_col.addWidget(lbl_title)
+        acc_text_col.addWidget(lbl_sub)
+        acc_lay.addLayout(acc_text_col, stretch=1)
+
+        btn_sync = QPushButton("🔄 Sincronizar Nube" if (has_user or has_token) else "🔑 Conectar Google")
+        btn_sync.setObjectName("ActionChipButton" if (has_user or has_token) else "SpotifyGreenPlayBig")
+        btn_sync.setFixedHeight(34)
+        btn_sync.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_sync.clicked.connect(self._sync_or_connect_google)
+        acc_lay.addWidget(btn_sync)
+
+        self.quick_grid_main_layout.addWidget(acc_frame)
+
+        # 2. Encabezado de Sección: "🎵 Tus Playlists Disponibles"
+        sec_header = QLabel("🎵 Tus Playlists Disponibles")
+        sec_header.setStyleSheet("color: #FFFFFF; font-size: 16px; font-weight: 800; margin-top: 4px;")
+        self.quick_grid_main_layout.addWidget(sec_header)
+
+        # 3. Cuadrícula de Playlists Disponibles
+        grid_widget = QWidget()
+        grid_widget.setStyleSheet("background: transparent;")
+        grid_lay = QGridLayout(grid_widget)
+        grid_lay.setContentsMargins(0, 0, 0, 0)
+        grid_lay.setSpacing(12)
 
         cards_data = []
         cards_data.append(
@@ -1270,7 +1550,10 @@ class SpotiLinuxWindow(QMainWindow):
                 lambda: self.switch_view("liked"),
             )
         )
-        cloud_tracks = [t for t in self.store.tracks.values() if "Drive" in t.album or t.filepath.startswith("gdrive://") or "gd_" in Path(t.filepath).name]
+        cloud_tracks = [
+            t for t in self.store.tracks.values()
+            if "Drive" in t.album or t.filepath.startswith("gdrive://") or Path(t.filepath).name.startswith("gd_")
+        ]
         cards_data.append(
             (
                 "Mi Google Drive ☁️",
@@ -1279,7 +1562,7 @@ class SpotiLinuxWindow(QMainWindow):
                 lambda: self.switch_view("gdrive"),
             )
         )
-        for pid, pl in list(self.store.playlists.items())[:2]:
+        for pid, pl in self.store.playlists.items():
             first_tid = pl.track_ids[0] if pl.track_ids else None
             cov = (
                 make_rounded_pixmap(self.store.tracks[first_tid].cover_path, 56, 6)
@@ -1294,19 +1577,21 @@ class SpotiLinuxWindow(QMainWindow):
                     lambda p=pid: self.switch_view(f"playlist:{p}"),
                 )
             )
-        for track in list(self.store.tracks.values())[: max(0, 6 - len(cards_data))]:
-            cards_data.append(
-                (
-                    track.title,
-                    track.artist,
-                    make_rounded_pixmap(track.cover_path, 56, 6),
-                    lambda t=track: self._play_track_or_stream_from_cloud(t, list(self.store.tracks.values())),
-                )
+        cards_data.append(
+            (
+                "➕ Crear Nueva Playlist",
+                "Arma tu propia selección",
+                make_liked_cover_pixmap(56, radius=6, symbol="＋", colors=((40, 40, 45), (70, 70, 80), (120, 120, 130))),
+                self.create_playlist_dialog,
             )
+        )
 
-        for idx, (title, sub, pix, cb) in enumerate(cards_data[:6]):
+        for idx, (title, sub, pix, cb) in enumerate(cards_data):
             row, col = divmod(idx, 3)
-            self.quick_grid_layout.addWidget(QuickAccessCard(title, sub, pix, cb), row, col)
+            grid_lay.addWidget(QuickAccessCard(title, sub, pix, cb), row, col)
+
+        self.quick_grid_main_layout.addWidget(grid_widget)
+        self.quick_grid_main_layout.addStretch()
 
     def set_genre_filter(self, genre: str) -> None:
         self.active_genre_filter = genre
@@ -1374,8 +1659,8 @@ class SpotiLinuxWindow(QMainWindow):
 
         return (
             "INICIO • SPOTILINUX + MAOMAO",
-            "Buenas tardes",
-            "Reproduce música local o de tu Google Drive mientras Maomao baila al compás 🌿",
+            "Tus Playlists Disponibles",
+            "Selecciona una playlist para escuchar o entra a 'Tu Biblioteca' para ver todas las canciones 🌿",
             all_tracks,
             False,
         )
@@ -1407,7 +1692,11 @@ class SpotiLinuxWindow(QMainWindow):
 
         total_secs = sum(t.duration for t in tracks)
         stats_text = f"{len(tracks)} canciones  •  {format_duration(total_secs)}"
-        if self.current_view == "liked":
+        if self.current_view == "home":
+            banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="🎵", colors=((29, 185, 84), (16, 95, 170), (140, 50, 210)))
+            banner_rgb = (29, 135, 78)
+            stats_text = f"{len(self.store.playlists)} playlists disponibles  •  {len(self.store.liked_ids)} favoritas"
+        elif self.current_view == "liked":
             banner_pix = make_liked_cover_pixmap(138, radius=10)
             banner_rgb = (82, 42, 188)
         elif self.current_view == "gdrive":
@@ -1487,6 +1776,7 @@ class SpotiLinuxWindow(QMainWindow):
         track = self.displayed_tracks[row]
         if col == 4:
             self.store.toggle_like(track.id)
+            self._sync_playlists_to_cloud()
             self._refresh_track_table()
             if self.engine.current_track and self.engine.current_track.id == track.id:
                 self._update_like_button_ui(track.id)
@@ -1496,63 +1786,226 @@ class SpotiLinuxWindow(QMainWindow):
             self._play_track_or_stream_from_cloud(track, self.displayed_tracks)
 
     def _on_table_context_menu(self, pos) -> None:
-        row = self.track_table.rowAt(pos.y())
-        if not (0 <= row < len(self.displayed_tracks)):
+        selected_rows = sorted(set(idx.row() for idx in self.track_table.selectedIndexes()))
+        if not selected_rows:
+            row = self.track_table.rowAt(pos.y())
+            if 0 <= row < len(self.displayed_tracks):
+                selected_rows = [row]
+
+        if not selected_rows:
             return
-        track = self.displayed_tracks[row]
+
+        selected_tracks = [self.displayed_tracks[r] for r in selected_rows if 0 <= r < len(self.displayed_tracks)]
+        selected_track_ids = [t.id for t in selected_tracks]
+        n_tracks = len(selected_tracks)
+        primary_track = selected_tracks[0]
 
         menu = QMenu(self)
-        act_play = menu.addAction("▶  Reproducir / Escuchar en línea")
-        act_download_cloud = None
-        if track.filepath.startswith("gdrive://"):
-            act_download_cloud = menu.addAction("⬇️  Descargar a la Carpeta de la App (Offline)")
-        act_queue = menu.addAction("☰  Añadir a la cola de reproducción")
-        liked = self.store.is_liked(track.id)
-        act_like = menu.addAction("💔  Quitar de Canciones que te gustan" if liked else "♥  Guardar en Canciones que te gustan")
 
-        menu.addSeparator()
-        pl_menu = menu.addMenu("＋  Añadir a Playlist")
-        pl_actions: dict[QAction, str] = {}
-        for pid, pl in self.store.playlists.items():
-            a = pl_menu.addAction(f"🎵 {pl.name}")
-            pl_actions[a] = pid
-        act_new_pl_with_track = pl_menu.addAction("✨ Crear nueva Playlist con esta canción...")
+        if n_tracks == 1:
+            act_play = menu.addAction("▶  Reproducir / Escuchar en línea")
+            act_download_cloud = None
+            if primary_track.filepath.startswith("gdrive://"):
+                act_download_cloud = menu.addAction("⬇️  Descargar a la Carpeta de la App (Offline)")
+            act_queue = menu.addAction("☰  Añadir a la cola de reproducción")
+            liked = self.store.is_liked(primary_track.id)
+            act_like = menu.addAction("💔  Quitar de Canciones que te gustan" if liked else "♥  Guardar en Canciones que te gustan")
 
-        act_remove_from_pl = None
-        if self.current_view.startswith("playlist:"):
             menu.addSeparator()
-            act_remove_from_pl = menu.addAction("✕  Quitar de esta Playlist")
+            pl_menu = menu.addMenu("＋  Añadir a Playlist")
+            pl_actions: dict[QAction, str] = {}
+            for pid, pl in self.store.playlists.items():
+                a = pl_menu.addAction(f"🎵 {pl.name}")
+                pl_actions[a] = pid
+            act_new_pl_with_tracks = pl_menu.addAction("✨ Crear nueva Playlist con esta canción...")
+
+            act_remove_from_pl = None
+            if self.current_view.startswith("playlist:"):
+                menu.addSeparator()
+                act_remove_from_pl = menu.addAction("✕  Quitar de esta Playlist")
+        else:
+            act_play = menu.addAction(f"▶  Reproducir selección ({n_tracks} canciones)")
+            act_download_cloud = None
+            act_queue = menu.addAction(f"☰  Añadir {n_tracks} canciones a la cola")
+            act_like = menu.addAction(f"♥  Guardar las {n_tracks} canciones en Favoritos")
+
+            menu.addSeparator()
+            pl_menu = menu.addMenu(f"＋  Añadir {n_tracks} canciones seleccionadas a Playlist")
+            pl_actions = {}
+            for pid, pl in self.store.playlists.items():
+                a = pl_menu.addAction(f"🎵 {pl.name}")
+                pl_actions[a] = pid
+            act_new_pl_with_tracks = pl_menu.addAction(f"✨ Crear nueva Playlist con las {n_tracks} canciones...")
+
+            act_remove_from_pl = None
+            if self.current_view.startswith("playlist:"):
+                menu.addSeparator()
+                act_remove_from_pl = menu.addAction(f"✕  Quitar las {n_tracks} canciones seleccionadas de esta Playlist")
 
         chosen = menu.exec(self.track_table.viewport().mapToGlobal(pos))
         if not chosen:
             return
 
         if chosen == act_play:
-            self._play_track_or_stream_from_cloud(track, self.displayed_tracks)
+            self._play_track_or_stream_from_cloud(primary_track, selected_tracks if n_tracks > 1 else self.displayed_tracks)
         elif act_download_cloud and chosen == act_download_cloud:
-            self._download_cloud_track_to_app_folder(track)
+            self._download_cloud_track_to_app_folder(primary_track)
         elif chosen == act_queue:
-            self.engine.add_to_queue(track)
+            for t in selected_tracks:
+                self.engine.add_to_queue(t)
         elif chosen == act_like:
-            self.store.toggle_like(track.id)
+            if n_tracks == 1:
+                self.store.toggle_like(primary_track.id)
+            else:
+                for t in selected_tracks:
+                    if t.id not in self.store.liked_ids:
+                        self.store.liked_ids.append(t.id)
+                self.store.save()
+            self._sync_playlists_to_cloud()
             self._refresh_track_table()
-            if self.engine.current_track and self.engine.current_track.id == track.id:
-                self._update_like_button_ui(track.id)
+            if self.engine.current_track and self.engine.current_track.id == primary_track.id:
+                self._update_like_button_ui(primary_track.id)
         elif chosen in pl_actions:
             pid = pl_actions[chosen]
-            self.store.add_track_to_playlist(pid, track.id)
+            added = self.store.add_multiple_tracks_to_playlist(pid, selected_track_ids)
+            self._sync_playlists_to_cloud()
             self._refresh_playlist_sidebar()
-        elif chosen == act_new_pl_with_track:
-            dlg = PlaylistDialog(self, "Nueva Playlist", name=f"Mix {track.title}")
+            if self.current_view == f"playlist:{pid}":
+                self.switch_view(self.current_view)
+            QMessageBox.information(
+                self,
+                "Canciones Agregadas",
+                f"Se agregaron {added} canciones a la playlist seleccionada.",
+            )
+        elif chosen == act_new_pl_with_tracks:
+            default_name = f"Mix {primary_track.title}" if n_tracks == 1 else f"Mix ({n_tracks} pistas)"
+            dlg = PlaylistDialog(self, "Nueva Playlist", name=default_name)
             if dlg.exec() == QDialog.DialogCode.Accepted:
                 name, desc = dlg.get_values()
-                pl = self.store.create_playlist(name, desc)
-                self.store.add_track_to_playlist(pl.id, track.id)
+                pl = self.store.create_playlist(name or default_name, desc)
+                self.store.add_multiple_tracks_to_playlist(pl.id, selected_track_ids)
+                self._sync_playlists_to_cloud()
                 self._refresh_playlist_sidebar()
+                self.switch_view(f"playlist:{pl.id}")
         elif act_remove_from_pl and chosen == act_remove_from_pl:
             pid = self.current_view.split(":", 1)[1]
-            self.store.remove_track_from_playlist(pid, track.id)
+            for tid in selected_track_ids:
+                self.store.remove_track_from_playlist(pid, tid)
+            self._sync_playlists_to_cloud()
             self.switch_view(self.current_view)
+
+    def _open_multi_track_picker_for_current_playlist(self) -> None:
+        """Abre un diálogo interactivo para seleccionar varias canciones con checkboxes y agregarlas juntas."""
+        if not self.current_view.startswith("playlist:"):
+            return
+        pid = self.current_view.split(":", 1)[1]
+        pl = self.store.playlists.get(pid)
+        if not pl:
+            return
+        all_tracks = list(self.store.tracks.values())
+        dlg = MultiTrackSelectorDialog(self, all_tracks, pl.track_ids)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            selected_ids = dlg.get_selected_track_ids()
+            if selected_ids:
+                added = self.store.add_multiple_tracks_to_playlist(pid, selected_ids)
+                self._sync_playlists_to_cloud()
+                self._refresh_playlist_sidebar()
+                self.switch_view(self.current_view)
+                QMessageBox.information(
+                    self,
+                    "Canciones Agregadas",
+                    f"✔ Se agregaron {added} canciones a la playlist «{pl.name}» con éxito.\n"
+                    "Sincronizadas con tu cuenta de Google Drive para todos tus dispositivos.",
+                )
+
+    def _sync_or_connect_google(self) -> None:
+        if self.store.gdrive_config.access_token:
+            self._sync_playlists_to_cloud(notify=True)
+        else:
+            self.open_google_drive_dialog()
+
+    def _sync_playlists_to_cloud(self, notify: bool = False) -> None:
+        token = self.store.gdrive_config.access_token
+        if not token:
+            if notify:
+                QMessageBox.information(
+                    self,
+                    "Cuenta de Google",
+                    "Primero conecta tu cuenta o ingresa tu Token de Google Drive.",
+                )
+            return
+
+        payload = {
+            "app": "SpotiLinux",
+            "version": "1.3.0",
+            "updatedAt": time.time(),
+            "user": self.store.google_user,
+            "playlists": [pl.to_dict() for pl in self.store.playlists.values()],
+            "likedIds": list(self.store.liked_ids),
+        }
+        self._cloud_sync_worker = GDriveCloudPlaylistSyncWorker(token, payload)
+        self._cloud_sync_worker.sync_completed.connect(lambda merged: self._on_cloud_sync_success(merged, notify=notify))
+        self._cloud_sync_worker.sync_failed.connect(lambda err: self._on_cloud_sync_failed(err, notify=notify))
+        self._cloud_sync_worker.start()
+
+    def _on_cloud_sync_success(self, merged: dict, notify: bool = False) -> None:
+        changed = False
+        cloud_playlists = merged.get("playlists", [])
+        for cp in cloud_playlists:
+            pid = cp.get("id")
+            pname = cp.get("name", "")
+            local_pl = self.store.playlists.get(pid) or next(
+                (p for p in self.store.playlists.values() if p.name.lower() == pname.lower()), None
+            )
+            if local_pl:
+                for tid in cp.get("track_ids", cp.get("trackIds", [])):
+                    if tid not in local_pl.track_ids:
+                        local_pl.track_ids.append(tid)
+                        changed = True
+            else:
+                new_pl = Playlist(
+                    id=pid or str(uuid.uuid4())[:8],
+                    name=pname or "Playlist Cloud",
+                    description=cp.get("description", ""),
+                    track_ids=list(cp.get("track_ids", cp.get("trackIds", []))),
+                    created_at=float(cp.get("created_at", time.time())),
+                )
+                self.store.playlists[new_pl.id] = new_pl
+                changed = True
+
+        for lid in merged.get("likedIds", []):
+            if lid not in self.store.liked_ids:
+                self.store.liked_ids.append(lid)
+                changed = True
+
+        u = merged.get("user")
+        if u and isinstance(u, dict) and u.get("name"):
+            self.store.google_user = u
+            changed = True
+
+        if changed:
+            self.store.save()
+            self._refresh_playlist_sidebar()
+            if self.current_view == "home":
+                self._rebuild_quick_access_cards()
+            else:
+                self._refresh_track_table()
+
+        if notify:
+            QMessageBox.information(
+                self,
+                "☁️ Sincronización Exitosa",
+                "Tus playlists y canciones favoritas están sincronizadas en tu cuenta de Google Drive.\n"
+                "Puedes acceder a ellas desde la app móvil (Android) y en Linux con la misma cuenta.",
+            )
+
+    def _on_cloud_sync_failed(self, err: str, notify: bool = False) -> None:
+        if notify:
+            QMessageBox.warning(
+                self,
+                "Aviso de Sincronización Cloud",
+                f"No se pudo sincronizar con Google Drive:\n{err}",
+            )
 
     def _download_cloud_track_to_app_folder(self, track: TrackMetadata) -> None:
         """Descarga explícitamente una pista de Google Drive a la carpeta persistente music_library/ de la app."""
@@ -1633,6 +2086,7 @@ class SpotiLinuxWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             name, desc = dlg.get_values()
             pl = self.store.create_playlist(name or "Mi Playlist", desc)
+            self._sync_playlists_to_cloud()
             self.switch_view(f"playlist:{pl.id}")
 
     def edit_current_playlist(self) -> None:
@@ -1648,6 +2102,7 @@ class SpotiLinuxWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             name, desc = dlg.get_values()
             self.store.rename_playlist(pid, name, desc)
+            self._sync_playlists_to_cloud()
             self.switch_view(f"playlist:{pid}")
 
     def delete_current_playlist(self) -> None:
@@ -1667,6 +2122,7 @@ class SpotiLinuxWindow(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.store.delete_playlist(pid)
+            self._sync_playlists_to_cloud()
             self.switch_view("home")
 
     def auto_scan_pc_music(self) -> None:
@@ -1849,6 +2305,7 @@ class SpotiLinuxWindow(QMainWindow):
             return
         tid = self.engine.current_track.id
         self.store.toggle_like(tid)
+        self._sync_playlists_to_cloud()
         self._update_like_button_ui(tid)
         self._refresh_track_table()
 

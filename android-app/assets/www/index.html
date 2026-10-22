@@ -117,10 +117,49 @@
   .playlist-card {
     background: var(--card-elev); border: 1px solid #2e2e3a; border-radius: 10px;
     padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+    position: relative; transition: all 0.2s ease;
   }
+  .playlist-card:hover { border-color: rgba(29, 185, 84, 0.4); transform: translateY(-2px); }
   .playlist-card.active { border-color: var(--green); background: #182820; }
   .playlist-card-title { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .playlist-card-sub { font-size: 11px; color: var(--muted); }
+  .playlist-card-badge {
+    position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 800;
+    background: rgba(29, 185, 84, 0.25); color: var(--green-bright); padding: 2px 6px; border-radius: 6px;
+  }
+
+  /* Perfil de cuenta Google en Inicio */
+  .account-badge-card {
+    display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, rgba(29, 185, 84, 0.15) 0%, rgba(24, 24, 32, 0.95) 100%);
+    border: 1px solid rgba(29, 185, 84, 0.35); border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 12px; cursor: pointer;
+  }
+  .account-avatar {
+    width: 36px; height: 36px; border-radius: 50%; background: var(--green);
+    color: #000; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 15px; overflow: hidden; flex-shrink: 0;
+  }
+  .account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .account-info { flex: 1; min-width: 0; }
+  .account-name { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .account-sub { font-size: 11px; color: var(--green-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Barra flotante de selección múltiple */
+  .multi-select-bar {
+    position: fixed; bottom: 84px; left: 12px; right: 12px;
+    background: #182820; border: 1px solid var(--green); border-radius: 12px;
+    padding: 8px 12px; display: none; align-items: center; justify-content: space-between;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.85); z-index: 35;
+  }
+  .multi-select-bar.show { display: flex; }
+  .track-checkbox {
+    width: 22px; height: 22px; border-radius: 6px; border: 2px solid #555;
+    margin-right: 8px; display: none; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 900; color: #000; cursor: pointer; background: #1a1a24; flex-shrink: 0;
+  }
+  .track-checkbox.visible { display: flex; }
+  .track-checkbox.checked { background: var(--green); border-color: var(--green); }
 
   /* Tarjetas de Google Drive y Ecualizador */
   .cloud-box {
@@ -317,34 +356,31 @@
         <input type="file" id="filePicker" accept="audio/*" multiple style="display:none" onchange="importLocalFiles(event)" />
       </div>
 
-      <!-- PESTAÑA 1: INICIO / BIBLIOTECA -->
+      <!-- PESTAÑA 1: INICIO (MUESTRA LAS PLAYLISTS DISPONIBLES) -->
       <div id="tab-home" class="tab-pane active">
-        <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;">
-          <button class="btn-chip active" id="flt-all" onclick="setFilter('all')">Todo</button>
-          <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">📱 Guardadas en App</button>
-          <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">♥ Favoritos</button>
-          <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">☁️ Google Drive</button>
+        <!-- Tarjeta de Cuenta Google / Sincronización en la Nube -->
+        <div id="homeAccountCard" class="account-badge-card" onclick="switchTab('drive')">
+          <div class="account-avatar" id="homeAvatar">👤</div>
+          <div class="account-info">
+            <div class="account-name" id="homeAccountName">Cuenta de Google / SpotiLinux</div>
+            <div class="account-sub" id="homeAccountSub">Toca para conectar Google Drive y sincronizar en la nube</div>
+          </div>
+          <span style="font-size:12px; color:var(--muted)">☁️</span>
         </div>
+
         <div class="section-title">
-          <span id="listHeading">Tu Biblioteca Musical</span>
+          <span>🎵 Tus Playlists Disponibles</span>
           <div style="display:flex; gap:5px;">
-            <button class="btn-chip" style="font-size:10px; padding:4px 9px;" onclick="openCreatePlaylistModal()">＋ Playlist</button>
+            <button class="btn-chip active" style="font-size:10px; padding:4px 9px;" onclick="openCreatePlaylistModal()">＋ Playlist</button>
             <button class="btn-chip" id="btnShuffleChip" style="font-size:10px; padding:4px 9px;" onclick="toggleShuffle(true)">🔀 Aleatorio</button>
           </div>
         </div>
-        <div id="scanBanner" style="font-size:11px; color:var(--green-bright); margin-bottom:6px; display:none;"></div>
-        <div id="trackList" class="track-list"></div>
-      </div>
 
-      <!-- PESTAÑA 2: PLAYLISTS PERSONALIZADAS -->
-      <div id="tab-playlists" class="tab-pane">
-        <div class="section-title">
-          <span>🎵 Mis Playlists</span>
-          <button class="btn-chip active" style="font-size:11px; padding:5px 12px;" onclick="openCreatePlaylistModal()">＋ Crear Nueva Playlist</button>
-        </div>
-        <div id="playlistGrid" class="playlist-grid"></div>
+        <!-- Grid de Playlists disponibles -->
+        <div id="homePlaylistGrid" class="playlist-grid"></div>
 
-        <div id="activePlaylistBox" class="cloud-box" style="display:none;">
+        <!-- Vista detallada de la playlist seleccionada -->
+        <div id="activePlaylistBox" class="cloud-box" style="display:none; margin-top:10px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <div>
               <h3 id="plViewTitle">Mi Playlist</h3>
@@ -355,22 +391,58 @@
               <button class="btn-chip" style="background:#3a1822; border-color:#6e2438;" onclick="deleteSelectedPlaylist()">🗑</button>
             </div>
           </div>
-          <div id="playlistTracksList" class="track-list" style="margin-top:8px;"></div>
+          <div style="display:flex; gap:6px; margin: 8px 0;">
+            <button class="btn-chip active" style="flex:1; font-size:11px; padding:7px 10px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir varias canciones a esta Playlist</button>
+          </div>
+          <div id="playlistTracksList" class="track-list" style="margin-top:6px;"></div>
+        </div>
+
+        <div style="margin-top:14px; text-align:center;">
+          <button class="btn-chip" style="width:100%; padding:10px; font-size:12px;" onclick="switchTab('songs')">
+            💿 Explorar todas las canciones sueltas / Biblioteca
+          </button>
         </div>
       </div>
 
-      <!-- PESTAÑA 3: GOOGLE DRIVE PRIVADO -->
+      <!-- PESTAÑA 2: TODAS LAS CANCIONES Y SELECCIÓN MÚLTIPLE -->
+      <div id="tab-songs" class="tab-pane">
+        <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;">
+          <button class="btn-chip active" id="flt-all" onclick="setFilter('all')">Todo</button>
+          <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">📱 Guardadas en App</button>
+          <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">♥ Favoritos</button>
+          <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">☁️ Google Drive</button>
+        </div>
+        <div class="section-title">
+          <span id="listHeading">Biblioteca de Canciones</span>
+          <div style="display:flex; gap:5px;">
+            <button class="btn-chip" id="btnToggleMultiSelect" style="font-size:10px; padding:4px 9px;" onclick="toggleMultiSelectMode()">☑️ Seleccionar Varias</button>
+          </div>
+        </div>
+        <div id="scanBanner" style="font-size:11px; color:var(--green-bright); margin-bottom:6px; display:none;"></div>
+        <div id="trackList" class="track-list"></div>
+      </div>
+
+      <!-- PESTAÑA 3: GOOGLE DRIVE PRIVADO Y CUENTA -->
       <div id="tab-drive" class="tab-pane">
         <div class="cloud-box">
-          <h3>☁️ Mi Cuenta de Google Drive</h3>
-          <p>Accede a tu cuenta de Google para buscar automáticamente tu carpeta de música en Drive e importar tus canciones para <b>escucharlas en línea (Stream)</b> o <b>descargarlas a la carpeta de la app</b>.</p>
+          <h3>☁️ Mi Cuenta y Google Drive</h3>
+          <p>Vincula tu cuenta de Google para sincronizar tus Playlists en la nube y acceder a ellas desde cualquier dispositivo (PC y Celular) como en Spotify.</p>
+
+          <!-- Perfil de cuenta vinculada -->
+          <div id="driveAccountStatus" class="account-badge-card" style="margin-bottom:10px;">
+            <div class="account-avatar" id="driveAvatar">👤</div>
+            <div class="account-info">
+              <div class="account-name" id="driveAccountName">Sin cuenta vinculada</div>
+              <div class="account-sub" id="driveAccountSub">Inicia sesión con Google para sincronizar tus Playlists</div>
+            </div>
+          </div>
 
           <div style="display:flex; gap:6px; margin-bottom:10px;">
             <button class="btn-chip active" style="flex:1; padding:9px;" onclick="openGoogleSignInPopup()">
               🔑 Iniciar sesión con cuenta de Google
             </button>
-            <button class="btn-chip" style="padding:9px;" onclick="autoDiscoverDriveMusic()">
-              🔍 Buscar carpeta Música
+            <button class="btn-chip" style="padding:9px;" onclick="syncCloudPlaylists()">
+              ☁️ Sincronizar Playlists
             </button>
           </div>
 
@@ -384,7 +456,7 @@
 
           <div class="field-group">
             <label>Token de Acceso de Google (se autocompleta al iniciar sesión o pégalo aquí):</label>
-            <input type="text" id="gdToken" placeholder="ya29.a0AfH6SM..." />
+            <input type="text" id="gdToken" placeholder="ya29.a0AfH6SM..." oninput="handleTokenManualInput()" />
           </div>
           <div class="field-group">
             <label>Client ID OAuth de Google Cloud (opcional para flujo automático):</label>
@@ -401,14 +473,16 @@
 
           <div style="display:flex; gap:6px;">
             <button class="btn-chip active" style="flex:1; padding:9px; font-size:12px;" onclick="autoDiscoverDriveMusic()">
-              ☁️ Auto-Escanear e Importar Drive
+              🔍 Auto-Escanear Música de Drive
             </button>
             <button class="btn-chip" style="padding:9px; font-size:12px;" onclick="downloadAllCloudTracks()">
               ⬇️ Descargar Todas
             </button>
           </div>
           <div id="gdStatus" style="margin-top:7px; font-size:11px; color:var(--green-bright);"></div>
+          <div id="cloudSyncStatus" style="margin-top:5px; font-size:11px; color:#6eeed0;"></div>
         </div>
+      </div>
       </div>
 
       <!-- PESTAÑA 4: ECUALIZADOR DE 5 BANDAS -->
@@ -495,16 +569,44 @@
     </div>
   </div>
 
-  <!-- MODAL: AÑADIR CANCIÓN A PLAYLIST -->
+  <!-- MODAL: AÑADIR CANCIÓN(ES) A PLAYLIST -->
   <div id="addToPlaylistModal" class="modal-backdrop">
     <div class="modal-card">
       <h3>＋ Añadir a una Playlist</h3>
-      <p id="addTrackToPlSubtitle">Selecciona la playlist donde quieres guardar esta canción:</p>
+      <p id="addTrackToPlSubtitle">Selecciona la playlist donde quieres guardar las canciones seleccionadas:</p>
       <div id="modalPlaylistChoices" style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;"></div>
       <div style="display:flex; gap:8px;">
         <button class="btn-chip active" style="flex:1; padding:8px;" onclick="closeAddToPlaylistAndCreateNew()">＋ Nueva Playlist</button>
         <button class="btn-chip" style="padding:8px;" onclick="closeAddToPlaylistModal()">Cerrar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SELECCIÓN MÚLTIPLE DE CANCIONES PARA LA PLAYLIST ABIERTA -->
+  <div id="multiTrackPickerModal" class="modal-backdrop">
+    <div class="modal-card" style="max-height:85vh; display:flex; flex-direction:column;">
+      <h3 id="multiPickerTitle">＋ Añadir canciones a la Playlist</h3>
+      <p style="margin-bottom:6px;">Marca las canciones que deseas agregar a la playlist:</p>
+      <input type="text" id="multiPickerSearch" class="search-input" placeholder="🔍 Filtrar por título o artista..." oninput="renderMultiPickerTracks()" style="margin-bottom:8px;" />
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span id="multiPickerCount" style="font-size:11px; color:var(--muted)">0 seleccionadas</span>
+        <button class="btn-chip" style="font-size:10px; padding:3px 8px;" onclick="toggleSelectAllInPicker()">Marcar todas</button>
+      </div>
+      <div id="multiPickerList" class="track-list" style="flex:1; overflow-y:auto; max-height:45vh; border:1px solid #292934; border-radius:8px; padding:4px;"></div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn-chip active" style="flex:1; padding:9px;" onclick="confirmMultiPickerAdd()">✔ Añadir Canciones</button>
+        <button class="btn-chip" style="padding:9px;" onclick="closeMultiTrackPickerModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra Flotante de Selección Múltiple -->
+  <div id="multiSelectBar" class="multi-select-bar">
+    <span id="multiSelectCount" style="font-size:12px; font-weight:800; color:#fff;">0 seleccionadas</span>
+    <div style="display:flex; gap:5px;">
+      <button class="btn-chip" style="padding:5px 8px; font-size:10px;" onclick="selectAllVisibleTracks()">Todas</button>
+      <button class="btn-chip active" style="padding:5px 10px; font-size:10px;" onclick="openAddSelectedToPlaylistModal()">＋ A Playlist</button>
+      <button class="btn-chip" style="padding:5px 8px; font-size:10px;" onclick="exitMultiSelectMode()">✕</button>
     </div>
   </div>
 
@@ -530,16 +632,16 @@
     </div>
   </div>
 
-  <!-- Barra de Navegación Inferior con 4 Pestañas (Inicio, Playlists, Mi Drive, Ecualizador) -->
+  <!-- Barra de Navegación Inferior con 4 Pestañas (Inicio, Canciones, Mi Drive, Ecualizador) -->
   <div class="bottom-nav">
     <button class="nav-item active" id="nav-home" onclick="switchTab('home')">
       <span class="ico">🏠</span><span>Inicio</span>
     </button>
-    <button class="nav-item" id="nav-playlists" onclick="switchTab('playlists')">
-      <span class="ico">🎵</span><span>Playlists</span>
+    <button class="nav-item" id="nav-songs" onclick="switchTab('songs')">
+      <span class="ico">💿</span><span>Canciones</span>
     </button>
     <button class="nav-item" id="nav-drive" onclick="switchTab('drive')">
-      <span class="ico">☁️</span><span>Mi Drive</span>
+      <span class="ico">☁️</span><span>Mi Cuenta</span>
     </button>
     <button class="nav-item" id="nav-eq" onclick="switchTab('eq')">
       <span class="ico">🎚</span><span>Ecualizador</span>
@@ -880,6 +982,12 @@ function fmtTime(sec) {
   return m + ":" + (s < 10 ? "0" : "") + s;
 }
 
+/* ---------------- VARIABLES DE SELECCIÓN MÚLTIPLE Y PERFIL GOOGLE ---------------- */
+let selectedTrackIds = new Set();
+let isMultiSelectMode = false;
+let googleUserProfile = null;
+let multiPickerSelectedIds = new Set();
+
 /* ---------------- RENDERIZADO DE CANCIONES Y ACCIONES ---------------- */
 function getFilteredTracks() {
   const q = (document.getElementById("searchInput").value || "").toLowerCase();
@@ -892,17 +1000,94 @@ function getFilteredTracks() {
   });
 }
 
+function toggleMultiSelectMode() {
+  isMultiSelectMode = !isMultiSelectMode;
+  selectedTrackIds.clear();
+  const btn = document.getElementById("btnToggleMultiSelect");
+  if (btn) {
+    btn.classList.toggle("active", isMultiSelectMode);
+    btn.textContent = isMultiSelectMode ? "✕ Salir" : "☑️ Seleccionar Varias";
+  }
+  const bar = document.getElementById("multiSelectBar");
+  if (bar) bar.classList.toggle("show", isMultiSelectMode);
+  updateMultiSelectBar();
+  renderTracks();
+}
+
+function exitMultiSelectMode() {
+  isMultiSelectMode = false;
+  selectedTrackIds.clear();
+  const btn = document.getElementById("btnToggleMultiSelect");
+  if (btn) {
+    btn.classList.remove("active");
+    btn.textContent = "☑️ Seleccionar Varias";
+  }
+  const bar = document.getElementById("multiSelectBar");
+  if (bar) bar.classList.remove("show");
+  renderTracks();
+}
+
+function toggleTrackSelection(id, ev) {
+  if (ev) ev.stopPropagation();
+  if (selectedTrackIds.has(id)) {
+    selectedTrackIds.delete(id);
+  } else {
+    selectedTrackIds.add(id);
+  }
+  updateMultiSelectBar();
+  renderTracks();
+}
+
+function selectAllVisibleTracks() {
+  const filtered = getFilteredTracks();
+  if (selectedTrackIds.size === filtered.length && filtered.length > 0) {
+    selectedTrackIds.clear();
+  } else {
+    filtered.forEach(t => selectedTrackIds.add(t.id));
+  }
+  updateMultiSelectBar();
+  renderTracks();
+}
+
+function updateMultiSelectBar() {
+  const countEl = document.getElementById("multiSelectCount");
+  if (countEl) countEl.textContent = `${selectedTrackIds.size} seleccionada${selectedTrackIds.size === 1 ? '' : 's'}`;
+}
+
+function openAddSelectedToPlaylistModal() {
+  if (selectedTrackIds.size === 0) {
+    showToast("Selecciona al menos una canción primero");
+    return;
+  }
+  openAddToPlaylistModal(Array.from(selectedTrackIds));
+}
+
 function renderTracks() {
   const listEl = document.getElementById("trackList");
+  if (!listEl) return;
   const filtered = getFilteredTracks();
   listEl.innerHTML = "";
   const curTrack = tracks[currentIndex];
 
   filtered.forEach((t) => {
     const realIdx = tracks.indexOf(t);
+    const isSelected = selectedTrackIds.has(t.id);
     const div = document.createElement("div");
-    div.className = "track-item" + (curTrack && curTrack.id === t.id ? " playing" : "");
-    div.onclick = () => playTrackIndex(realIdx);
+    div.className = "track-item" + (curTrack && curTrack.id === t.id ? " playing" : "") + (isSelected ? " selected" : "");
+    div.onclick = (ev) => {
+      if (isMultiSelectMode) {
+        toggleTrackSelection(t.id, ev);
+      } else {
+        playTrackIndex(realIdx);
+      }
+    };
+
+    // Checkbox de selección múltiple
+    const cb = document.createElement("div");
+    cb.className = "track-checkbox" + (isSelected ? " checked" : "") + (isMultiSelectMode ? " visible" : "");
+    cb.textContent = isSelected ? "✓" : "";
+    cb.onclick = (ev) => toggleTrackSelection(t.id, ev);
+    div.appendChild(cb);
 
     const thumb = document.createElement("div");
     thumb.className = "track-thumb";
@@ -918,76 +1103,174 @@ function renderTracks() {
     div.appendChild(thumb);
     div.appendChild(meta);
 
-    // Si es una pista de Google Drive en línea aún no descargada, mostrar botón ⬇️ Descargar
-    if (t.cloud && !t.downloaded && t.driveId) {
-      const dlBtn = document.createElement("button");
-      dlBtn.className = "icon-action-btn";
-      dlBtn.textContent = "⬇️";
-      dlBtn.title = "Descargar a la carpeta de la aplicación";
-      dlBtn.onclick = (ev) => {
+    if (!isMultiSelectMode) {
+      // Si es una pista de Google Drive en línea aún no descargada, mostrar botón ⬇️ Descargar
+      if (t.cloud && !t.downloaded && t.driveId) {
+        const dlBtn = document.createElement("button");
+        dlBtn.className = "icon-action-btn";
+        dlBtn.textContent = "⬇️";
+        dlBtn.title = "Descargar a la carpeta de la aplicación";
+        dlBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          downloadSingleDriveTrack(t, dlBtn);
+        };
+        div.appendChild(dlBtn);
+      }
+
+      // Botón ＋ para agregar a Playlist individual
+      const plBtn = document.createElement("button");
+      plBtn.className = "icon-action-btn";
+      plBtn.textContent = "＋";
+      plBtn.title = "Añadir a Playlist";
+      plBtn.onclick = (ev) => {
         ev.stopPropagation();
-        downloadSingleDriveTrack(t, dlBtn);
+        openAddToPlaylistModal(t.id);
       };
-      div.appendChild(dlBtn);
+      div.appendChild(plBtn);
+
+      // Botón ♥ Favorito
+      const likeBtn = document.createElement("button");
+      likeBtn.className = "like-btn" + (t.liked ? " liked" : "");
+      likeBtn.textContent = t.liked ? "♥" : "♡";
+      likeBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        t.liked = !t.liked;
+        savePersistentState();
+        renderTracks();
+        renderHomePlaylists();
+        uploadPlaylistsToDrive();
+      };
+      div.appendChild(likeBtn);
     }
-
-    // Botón ＋ para agregar a Playlist
-    const plBtn = document.createElement("button");
-    plBtn.className = "icon-action-btn";
-    plBtn.textContent = "＋";
-    plBtn.title = "Añadir a Playlist";
-    plBtn.onclick = (ev) => {
-      ev.stopPropagation();
-      openAddToPlaylistModal(t.id);
-    };
-    div.appendChild(plBtn);
-
-    // Botón ♥ Favorito
-    const likeBtn = document.createElement("button");
-    likeBtn.className = "like-btn" + (t.liked ? " liked" : "");
-    likeBtn.textContent = t.liked ? "♥" : "♡";
-    likeBtn.onclick = (ev) => {
-      ev.stopPropagation();
-      t.liked = !t.liked;
-      savePersistentState();
-      renderTracks();
-    };
-    div.appendChild(likeBtn);
 
     listEl.appendChild(div);
   });
 }
 
-/* ---------------- GESTIÓN DE PLAYLISTS EN EL APK ---------------- */
-function renderPlaylists() {
-  const grid = document.getElementById("playlistGrid");
+/* ---------------- GESTIÓN DE PLAYLISTS DISPONIBLES EN INICIO ---------------- */
+function renderHomePlaylists() {
+  const grid = document.getElementById("homePlaylistGrid");
+  if (!grid) return;
   grid.innerHTML = "";
 
+  // 1. Tarjeta Especial: Crear Nueva Playlist
+  const createCard = document.createElement("div");
+  createCard.className = "playlist-card";
+  createCard.style.border = "1px dashed var(--green)";
+  createCard.style.background = "rgba(29, 185, 84, 0.08)";
+  createCard.onclick = () => openCreatePlaylistModal();
+  createCard.innerHTML = `
+    <div style="font-size:20px; color:var(--green-bright); margin-bottom:2px;">✨ ＋</div>
+    <div class="playlist-card-title">Nueva Playlist</div>
+    <div class="playlist-card-sub">Crea una lista personalizada</div>
+  `;
+  grid.appendChild(createCard);
+
+  // 2. Tarjeta Especial: Canciones que te gustan
+  const likedCount = tracks.filter(t => t.liked).length;
+  const likedCard = document.createElement("div");
+  likedCard.className = "playlist-card" + (selectedPlaylistId === "pl_liked" ? " active" : "");
+  likedCard.style.background = "linear-gradient(135deg, #450af5 0%, #8e73eb 100%)";
+  likedCard.onclick = () => selectAndDisplaySpecialPlaylist("pl_liked", "💜 Canciones que te gustan", "Tus temas marcados con corazón", tracks.filter(t => t.liked));
+  likedCard.innerHTML = `
+    <div class="playlist-card-badge">FAVORITOS</div>
+    <div class="playlist-card-title" style="margin-top:16px;">💜 Tus Favoritos</div>
+    <div class="playlist-card-sub" style="color:#e0e0ff;">${likedCount} canciones</div>
+  `;
+  grid.appendChild(likedCard);
+
+  // 3. Tarjeta Especial: Google Drive Cloud
+  const cloudCount = tracks.filter(t => t.cloud).length;
+  const cloudCard = document.createElement("div");
+  cloudCard.className = "playlist-card" + (selectedPlaylistId === "pl_cloud" ? " active" : "");
+  cloudCard.style.background = "linear-gradient(135deg, #0f5fc3 0%, #1db954 100%)";
+  cloudCard.onclick = () => selectAndDisplaySpecialPlaylist("pl_cloud", "☁️ Mi Google Drive", "Música de tu nube privada de Google", tracks.filter(t => t.cloud));
+  cloudCard.innerHTML = `
+    <div class="playlist-card-badge">NUBE</div>
+    <div class="playlist-card-title" style="margin-top:16px;">☁️ Google Drive</div>
+    <div class="playlist-card-sub" style="color:#d8ffff;">${cloudCount} canciones</div>
+  `;
+  grid.appendChild(cloudCard);
+
+  // 4. Playlists del usuario
   playlists.forEach(pl => {
     const card = document.createElement("div");
     card.className = "playlist-card" + (pl.id === selectedPlaylistId ? " active" : "");
     card.onclick = () => {
       selectedPlaylistId = pl.id;
-      renderPlaylists();
+      renderHomePlaylists();
     };
-    card.innerHTML = `<div class="playlist-card-title">🎵 ${pl.name}</div>
-                      <div class="playlist-card-sub">${pl.trackIds.length} canciones</div>`;
+    card.innerHTML = `
+      <div style="font-size:22px; margin-bottom:2px;">🎵</div>
+      <div class="playlist-card-title">${pl.name}</div>
+      <div class="playlist-card-sub">${pl.trackIds.length} canciones</div>
+    `;
     grid.appendChild(card);
   });
 
+  // Mostrar detalle de la playlist activa dentro de Inicio
+  renderActivePlaylistDetail();
+}
+
+function selectAndDisplaySpecialPlaylist(id, name, desc, trackList) {
+  selectedPlaylistId = id;
+  renderHomePlaylists();
   const activeBox = document.getElementById("activePlaylistBox");
+  if (!activeBox) return;
+  activeBox.style.display = "block";
+  document.getElementById("plViewTitle").textContent = name;
+  document.getElementById("plViewDesc").textContent = `${desc} • ${trackList.length} pistas`;
+
+  const plListEl = document.getElementById("playlistTracksList");
+  plListEl.innerHTML = "";
+  trackList.forEach(t => {
+    const realIdx = tracks.indexOf(t);
+    const row = document.createElement("div");
+    row.className = "track-item";
+    row.onclick = () => playTrackIndex(realIdx);
+    row.innerHTML = `
+      <div class="track-thumb" style="width:36px;height:36px;font-size:14px;background:linear-gradient(135deg,${t.color || '#1db954'},#181824)">♪</div>
+      <div class="track-meta">
+        <div class="track-title">${t.title}</div>
+        <div class="track-sub">${t.artist}</div>
+      </div>
+    `;
+    plListEl.appendChild(row);
+  });
+}
+
+function renderActivePlaylistDetail() {
+  const activeBox = document.getElementById("activePlaylistBox");
+  if (!activeBox) return;
+  if (selectedPlaylistId === "pl_liked" || selectedPlaylistId === "pl_cloud") return;
+
   const curPl = playlists.find(p => p.id === selectedPlaylistId);
   if (!curPl) {
+    if (playlists.length > 0) {
+      selectedPlaylistId = playlists[0].id;
+      return renderActivePlaylistDetail();
+    }
     activeBox.style.display = "none";
     return;
   }
 
   activeBox.style.display = "block";
   document.getElementById("plViewTitle").textContent = "🎵 " + curPl.name;
-  document.getElementById("plViewDesc").textContent = `${curPl.desc || 'Playlist personalizada'} • ${curPl.trackIds.length} pistas`;
+  document.getElementById("plViewDesc").textContent = `${curPl.desc || 'Playlist personalizada'} • ${curPl.trackIds.length} canciones`;
 
   const plListEl = document.getElementById("playlistTracksList");
   plListEl.innerHTML = "";
+
+  if (curPl.trackIds.length === 0) {
+    plListEl.innerHTML = `
+      <div style="padding:14px; text-align:center; color:var(--muted); font-size:12px;">
+        Esta playlist aún no tiene canciones.<br>
+        <button class="btn-chip active" style="margin-top:8px; font-size:11px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir varias canciones ahora</button>
+      </div>
+    `;
+    return;
+  }
+
   curPl.trackIds.forEach(tid => {
     const t = tracks.find(x => x.id === tid);
     if (!t) return;
@@ -1005,15 +1288,97 @@ function renderPlaylists() {
     const rmBtn = document.createElement("button");
     rmBtn.className = "icon-action-btn";
     rmBtn.textContent = "✕";
+    rmBtn.title = "Quitar de esta Playlist";
     rmBtn.onclick = (ev) => {
       ev.stopPropagation();
       curPl.trackIds = curPl.trackIds.filter(id => id !== tid);
       savePersistentState();
-      renderPlaylists();
+      renderHomePlaylists();
+      uploadPlaylistsToDrive();
     };
     row.appendChild(rmBtn);
     plListEl.appendChild(row);
   });
+}
+
+/* ---------------- SELECCIÓN MÚLTIPLE DESDE DENTRO DE UNA PLAYLIST ---------------- */
+function openMultiTrackPickerForCurrentPlaylist() {
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  if (!curPl) return;
+  document.getElementById("multiPickerTitle").textContent = `＋ Añadir canciones a «${curPl.name}»`;
+  document.getElementById("multiPickerSearch").value = "";
+  multiPickerSelectedIds.clear();
+  // Pre-marcar canciones que ya están en la playlist
+  curPl.trackIds.forEach(id => multiPickerSelectedIds.add(id));
+  renderMultiPickerTracks();
+  document.getElementById("multiTrackPickerModal").classList.add("open");
+}
+
+function closeMultiTrackPickerModal() {
+  document.getElementById("multiTrackPickerModal").classList.remove("open");
+}
+
+function renderMultiPickerTracks() {
+  const container = document.getElementById("multiPickerList");
+  const q = (document.getElementById("multiPickerSearch").value || "").toLowerCase();
+  container.innerHTML = "";
+
+  const available = tracks.filter(t => {
+    if (!q) return true;
+    return t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q);
+  });
+
+  available.forEach(t => {
+    const isChecked = multiPickerSelectedIds.has(t.id);
+    const row = document.createElement("div");
+    row.className = "track-item" + (isChecked ? " selected" : "");
+    row.style.padding = "6px 8px";
+    row.onclick = () => {
+      if (multiPickerSelectedIds.has(t.id)) {
+        multiPickerSelectedIds.delete(t.id);
+      } else {
+        multiPickerSelectedIds.add(t.id);
+      }
+      renderMultiPickerTracks();
+    };
+
+    const cb = document.createElement("div");
+    cb.className = "track-checkbox visible" + (isChecked ? " checked" : "");
+    cb.textContent = isChecked ? "✓" : "";
+    row.appendChild(cb);
+
+    const meta = document.createElement("div");
+    meta.className = "track-meta";
+    meta.innerHTML = `<div class="track-title" style="font-size:12px;">${t.title}</div>
+                      <div class="track-sub" style="font-size:10px;">${t.artist}</div>`;
+    row.appendChild(meta);
+    container.appendChild(row);
+  });
+
+  const countEl = document.getElementById("multiPickerCount");
+  if (countEl) countEl.textContent = `${multiPickerSelectedIds.size} seleccionada${multiPickerSelectedIds.size === 1 ? '' : 's'}`;
+}
+
+function toggleSelectAllInPicker() {
+  const q = (document.getElementById("multiPickerSearch").value || "").toLowerCase();
+  const available = tracks.filter(t => !q || t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
+  if (multiPickerSelectedIds.size >= available.length && available.length > 0) {
+    multiPickerSelectedIds.clear();
+  } else {
+    available.forEach(t => multiPickerSelectedIds.add(t.id));
+  }
+  renderMultiPickerTracks();
+}
+
+function confirmMultiPickerAdd() {
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  if (!curPl) return;
+  curPl.trackIds = Array.from(multiPickerSelectedIds);
+  savePersistentState();
+  closeMultiTrackPickerModal();
+  renderHomePlaylists();
+  uploadPlaylistsToDrive();
+  showToast(`✔ Playlist «${curPl.name}» actualizada con ${curPl.trackIds.length} canciones`);
 }
 
 function openCreatePlaylistModal() {
@@ -1029,40 +1394,56 @@ function closeCreatePlaylistModal() {
 function confirmCreatePlaylist() {
   const name = document.getElementById("newPlName").value.trim() || ("Mi Playlist #" + (playlists.length + 1));
   const desc = document.getElementById("newPlDesc").value.trim();
+  let initialIds = [];
+  if (pendingTrackIdForPlaylist) {
+    if (Array.isArray(pendingTrackIdForPlaylist)) initialIds = [...pendingTrackIdForPlaylist];
+    else initialIds = [pendingTrackIdForPlaylist];
+  }
   const newPl = {
     id: "pl_" + Date.now(),
     name,
     desc,
-    trackIds: pendingTrackIdForPlaylist ? [pendingTrackIdForPlaylist] : []
+    trackIds: initialIds
   };
   pendingTrackIdForPlaylist = null;
   playlists.unshift(newPl);
   selectedPlaylistId = newPl.id;
   savePersistentState();
   closeCreatePlaylistModal();
-  renderPlaylists();
-  switchTab("playlists");
+  renderHomePlaylists();
+  uploadPlaylistsToDrive();
+  showToast(`✔ Playlist «${newPl.name}» creada`);
 }
 
-function openAddToPlaylistModal(trackId) {
-  pendingTrackIdForPlaylist = trackId;
-  const t = tracks.find(x => x.id === trackId);
-  document.getElementById("addTrackToPlSubtitle").textContent = t ? `Guardar «${t.title}» en:` : "Selecciona una playlist:";
+function openAddToPlaylistModal(trackIdsOrId) {
+  const targetIds = Array.isArray(trackIdsOrId) ? trackIdsOrId : [trackIdsOrId];
+  pendingTrackIdForPlaylist = targetIds;
+  const count = targetIds.length;
+  document.getElementById("addTrackToPlSubtitle").textContent = count > 1 ? `Añadir las ${count} canciones seleccionadas a:` : "Selecciona la playlist:";
   const container = document.getElementById("modalPlaylistChoices");
   container.innerHTML = "";
+
   playlists.forEach(pl => {
     const btn = document.createElement("button");
     btn.className = "btn-chip";
     btn.style.textAlign = "left";
     btn.style.padding = "9px 12px";
-    const already = pl.trackIds.includes(trackId);
-    btn.textContent = `🎵 ${pl.name} (${pl.trackIds.length})` + (already ? " ✔" : "");
+    btn.textContent = `🎵 ${pl.name} (${pl.trackIds.length})`;
     btn.onclick = () => {
-      if (!pl.trackIds.includes(trackId)) pl.trackIds.push(trackId);
+      let addedCnt = 0;
+      targetIds.forEach(id => {
+        if (!pl.trackIds.includes(id)) {
+          pl.trackIds.push(id);
+          addedCnt++;
+        }
+      });
       pendingTrackIdForPlaylist = null;
       savePersistentState();
-      renderPlaylists();
+      renderHomePlaylists();
+      uploadPlaylistsToDrive();
       closeAddToPlaylistModal();
+      exitMultiSelectMode();
+      showToast(`✔ ${addedCnt} canciones añadidas a «${pl.name}»`);
     };
     container.appendChild(btn);
   });
@@ -1079,6 +1460,16 @@ function closeAddToPlaylistAndCreateNew() {
 }
 
 function playSelectedPlaylist() {
+  if (selectedPlaylistId === "pl_liked") {
+    const liked = tracks.filter(t => t.liked);
+    if (liked.length > 0) playTrackIndex(tracks.indexOf(liked[0]));
+    return;
+  }
+  if (selectedPlaylistId === "pl_cloud") {
+    const cloud = tracks.filter(t => t.cloud);
+    if (cloud.length > 0) playTrackIndex(tracks.indexOf(cloud[0]));
+    return;
+  }
   const curPl = playlists.find(p => p.id === selectedPlaylistId);
   if (!curPl || !curPl.trackIds.length) return;
   const firstTrack = tracks.find(x => x.id === curPl.trackIds[0]);
@@ -1087,10 +1478,14 @@ function playSelectedPlaylist() {
 
 function deleteSelectedPlaylist() {
   if (playlists.length <= 1) return;
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  const name = curPl ? curPl.name : "Playlist";
   playlists = playlists.filter(p => p.id !== selectedPlaylistId);
   selectedPlaylistId = playlists[0] ? playlists[0].id : "";
   savePersistentState();
-  renderPlaylists();
+  renderHomePlaylists();
+  uploadPlaylistsToDrive();
+  showToast(`🗑 Playlist «${name}» eliminada`);
 }
 
 /* ---------------- GOOGLE DRIVE: ACCESO DESDE EL INICIO + AUTO-BÚSQUEDA DE CARPETA MÚSICA + ONLINE/OFFLINE ---------------- */
@@ -1105,13 +1500,222 @@ function openGoogleSignInPopup() {
   const st = document.getElementById("gdStatus");
   if (cid) {
     const redirect = encodeURIComponent(window.location.href.split("#")[0]);
-    const scope = encodeURIComponent("https://www.googleapis.com/auth/drive.readonly");
+    const scope = encodeURIComponent("https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly");
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(cid)}&redirect_uri=${redirect}&response_type=token&scope=${scope}&include_granted_scopes=true`;
-    window.location.href = authUrl;
+    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.openExternalAuth) {
+      window.AndroidMedia.openExternalAuth(authUrl);
+    } else {
+      window.location.href = authUrl;
+    }
   } else {
-    // Abrir selector de token OAuth2 de Google para obtener acceso inmediato a Google Drive
-    st.textContent = "🔑 Ingresa o pega tu Token de Google Drive (o Client ID) y pulsa Auto-Escanear.";
-    window.open("https://developers.google.com/oauthplayground/#step1&apisSelect=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.readonly", "_blank");
+    st.textContent = "🔑 Abriendo consola para autorizar tu cuenta de Google...";
+    const authHelperUrl = "https://developers.google.com/oauthplayground/#step1&apisSelect=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive";
+    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.openExternalAuth) {
+      window.AndroidMedia.openExternalAuth(authHelperUrl);
+    } else {
+      window.open(authHelperUrl, "_blank");
+    }
+  }
+}
+
+async function fetchGoogleUserProfile() {
+  const token = document.getElementById("gdToken").value.trim();
+  if (!token) return null;
+  try {
+    const res = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        googleUserProfile = {
+          displayName: data.user.displayName || "Usuario de Google",
+          email: data.user.emailAddress || "",
+          photoLink: data.user.photoLink || ""
+        };
+        updateAccountUI();
+        return googleUserProfile;
+      }
+    }
+  } catch (e) {
+    console.error("Error al obtener perfil de usuario:", e);
+  }
+  return null;
+}
+
+function updateAccountUI() {
+  const nameEl = document.getElementById("homeAccountName");
+  const subEl = document.getElementById("homeAccountSub");
+  const avatarEl = document.getElementById("homeAvatar");
+  const dNameEl = document.getElementById("driveAccountName");
+  const dSubEl = document.getElementById("driveAccountSub");
+  const dAvatarEl = document.getElementById("driveAvatar");
+
+  if (googleUserProfile && googleUserProfile.email) {
+    const nameStr = googleUserProfile.displayName || "Usuario de Google";
+    const subStr = `${googleUserProfile.email} • Playlists sincronizadas en la nube ☁️`;
+    if (nameEl) nameEl.textContent = nameStr;
+    if (subEl) subEl.textContent = subStr;
+    if (dNameEl) dNameEl.textContent = nameStr;
+    if (dSubEl) dSubEl.textContent = subStr;
+
+    if (googleUserProfile.photoLink) {
+      if (avatarEl) avatarEl.innerHTML = `<img src="${googleUserProfile.photoLink}" alt="avatar" />`;
+      if (dAvatarEl) dAvatarEl.innerHTML = `<img src="${googleUserProfile.photoLink}" alt="avatar" />`;
+    }
+  } else {
+    const token = document.getElementById("gdToken").value.trim();
+    if (token) {
+      const msg = "Playlists sincronizadas con Google Drive ☁️";
+      if (nameEl) nameEl.textContent = "Cuenta de Google Conectada";
+      if (subEl) subEl.textContent = msg;
+      if (dNameEl) dNameEl.textContent = "Cuenta de Google Conectada";
+      if (dSubEl) dSubEl.textContent = msg;
+    } else {
+      if (nameEl) nameEl.textContent = "Cuenta de Google / SpotiLinux";
+      if (subEl) subEl.textContent = "Toca para conectar Google Drive y sincronizar en la nube";
+      if (dNameEl) dNameEl.textContent = "Sin cuenta vinculada";
+      if (dSubEl) dSubEl.textContent = "Inicia sesión con Google para sincronizar tus Playlists";
+    }
+  }
+}
+
+function handleTokenManualInput() {
+  savePersistentState();
+  const token = document.getElementById("gdToken").value.trim();
+  if (token.length > 20) {
+    fetchGoogleUserProfile();
+    syncCloudPlaylists();
+  }
+}
+
+async function syncCloudPlaylists() {
+  const token = document.getElementById("gdToken").value.trim();
+  const statusEl = document.getElementById("cloudSyncStatus");
+  if (!token) {
+    if (statusEl) statusEl.textContent = "⚠️ Primero inicia sesión o pega tu Token de Google.";
+    return;
+  }
+  if (statusEl) statusEl.textContent = "☁️ Sincronizando playlists con tu cuenta de Google...";
+
+  try {
+    await fetchGoogleUserProfile();
+
+    // 1. Buscar si ya existe 'spotilinux_cloud_playlists.json' en Drive
+    const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D%27spotilinux_cloud_playlists.json%27+and+trashed%3Dfalse&fields=files(id%2Cname)", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    let fileId = null;
+    if (searchRes.ok) {
+      const data = await searchRes.json();
+      if (data.files && data.files.length > 0) {
+        fileId = data.files[0].id;
+      }
+    }
+
+    // 2. Si existe, descargar y combinar
+    if (fileId) {
+      const dlRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (dlRes.ok) {
+        const cloudData = await dlRes.json();
+        if (Array.isArray(cloudData.playlists)) {
+          cloudData.playlists.forEach(cPl => {
+            const localPl = playlists.find(p => p.id === cPl.id || p.name.toLowerCase() === cPl.name.toLowerCase());
+            if (localPl) {
+              localPl.trackIds = Array.from(new Set([...localPl.trackIds, ...(cPl.trackIds || [])]));
+            } else {
+              playlists.push(cPl);
+            }
+          });
+        }
+        if (Array.isArray(cloudData.likedIds)) {
+          tracks.forEach(t => {
+            if (cloudData.likedIds.includes(t.id)) t.liked = true;
+          });
+        }
+        savePersistentState();
+        renderHomePlaylists();
+        renderTracks();
+      }
+    }
+
+    // 3. Subir el estado actual a Google Drive (Crear o Actualizar)
+    await uploadPlaylistsToDrive(fileId);
+    if (statusEl) statusEl.textContent = "✔ Playlists sincronizadas en tu cuenta de Google (disponibles en cualquier dispositivo).";
+    showToast("☁️ Playlists sincronizadas en la nube");
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "Aviso sincronización: " + err.message;
+  }
+}
+
+async function uploadPlaylistsToDrive(existingFileId) {
+  const token = document.getElementById("gdToken").value.trim();
+  if (!token) return;
+
+  const payload = {
+    app: "SpotiLinux",
+    version: "1.3.0",
+    updatedAt: Date.now(),
+    user: googleUserProfile,
+    playlists: playlists,
+    likedIds: tracks.filter(t => t.liked).map(t => t.id)
+  };
+  const jsonStr = JSON.stringify(payload, null, 2);
+
+  try {
+    let fileId = existingFileId;
+    if (!fileId) {
+      const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D%27spotilinux_cloud_playlists.json%27+and+trashed%3Dfalse&fields=files(id%2Cname)", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        if (data.files && data.files.length > 0) fileId = data.files[0].id;
+      }
+    }
+
+    if (fileId) {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json; charset=UTF-8"
+        },
+        body: jsonStr
+      });
+    } else {
+      const boundary = "-------314159265358979323846";
+      const delimiter = "\r\n--" + boundary + "\r\n";
+      const closeDelim = "\r\n--" + boundary + "--";
+
+      const metadata = {
+        name: "spotilinux_cloud_playlists.json",
+        mimeType: "application/json",
+        description: "SpotiLinux Playlists & Cloud Sync across devices"
+      };
+
+      const multipartRequestBody =
+        delimiter +
+        "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+        JSON.stringify(metadata) +
+        delimiter +
+        "Content-Type: application/json\r\n\r\n" +
+        jsonStr +
+        closeDelim;
+
+      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "multipart/related; boundary=" + boundary
+        },
+        body: multipartRequestBody
+      });
+    }
+  } catch (e) {
+    console.error("Error subiendo playlists a Drive:", e);
   }
 }
 
@@ -1314,11 +1918,15 @@ function applyEqPreset(vals) {
 
 /* ---------------- NAVEGACIÓN Y FILTROS ---------------- */
 function switchTab(tab) {
-  ["home", "playlists", "drive", "eq"].forEach(k => {
-    document.getElementById("tab-" + k).classList.toggle("active", k === tab);
-    document.getElementById("nav-" + k).classList.toggle("active", k === tab);
+  ["home", "songs", "drive", "eq"].forEach(k => {
+    const pane = document.getElementById("tab-" + k);
+    const nav = document.getElementById("nav-" + k);
+    if (pane) pane.classList.toggle("active", k === tab);
+    if (nav) nav.classList.toggle("active", k === tab);
   });
-  if (tab === "playlists") renderPlaylists();
+  if (tab === "home") renderHomePlaylists();
+  if (tab === "songs") renderTracks();
+  if (tab === "drive") updateAccountUI();
 }
 
 function setFilter(flt) {
@@ -1588,7 +2196,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   loadPersistentState();
   renderTracks();
-  renderPlaylists();
+  renderHomePlaylists();
+  updateAccountUI();
   updateShuffleUI();
   updateRepeatUI();
   syncCanvasDimensions();
@@ -1600,8 +2209,12 @@ window.addEventListener("DOMContentLoaded", () => {
   if (!hasToken && !welcomeDone) {
     document.getElementById("welcomeModal").classList.add("open");
   } else if (hasToken) {
-    // Si ya tenía cuenta conectada, sincronizar automáticamente su carpeta de música de Drive
-    setTimeout(() => autoDiscoverDriveMusic(), 600);
+    // Si ya tenía cuenta conectada, sincronizar perfil y playlists en la nube
+    setTimeout(() => {
+      fetchGoogleUserProfile();
+      syncCloudPlaylists();
+      autoDiscoverDriveMusic();
+    }, 600);
   }
 });
 </script>

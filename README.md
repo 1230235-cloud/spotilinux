@@ -23,8 +23,10 @@
 - **Motor de Audio Nativo en Segundo Plano en Android (Solución al Silencio tras Pausa Prolongada con Audífonos)**:
   - Toda la reproducción de audio en Android ocurre dentro del servicio nativo en primer plano `MediaPlaybackService.java` usando `android.media.MediaPlayer` + `android.media.audiofx.Equalizer` + `PARTIAL_WAKE_LOCK` + `WifiLock` + `AudioFocusRequest` + `MediaSession` (`FLAG_HANDLES_MEDIA_BUTTONS`).
   - Esto garantiza que al pausar con audífonos Bluetooth/cableados o desde los Ajustes Rápidos de Android y esperar varios minutos, al volver a despausar con los audífonos o desde la pantalla de bloqueo **el audio siempre suene inmediatamente** sin necesidad de abrir la aplicación (evitando la suspensión del `AudioContext` de Chromium WebView).
-- **Gestión Completa de Playlists y Favoritos (`♥`)**:
-  - Tanto en Linux como en el APK de Android: creación de Playlists personalizadas, visualización de canciones dentro de cada Playlist, adición rápida con botón `＋` o menú contextual, eliminación de canciones de una Playlist, borrado de Playlists y lista de *"Canciones que te gustan"*.
+- **Gestión Completa de Playlists y Favoritos (`♥`) con Selección Múltiple y Pantalla Principal de Playlists**:
+  - **Página Principal estilo Spotify**: Tanto en Linux como en Android, la pantalla de Inicio (`🏠 Inicio`) no muestra una lista plana de canciones sueltas; en su lugar, destaca las **Playlists Disponibles** (Favoritos, Google Drive, playlists personalizadas y tarjeta para crear una nueva). Al pulsar cualquier playlist se abre su vista detallada con sus pistas.
+  - **Selección Múltiple de Canciones**: Permite seleccionar varias canciones a la vez con checkboxes (`☑️`) o selección extendida (`Ctrl+Click`/`Shift+Click`) y agregarlas todas juntas a cualquier playlist existente o nueva con un solo clic.
+  - **Sincronización en la Nube con Cuenta de Google & Google Drive**: Al vincular la cuenta de Google, SpotiLinux sincroniza automáticamente las playlists y favoritos en `spotilinux_cloud_playlists.json` dentro del Google Drive del usuario, permitiendo acceder a las mismas listas desde cualquier teléfono o PC con esa cuenta (roaming multiplataforma estilo Spotify).
 - **Figura Animada de Maomao (*The Apothecary Diaries*) Bailando al Compás**:
   - Renderizado vectorial a 60 FPS (`QPainter` en Linux y HTML5 `Canvas` en Android) donde Maomao baila sincronizada en tiempo real con las bandas de frecuencia de la música (sub-bajos `20–160 Hz` marcan el paso y rebote de rodillas; medios `200–2000 Hz` mueven el torso, abanico/hierbas medicinales y mangas del hanfu; agudos `2–12 kHz` animan las orejitas de gato, el parpadeo y las partículas brillantes). Incluye 4 pasos de baile intercambiables.
 - **Visualizador FFT en Vivo (60 FPS) y Ecualizador de 5 Bandas**:
@@ -161,11 +163,11 @@ A su vez, `MediaPlaybackService.java` envía actualizaciones cada `250 ms` hacia
   - En modo **Horizontal (Landscape)**: Mediante `@media (orientation: landscape) and (max-height: 600px)`, la pantalla se divide automáticamente en **2 columnas lado a lado** (izquierda: Maomao + Espectro FFT; derecha: buscador, pestañas y lista desplazable de canciones/playlists) y oculta los encabezados redundantes para aprovechar todo el alto disponible.
 - **Modal de Bienvenida al Inicio (`#welcomeModal`)**:
   - Al abrir la app por primera vez, solicita directamente conectar la cuenta de Google Drive (buscando automáticamente la carpeta `Music` / `Música` en el Drive del usuario) o rastrear y guardar las canciones del dispositivo.
-- **Pestañas de Navegación**:
-  1. `🏠 Inicio`: Todas las canciones (Demo + Guardadas en App + Google Drive).
-  2. `🎵 Playlists`: Tarjetas de Playlists con botón `✨ Crear Nueva Playlist`, vista de canciones dentro de cada Playlist, botón `＋` en cada canción para añadirla a cualquier Playlist y botón `🗑` para eliminar.
-  3. `☁️ Drive`: Configuración de cuenta de Google, botón `🔍 Buscar carpeta "Music" e Importar`, selector entre **🎧 Escuchar en Línea (Stream)** y **⬇️ Descargar a la App (Offline)**, y botón individual `⬇️` o `☁️` en cada pista de la nube.
-  4. `💜 Gustan`: Canciones marcadas con corazón `♥`.
+- **Pestañas de Navegación Móvil**:
+  1. `🏠 Inicio`: Tarjeta de cuenta de Google, estado de sincronización y **cuadrícula de Playlists Disponibles** (Favoritos, Google Drive, y playlists del usuario). Al tocar una playlist se abre su reproductor y lista de canciones, con botón de selección múltiple para agregar pistas en lote.
+  2. `💿 Canciones`: Explorador de todas las canciones con buscador, filtro de géneros y modo **☑️ Selección Múltiple** para seleccionar varias canciones simultáneamente y agregarlas a una playlist con la barra flotante inferior.
+  3. `☁️ Drive`: Configuración de cuenta de Google, sincronización con `spotilinux_cloud_playlists.json`, botón `🔍 Buscar carpeta "Music" e Importar`, selector entre **🎧 Escuchar en Línea (Stream)** y **⬇️ Descargar a la App (Offline)**, y descarga individual por pista.
+  4. `💜 Gustan`: Canciones marcadas con corazón `♥` sincronizadas con la nube.
   5. `🎚 EQ`: Ecualizador de 5 bandas conectado al DSP nativo de Android + selector de paso de baile de Maomao.
 
 ---
