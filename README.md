@@ -108,7 +108,11 @@ spotify-linux/
 
 ### 3.3 Nube Privada de Google Drive (`gdrive_sync.py`)
 - **`GoogleDriveConfig`**: Almacena `access_token`, `refresh_token`, `client_id`, `client_secret`, `api_key` y `folder_id`.
-- **`GDriveOAuthLoopbackWorker`**: Levanta un servidor HTTP temporal en `127.0.0.1:8765`, abre el navegador del sistema en `https://accounts.google.com/o/oauth2/v2/auth` con scope `drive.readonly`, captura el `code` de autorización y lo canjea automáticamente por `access_token` y `refresh_token`.
+- **`GDriveOAuthLoopbackWorker`**: Levanta un servidor HTTP temporal en `127.0.0.1:8765`, abre el navegador del sistema en `https://accounts.google.com/o/oauth2/v2/auth` con scopes `drive.readonly` + `drive.file` (este último es necesario para escribir el JSON de playlists en la nube), captura el `code` de autorización y lo canjea automáticamente por `access_token` y `refresh_token`.
+- **Cuenta de Google y Playlists en la nube**:
+  - `fetch_google_user_profile(token)` → lee `drive/v3/about?fields=user` (nombre, correo, foto) y se guarda en `LibraryStore.google_user`.
+  - `sync_cloud_playlists_with_drive(token, payload)` + `GDriveCloudPlaylistSyncWorker` (QThread) → busca/crea `spotilinux_cloud_playlists.json` en el Drive, **combina** (unión, nunca borra) playlists y `likedIds` locales con los de la nube y sube el resultado. Formato compartido con Android: `{app, version, updatedAt, user, playlists:[{id,name,description,track_ids|trackIds}], likedIds}` (Linux usa `track_ids`, Android `trackIds`; ambos lados aceptan los dos).
+  - `main.py::_sync_playlists_to_cloud()` se llama al iniciar con token, al conectar la cuenta, al crear/editar/borrar playlists, al agregar/quitar canciones y al marcar favoritos.
 - **`GDriveSyncWorker`**:
   - Si `config.folder_id` está vacío, realiza primero una consulta automática a Google Drive API v3 buscando carpetas llamadas `Music`, `Música` o `Musica`:
     ```sql
@@ -122,6 +126,14 @@ spotify-linux/
   - Gestiona `self.music_library_dir = base_dir / "music_library"`.
   - El método `auto_scan_device_to_app_folder()` rastrea automáticamente `~/Music`, `~/Música`, `~/Downloads` y `~/Descargas`, copiando cualquier archivo de audio encontrado a `music_library/` e indexándolo en `data/library.json`.
   - Cuando el usuario importa carpetas o archivos manualmente (o por Drag & Drop), también se copian a `music_library/` (`copy_to_app_folder=True`) para garantizar persistencia total.
+  - `add_multiple_tracks_to_playlist(pid, track_ids)` agrega canciones en lote (selección múltiple).
+
+### 3.5 Pantalla de Inicio, Cola de Reproducción por Playlist y Selección Múltiple (`main.py`)
+- **Inicio (`current_view == "home"`)**: se oculta `track_table` y se muestra `quick_scroll` con: tarjeta de cuenta Google → cuadrícula de playlists (`QuickAccessCard`: clic = seleccionar para vista previa, botón ▶ = reproducir esa playlist) → **vista previa reducible** de la playlist seleccionada (`_build_home_preview_card`).
+  - Estado: `home_preview_key` (`"liked" | "gdrive" | "playlist:<id>"`), `home_preview_collapsed` (botón **➖ Reducir lista / ➕ Mostrar lista**), `home_preview_expanded` (por defecto solo se ven `HOME_PREVIEW_LIMIT = 4` canciones con **▼ Ver todas / ▲ Mostrar menos**).
+  - Filas compactas `CompactTrackRow`; botón **↗ Abrir** cambia a la vista completa de la playlist.
+- **Regla de la cola (corrección importante)**: al reproducir desde una playlist, `AudioEngine.context_tracks` debe contener **solo** las canciones de esa playlist. Se hace siempre con `_play_track_or_stream_from_cloud(track, lista_de_la_playlist)` o `_play_home_key(key, start_index, shuffle)`. `play_current_view()` reinicia la cola si el contexto actual no coincide con la vista (antes solo pausaba y seguía reproduciendo toda la biblioteca). `AudioEngine.previous_track()` descarta del historial las pistas que no pertenecen a la cola activa. Al arrancar, la cola inicial es la playlist seleccionada en Inicio.
+- **Selección múltiple**: `track_table` usa `ExtendedSelection` (Ctrl/Shift + clic) y el menú contextual permite agregar/quitar/crear playlist con todas las seleccionadas. Dentro de una playlist, el botón **＋ Agregar canciones** abre `MultiTrackSelectorDialog` (checkboxes, buscador, seleccionar todas).
 
 ---
 
@@ -153,9 +165,9 @@ spotify-linux/
 | `saveAppStateJson(json)` / `loadAppStateJson()` | Guarda y carga en disco nativo (`spotilinux_state.json`) las Playlists, Favoritos, credenciales de Google Drive y pistas importadas. |
 | `openExternalAuth(url)` | Abre el navegador del sistema para autenticación OAuth de Google si el usuario lo requiere. |
 
-A su vez, `MediaPlaybackService.java` envía actualizaciones cada `250 ms` hacia el `WebView` llamando a:
-- `window.__onNativePlaybackState(isPlaying, positionMs, durationMs)`
-- `window.__onNativeMediaCommand('next' | 'prev' | 'ended')`
+A su vez, `MediaPlaybackService.java` (vía `MainActivity.notifyWebProgress` / `dispatchMediaCommandToWeb`) envía actualizaciones cada `250 ms` hacia el `WebView` llamando a:
+- `window.onNativeProgress(positionMs, durationMs, isPlaying)`
+- `window.onNativeMediaCommand('next' | 'ended_next' | 'prev' | 'play' | 'toggle')` → `nextTrack()` / `prevTrack()` usan la **cola activa** (ver 4.4), así los botones de audífonos/notificación también respetan la playlist.
 
 ### 4.3 Interfaz Móvil Responsiva (`android-app/assets/www/index.html`)
 - **Adaptación Vertical y Horizontal (`Portrait` & `Landscape`)**:
@@ -163,12 +175,17 @@ A su vez, `MediaPlaybackService.java` envía actualizaciones cada `250 ms` hacia
   - En modo **Horizontal (Landscape)**: Mediante `@media (orientation: landscape) and (max-height: 600px)`, la pantalla se divide automáticamente en **2 columnas lado a lado** (izquierda: Maomao + Espectro FFT; derecha: buscador, pestañas y lista desplazable de canciones/playlists) y oculta los encabezados redundantes para aprovechar todo el alto disponible.
 - **Modal de Bienvenida al Inicio (`#welcomeModal`)**:
   - Al abrir la app por primera vez, solicita directamente conectar la cuenta de Google Drive (buscando automáticamente la carpeta `Music` / `Música` en el Drive del usuario) o rastrear y guardar las canciones del dispositivo.
-- **Pestañas de Navegación Móvil**:
-  1. `🏠 Inicio`: Tarjeta de cuenta de Google, estado de sincronización y **cuadrícula de Playlists Disponibles** (Favoritos, Google Drive, y playlists del usuario). Al tocar una playlist se abre su reproductor y lista de canciones, con botón de selección múltiple para agregar pistas en lote.
-  2. `💿 Canciones`: Explorador de todas las canciones con buscador, filtro de géneros y modo **☑️ Selección Múltiple** para seleccionar varias canciones simultáneamente y agregarlas a una playlist con la barra flotante inferior.
-  3. `☁️ Drive`: Configuración de cuenta de Google, sincronización con `spotilinux_cloud_playlists.json`, botón `🔍 Buscar carpeta "Music" e Importar`, selector entre **🎧 Escuchar en Línea (Stream)** y **⬇️ Descargar a la App (Offline)**, y descarga individual por pista.
-  4. `💜 Gustan`: Canciones marcadas con corazón `♥` sincronizadas con la nube.
-  5. `🎚 EQ`: Ecualizador de 5 bandas conectado al DSP nativo de Android + selector de paso de baile de Maomao.
+- **Pestañas de Navegación Móvil (barra inferior de 4 botones)**:
+  1. `🏠 Inicio`: Tarjeta de cuenta de Google, cuadrícula de **Playlists Disponibles** (Nueva, Favoritos, Google Drive y playlists del usuario) y tarjeta de la playlist seleccionada (`#activePlaylistBox`) con **▶ Reproducir**, **🔀 Aleatorio**, **➖ Reducir lista / ➕ Mostrar lista**, 🗑 y **＋ Añadir varias canciones**. Por defecto solo muestra 4 canciones (`playlistMaxVisibleCount`) con botón **▼ Ver todas**.
+  2. `💿 Canciones`: Biblioteca completa con filtros (Todo / Guardadas / Favoritos / Drive) y modo **☑️ Seleccionar Varias** con barra flotante `＋ A Playlist`.
+  3. `☁️ Mi Cuenta`: Cuenta de Google, sincronización de `spotilinux_cloud_playlists.json`, `🔍 Buscar carpeta "Music" e Importar`, selector **🎧 En Línea / ⬇️ Descargar** y descarga individual por pista.
+  4. `🎚 Ecualizador`: 5 bandas conectadas al DSP nativo + selector de baile de Maomao.
+
+### 4.4 Cola de Reproducción por Playlist (Android)
+- Variables globales: `activePlaybackQueue` (lista de pistas), `activeQueueIndex`, `activeQueueName`.
+- **`playTrackFromQueue(lista, índice, nombre)`** es la función a usar al reproducir desde una playlist/favoritos/Drive/biblioteca filtrada: fija la cola a esa lista. `nextTrack()`, `prevTrack()` y el aleatorio solo recorren `activePlaybackQueue` (antes recorrían todo `tracks`, por eso sonaban canciones fuera de la playlist).
+- `playTrackIndex(idx)` se mantiene por compatibilidad: si la pista ya está en la cola activa solo cambia el índice; si no, la cola pasa a ser toda la biblioteca.
+- La barra inferior muestra `Artista • 🎵 <nombre de la cola>` para que el usuario vea qué playlist está sonando.
 
 ---
 
@@ -194,16 +211,20 @@ El proyecto incluye un script autónomo (`build_android_apk.sh`) que utiliza Ope
 
 ## 🤖 6. Reglas de Oro para Otra IA que Continúe este Proyecto
 
-Si eres un agente de IA encargado de añadir nuevas funciones o corregir detalles en el futuro, **respeta estrictamente estas 5 reglas arquitectónicas**:
+Si eres un agente de IA encargado de añadir nuevas funciones o corregir detalles en el futuro, **respeta estrictamente estas 7 reglas arquitectónicas**:
 
 1. **Nunca muevas la reproducción de audio de Android de vuelta al `WebView`**:
-   - Toda reproducción en Android debe seguir pasando por `window.AndroidMedia.playSource(...)` hacia `MediaPlaybackService.java` (`android.media.MediaPlayer`). El generador de espectro en `index.html` se sincroniza con `window.__onNativePlaybackState(isPlaying, posMs, durMs)` para animar a Maomao sin bloquear el audio nativo ni depender de `AudioContext` en segundo plano.
+   - Toda reproducción en Android debe seguir pasando por `window.AndroidMedia.playSource(...)` hacia `MediaPlaybackService.java` (`android.media.MediaPlayer`). El generador de espectro en `index.html` se sincroniza con `window.onNativeProgress(posMs, durMs, isPlaying)` para animar a Maomao sin bloquear el audio nativo ni depender de `AudioContext` en segundo plano.
 2. **Mantén la persistencia de archivos en las carpetas propias de la app**:
    - En Linux, las pistas rastreadas/importadas/descargadas se guardan en `music_library/`.
    - En Android, las pistas rastreadas (`scanDeviceMusic`), importadas (`importAudioFiles`) o descargadas de Drive (`downloadDriveTrack`) se copian a `getExternalFilesDir(null)/SpotiLinuxMusic`.
 3. **Sincroniza el estado de Android con `saveAppStateJson`**:
-   - Cada vez que se modifique `state.playlists`, `state.liked`, `state.gdrive` o `state.tracks` en `android-app/assets/www/index.html`, debe invocarse `saveState()` (que escribe tanto en `localStorage` como en el archivo nativo `spotilinux_state.json` mediante `window.AndroidMedia.saveAppStateJson`).
+   - Cada vez que se modifiquen `playlists`, favoritos (`liked`), credenciales de Drive o `tracks` en `android-app/assets/www/index.html`, debe invocarse `savePersistentState()` (escribe en `localStorage` y en el archivo nativo `spotilinux_state.json` mediante `window.AndroidMedia.saveAppStateJson`) y, si cambian playlists/favoritos, `uploadPlaylistsToDrive()`.
 4. **Paridad de Funciones entre Linux (`main.py`) y Android (`android-app/`)**:
    - Cuando el usuario pida un cambio funcional (nuevas vistas, ajustes de Google Drive, pasos de baile de Maomao, playlists), verifica si aplica a ambas plataformas y actualiza tanto los módulos Python como `android-app/`.
 5. **Recompila siempre los artefactos de salida en `dist/`**:
-   - Después de editar el código fuente Python o Java/HTML, ejecuta siempre `./venv/bin/python build_linux_binary.py` y `./build_android_apk.sh` para que `dist/SpotiLinux` y `dist/SpotiLinux-Mobile.apk` contengan los cambios más recientes.
+   - Después de editar el código fuente Python o Java/HTML, ejecuta siempre `./venv/bin/python build_linux_binary.py` y `./build_android_apk.sh` para que `dist/SpotiLinux` y `dist/SpotiLinux-Mobile.apk` contengan los cambios más recientes, y copia ambos a la raíz del repo (`SpotiLinux`, `SpotiLinux-Mobile.apk`).
+6. **La cola de reproducción siempre es la playlist que el usuario eligió**:
+   - Linux: pasa la lista de la playlist como `context_list` (`_play_track_or_stream_from_cloud` / `_play_home_key`). Android: usa `playTrackFromQueue(...)`. Nunca vuelvas a recorrer toda la biblioteca en `next/prev/shuffle` cuando se está reproduciendo una playlist.
+7. **El Inicio muestra playlists, no la biblioteca**:
+   - La lista de canciones de la playlist seleccionada en Inicio debe seguir siendo reducible (➖/➕) y limitada por defecto (4 canciones, “Ver todas”). La biblioteca completa vive en `💿 Tu Biblioteca` (Linux) / `💿 Canciones` (Android).

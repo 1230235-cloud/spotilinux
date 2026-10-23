@@ -261,60 +261,116 @@ class HeroBannerWidget(QFrame):
 class QuickAccessCard(QFrame):
     """Tarjeta horizontal compacta estilo pantalla de Inicio de Spotify."""
 
-    def __init__(self, title: str, subtitle: str, pixmap: QPixmap, callback) -> None:
+    def __init__(self, title: str, subtitle: str, pixmap: QPixmap, callback, play_callback=None, is_selected: bool = False) -> None:
         super().__init__()
         self.callback = callback
+        self.play_callback = play_callback
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(56)
+
+        bg = "rgba(29, 185, 84, 0.16)" if is_selected else "rgba(255, 255, 255, 0.07)"
+        border = "#1DB954" if is_selected else "rgba(255, 255, 255, 0.08)"
         self.setStyleSheet(
-            """
-            QFrame {
-                background-color: rgba(255, 255, 255, 0.07);
-                border-radius: 6px;
-            }
-            QFrame:hover {
-                background-color: rgba(255, 255, 255, 0.16);
-            }
+            f"""
+            QFrame {{
+                background-color: {bg};
+                border: 1px solid {border};
+                border-radius: 8px;
+            }}
+            QFrame:hover {{
+                background-color: rgba(29, 185, 84, 0.22);
+                border-color: #1DB954;
+            }}
             """
         )
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 12, 0)
+        lay.setContentsMargins(0, 0, 10, 0)
         lay.setSpacing(10)
 
         lbl_img = QLabel()
         lbl_img.setFixedSize(56, 56)
         lbl_img.setPixmap(pixmap)
-        lbl_img.setStyleSheet("background: transparent;")
+        lbl_img.setStyleSheet("background: transparent; border: none;")
         lay.addWidget(lbl_img)
 
         text_col = QVBoxLayout()
         text_col.setSpacing(1)
         text_col.addStretch()
-        short_t = title if len(title) <= 20 else title[:18] + "…"
-        short_s = subtitle if len(subtitle) <= 24 else subtitle[:22] + "…"
+        short_t = title if len(title) <= 22 else title[:20] + "…"
+        short_s = subtitle if len(subtitle) <= 26 else subtitle[:24] + "…"
         lbl_t = QLabel(short_t)
         lbl_t.setToolTip(title)
-        lbl_t.setStyleSheet("color: #FFFFFF; font-size: 12px; font-weight: 700; background: transparent;")
+        lbl_t.setStyleSheet(f"color: {'#1ED760' if is_selected else '#FFFFFF'}; font-size: 12px; font-weight: 700; background: transparent; border: none;")
         lbl_s = QLabel(short_s)
-        lbl_s.setStyleSheet("color: #B3B3B3; font-size: 11px; background: transparent;")
+        lbl_s.setStyleSheet("color: #B3B3B3; font-size: 11px; background: transparent; border: none;")
         text_col.addWidget(lbl_t)
         text_col.addWidget(lbl_s)
         text_col.addStretch()
         lay.addLayout(text_col, stretch=1)
 
-        lbl_play = QLabel("▶")
-        lbl_play.setFixedSize(30, 30)
-        lbl_play.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_play.setStyleSheet(
-            "background-color: #1DB954; color: #000000; border-radius: 15px; font-weight: bold; font-size: 12px;"
+        self.btn_play_mini = QPushButton("▶")
+        self.btn_play_mini.setFixedSize(30, 30)
+        self.btn_play_mini.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_play_mini.setStyleSheet(
+            "background-color: #1DB954; color: #000000; border-radius: 15px; font-weight: bold; font-size: 12px; border: none;"
         )
-        lay.addWidget(lbl_play)
+        if self.play_callback:
+            self.btn_play_mini.clicked.connect(self.play_callback)
+        lay.addWidget(self.btn_play_mini)
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.callback:
             self.callback()
         super().mousePressEvent(event)
+
+
+class CompactTrackRow(QFrame):
+    """Fila compacta para previsualizar canciones de la playlist seleccionada en el Inicio."""
+
+    def __init__(self, index: int, track: TrackMetadata, on_click, is_playing: bool = False) -> None:
+        super().__init__()
+        self.setObjectName("CompactTrackRow")
+        self.setProperty("playing", "true" if is_playing else "false")
+        self.setFixedHeight(44)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.on_click = on_click
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(10, 4, 12, 4)
+        lay.setSpacing(10)
+
+        lbl_idx = QLabel("▶" if is_playing else str(index))
+        lbl_idx.setFixedWidth(22)
+        lbl_idx.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_idx.setStyleSheet(f"color: {'#1ED760' if is_playing else '#A7A7A7'}; font-weight: bold; font-size: 11px; background: transparent; border: none;")
+        lay.addWidget(lbl_idx)
+
+        lbl_cov = QLabel()
+        lbl_cov.setFixedSize(34, 34)
+        lbl_cov.setPixmap(make_rounded_pixmap(track.cover_path, 34, 5))
+        lbl_cov.setStyleSheet("background: transparent; border: none;")
+        lay.addWidget(lbl_cov)
+
+        meta_col = QVBoxLayout()
+        meta_col.setSpacing(1)
+        lbl_t = QLabel(track.title)
+        lbl_t.setStyleSheet(f"color: {'#1ED760' if is_playing else '#FFFFFF'}; font-weight: 700; font-size: 12px; background: transparent; border: none;")
+        lbl_a = QLabel(track.artist)
+        lbl_a.setStyleSheet("color: #A7A7A7; font-size: 11px; background: transparent; border: none;")
+        meta_col.addWidget(lbl_t)
+        meta_col.addWidget(lbl_a)
+        lay.addLayout(meta_col, stretch=1)
+
+        dur_str = format_duration(track.duration) if track.duration > 0 else "Cloud ☁️"
+        lbl_dur = QLabel(dur_str)
+        lbl_dur.setStyleSheet("color: #888888; font-size: 11px; background: transparent; border: none;")
+        lay.addWidget(lbl_dur)
+
+    def mousePressEvent(self, ev) -> None:
+        if ev.button() == Qt.MouseButton.LeftButton and self.on_click:
+            self.on_click()
+        super().mousePressEvent(ev)
 
 
 class PlaylistDialog(QDialog):
@@ -723,6 +779,8 @@ class GoogleDriveDialog(QDialog):
 
 
 class SpotiLinuxWindow(QMainWindow):
+    HOME_PREVIEW_LIMIT = 4  # canciones visibles en la vista previa reducida del Inicio
+
     def __init__(self, base_dir: Path) -> None:
         super().__init__()
         self.base_dir = base_dir
@@ -761,17 +819,25 @@ class SpotiLinuxWindow(QMainWindow):
         self._muted: bool = False
         self._pre_mute_volume: int = self.store.volume
 
+        # Vista previa reducible de la playlist seleccionada en Inicio
+        first_pid = next(iter(self.store.playlists), None)
+        self.home_preview_key: str = f"playlist:{first_pid}" if first_pid else "liked"
+        self.home_preview_collapsed: bool = False
+        self.home_preview_expanded: bool = False
+
         self._build_ui()
         self._connect_signals()
         self._setup_shortcuts()
 
-        # Cargar vista inicial y preparar primera canción
+        # Cargar vista inicial y preparar primera canción (cola = playlist seleccionada, no toda la biblioteca)
         self.switch_view("home")
         self._update_shuffle_ui()
-        if self.displayed_tracks:
-            first = self.displayed_tracks[0]
-            self.engine.context_tracks = list(self.displayed_tracks)
-            self._update_now_playing_ui(first)
+        _pl_name, initial_ctx = self._get_home_preview_tracks(self.home_preview_key)
+        if not initial_ctx:
+            initial_ctx = list(self.displayed_tracks)
+        if initial_ctx:
+            self.engine.context_tracks = list(initial_ctx)
+            self._update_now_playing_ui(initial_ctx[0])
 
         # Solicitar acceso a Google Drive o rastreo automático desde el inicio
         QTimer.singleShot(450, self._check_first_run_welcome)
@@ -1547,19 +1613,16 @@ class SpotiLinuxWindow(QMainWindow):
                 "Canciones que te gustan",
                 f"{len(self.store.liked_ids)} canciones favoritas",
                 make_liked_cover_pixmap(56, radius=6),
-                lambda: self.switch_view("liked"),
+                "liked",
             )
         )
-        cloud_tracks = [
-            t for t in self.store.tracks.values()
-            if "Drive" in t.album or t.filepath.startswith("gdrive://") or Path(t.filepath).name.startswith("gd_")
-        ]
+        cloud_tracks = self._get_home_preview_tracks("gdrive")[1]
         cards_data.append(
             (
                 "Mi Google Drive ☁️",
                 f"{len(cloud_tracks)} pistas en la nube",
                 make_liked_cover_pixmap(56, radius=6, symbol="☁️", colors=((15, 95, 195), (29, 185, 84), (110, 245, 210))),
-                lambda: self.switch_view("gdrive"),
+                "gdrive",
             )
         )
         for pid, pl in self.store.playlists.items():
@@ -1569,29 +1632,168 @@ class SpotiLinuxWindow(QMainWindow):
                 if first_tid and first_tid in self.store.tracks
                 else make_liked_cover_pixmap(56, 6)
             )
-            cards_data.append(
-                (
-                    pl.name,
-                    f"Playlist • {len(pl.track_ids)} pistas",
-                    cov,
-                    lambda p=pid: self.switch_view(f"playlist:{p}"),
-                )
+            cards_data.append((pl.name, f"Playlist • {len(pl.track_ids)} pistas", cov, f"playlist:{pid}"))
+
+        idx = 0
+        for title, sub, pix, key in cards_data:
+            row, col = divmod(idx, 3)
+            grid_lay.addWidget(
+                QuickAccessCard(
+                    title,
+                    sub,
+                    pix,
+                    lambda k=key: self._select_home_preview(k),
+                    play_callback=lambda _c=False, k=key: self._play_home_key(k),
+                    is_selected=(key == self.home_preview_key),
+                ),
+                row,
+                col,
             )
-        cards_data.append(
-            (
+            idx += 1
+        row, col = divmod(idx, 3)
+        grid_lay.addWidget(
+            QuickAccessCard(
                 "➕ Crear Nueva Playlist",
                 "Arma tu propia selección",
                 make_liked_cover_pixmap(56, radius=6, symbol="＋", colors=((40, 40, 45), (70, 70, 80), (120, 120, 130))),
                 self.create_playlist_dialog,
-            )
+                play_callback=lambda _c=False: self.create_playlist_dialog(),
+            ),
+            row,
+            col,
         )
 
-        for idx, (title, sub, pix, cb) in enumerate(cards_data):
-            row, col = divmod(idx, 3)
-            grid_lay.addWidget(QuickAccessCard(title, sub, pix, cb), row, col)
-
         self.quick_grid_main_layout.addWidget(grid_widget)
+
+        # 4. Vista previa reducible de la playlist seleccionada
+        self.quick_grid_main_layout.addWidget(self._build_home_preview_card())
         self.quick_grid_main_layout.addStretch()
+
+    # ---------------- Vista previa de playlist en Inicio ---------------- #
+
+    def _get_home_preview_tracks(self, key: str) -> tuple[str, list[TrackMetadata]]:
+        """Devuelve (nombre, pistas) para una clave de vista: liked | gdrive | playlist:<id>."""
+        if key == "liked":
+            return "Canciones que te gustan", [self.store.tracks[t] for t in self.store.liked_ids if t in self.store.tracks]
+        if key == "gdrive":
+            return "Mi Google Drive ☁️", [
+                t for t in self.store.tracks.values()
+                if t.filepath.startswith("gdrive://") or "Drive" in t.album or Path(t.filepath).name.startswith("gd_")
+            ]
+        if key.startswith("playlist:"):
+            pl = self.store.playlists.get(key.split(":", 1)[1])
+            if pl:
+                return pl.name, [self.store.tracks[t] for t in pl.track_ids if t in self.store.tracks]
+        return "", []
+
+    def _select_home_preview(self, key: str) -> None:
+        self.home_preview_key = key
+        self.home_preview_expanded = False
+        self._rebuild_quick_access_cards()
+
+    def _play_home_key(self, key: str, start_index: int = 0, shuffle: bool = False) -> None:
+        """Reproduce SOLO las canciones de la playlist indicada (la cola queda limitada a ella)."""
+        _name, tracks = self._get_home_preview_tracks(key)
+        if not tracks:
+            QMessageBox.information(self, "Playlist vacía", "Esta playlist todavía no tiene canciones.")
+            return
+        if shuffle:
+            self.engine.shuffle = True
+            self.store.shuffle = True
+            self.store.save()
+            self._update_shuffle_ui()
+            start_index = random.randrange(len(tracks))
+        self.home_preview_key = key
+        self._play_track_or_stream_from_cloud(tracks[start_index], tracks)
+
+    def _toggle_home_preview_collapsed(self) -> None:
+        self.home_preview_collapsed = not self.home_preview_collapsed
+        self._rebuild_quick_access_cards()
+
+    def _toggle_home_preview_expanded(self) -> None:
+        self.home_preview_expanded = not self.home_preview_expanded
+        self._rebuild_quick_access_cards()
+
+    def _build_home_preview_card(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("ActivePlaylistHomeCard")
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setSpacing(8)
+
+        # Si la playlist seleccionada ya no existe, usar la primera disponible
+        name, tracks = self._get_home_preview_tracks(self.home_preview_key)
+        if not name:
+            first_pid = next(iter(self.store.playlists), None)
+            self.home_preview_key = f"playlist:{first_pid}" if first_pid else "liked"
+            name, tracks = self._get_home_preview_tracks(self.home_preview_key)
+
+        header = QHBoxLayout()
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        lbl_badge = QLabel(f"PLAYLIST SELECCIONADA  •  {len(tracks)} canciones")
+        lbl_badge.setStyleSheet("color: #1ED760; font-size: 10px; font-weight: 800; background: transparent; border: none;")
+        lbl_name = QLabel(name)
+        lbl_name.setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: 900; background: transparent; border: none;")
+        info.addWidget(lbl_badge)
+        info.addWidget(lbl_name)
+        header.addLayout(info, stretch=1)
+
+        key = self.home_preview_key
+        btn_play = QPushButton("▶ Reproducir")
+        btn_play.setObjectName("ActionChipButton")
+        btn_play.setProperty("active", "true")
+        btn_play.clicked.connect(lambda _c=False, k=key: self._play_home_key(k))
+        btn_shuffle = QPushButton("🔀 Aleatorio")
+        btn_shuffle.setObjectName("ActionChipButton")
+        btn_shuffle.clicked.connect(lambda _c=False, k=key: self._play_home_key(k, shuffle=True))
+        btn_open = QPushButton("↗ Abrir")
+        btn_open.setObjectName("ActionChipButton")
+        btn_open.setToolTip("Abrir la playlist completa (editar, quitar o agregar canciones)")
+        btn_open.clicked.connect(lambda _c=False, k=key: self.switch_view(k))
+        btn_collapse = QPushButton("➕ Mostrar lista" if self.home_preview_collapsed else "➖ Reducir lista")
+        btn_collapse.setObjectName("ActionChipButton")
+        btn_collapse.clicked.connect(self._toggle_home_preview_collapsed)
+        for b in (btn_play, btn_shuffle, btn_open, btn_collapse):
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            header.addWidget(b)
+        lay.addLayout(header)
+
+        if self.home_preview_collapsed:
+            lbl = QLabel("Lista reducida. Pulsa «➕ Mostrar lista» para ver las canciones.")
+            lbl.setStyleSheet("color: #8A8A8A; font-size: 11px; background: transparent; border: none;")
+            lay.addWidget(lbl)
+            return card
+
+        if not tracks:
+            lbl = QLabel("Esta playlist aún no tiene canciones. Usa «↗ Abrir» → «＋ Agregar canciones».")
+            lbl.setStyleSheet("color: #8A8A8A; font-size: 11px; background: transparent; border: none;")
+            lay.addWidget(lbl)
+            return card
+
+        active_id = self.engine.current_track.id if self.engine.current_track else None
+        visible = tracks if self.home_preview_expanded else tracks[: self.HOME_PREVIEW_LIMIT]
+        for i, t in enumerate(visible):
+            lay.addWidget(
+                CompactTrackRow(
+                    i + 1,
+                    t,
+                    lambda _i=i, k=key: self._play_home_key(k, start_index=_i),
+                    is_playing=(t.id == active_id),
+                )
+            )
+
+        if len(tracks) > self.HOME_PREVIEW_LIMIT:
+            btn_more = QPushButton(
+                "▲ Mostrar menos"
+                if self.home_preview_expanded
+                else f"▼ Ver todas las canciones ({len(tracks) - self.HOME_PREVIEW_LIMIT} más)"
+            )
+            btn_more.setObjectName("GhostSmallButton")
+            btn_more.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_more.clicked.connect(self._toggle_home_preview_expanded)
+            lay.addWidget(btn_more)
+        return card
 
     def set_genre_filter(self, genre: str) -> None:
         self.active_genre_filter = genre
@@ -2031,16 +2233,24 @@ class SpotiLinuxWindow(QMainWindow):
         )
 
     def play_current_view(self) -> None:
+        if self.current_view == "home":
+            self._play_home_key(self.home_preview_key)
+            return
         if not self.displayed_tracks:
             if self.current_view == "gdrive":
                 self.open_google_drive_dialog()
             return
-        if self.engine.current_track and any(t.id == self.engine.current_track.id for t in self.displayed_tracks):
+        same_context = [t.id for t in self.engine.context_tracks] == [t.id for t in self.displayed_tracks]
+        if same_context and self.engine.current_track and any(t.id == self.engine.current_track.id for t in self.displayed_tracks):
             self.engine.toggle_play_pause()
         else:
+            # Reiniciar la cola con SOLO las canciones de esta vista/playlist
             self._play_track_or_stream_from_cloud(self.displayed_tracks[0], self.displayed_tracks)
 
     def shuffle_play_current_view(self) -> None:
+        if self.current_view == "home":
+            self._play_home_key(self.home_preview_key, shuffle=True)
+            return
         if not self.displayed_tracks:
             return
         self.engine.shuffle = True
@@ -2191,6 +2401,8 @@ class SpotiLinuxWindow(QMainWindow):
         self.store.record_play(track.id)
         self._update_now_playing_ui(track)
         self._refresh_track_table()
+        if self.current_view == "home":
+            self._rebuild_quick_access_cards()
 
     def _update_now_playing_ui(self, track: TrackMetadata) -> None:
         self.lbl_bar_cover.setPixmap(make_rounded_pixmap(track.cover_path, 56, radius=6))

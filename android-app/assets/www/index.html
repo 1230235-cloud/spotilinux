@@ -113,19 +113,41 @@
   .like-btn.liked { color: var(--green); }
 
   /* Tarjetas de Playlists */
-  .playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 9px; margin-bottom: 12px; }
   .playlist-card {
-    background: var(--card-elev); border: 1px solid #2e2e3a; border-radius: 10px;
-    padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
-    position: relative; transition: all 0.2s ease;
+    background: var(--card-elev); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;
+    padding: 12px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+    position: relative; transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
-  .playlist-card:hover { border-color: rgba(29, 185, 84, 0.4); transform: translateY(-2px); }
-  .playlist-card.active { border-color: var(--green); background: #182820; }
+  .playlist-card:hover { border-color: rgba(29, 185, 84, 0.5); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
+  .playlist-card.active { border-color: var(--green-bright); background: linear-gradient(135deg, #153222 0%, #111a14 100%); box-shadow: 0 0 16px rgba(29, 185, 84, 0.25); }
   .playlist-card-title { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .playlist-card-sub { font-size: 11px; color: var(--muted); }
   .playlist-card-badge {
-    position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 800;
+    position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 800;
     background: rgba(29, 185, 84, 0.25); color: var(--green-bright); padding: 2px 6px; border-radius: 6px;
+  }
+
+  /* Tarjeta de Playlist Activa */
+  .active-playlist-card {
+    background: linear-gradient(180deg, #18231c 0%, #121417 100%);
+    border: 1px solid rgba(29, 185, 84, 0.4);
+    border-radius: 14px; padding: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    transition: all 0.25s ease;
+  }
+  .active-pl-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 8px; margin-bottom: 8px;
+  }
+  .pl-pill {
+    background: rgba(29, 185, 84, 0.2); color: var(--green-bright);
+    font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 6px; letter-spacing: 0.5px;
+  }
+  .pl-count-pill {
+    background: #252530; color: #e0e0e0;
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
   }
 
   /* Perfil de cuenta Google en Inicio */
@@ -380,21 +402,42 @@
         <div id="homePlaylistGrid" class="playlist-grid"></div>
 
         <!-- Vista detallada de la playlist seleccionada -->
-        <div id="activePlaylistBox" class="cloud-box" style="display:none; margin-top:10px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <div>
-              <h3 id="plViewTitle">Mi Playlist</h3>
-              <p id="plViewDesc" style="margin-bottom:0;">0 canciones</p>
+        <div id="activePlaylistBox" class="active-playlist-card" style="display:none; margin-top:12px;">
+          <div class="active-pl-header">
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span id="plViewBadge" class="pl-pill">PLAYLIST SELECCIONADA</span>
+                <span id="plTrackCountBadge" class="pl-count-pill">0 canciones</span>
+              </div>
+              <h3 id="plViewTitle" style="font-size:16px; font-weight:800; color:#fff; margin:4px 0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Mi Playlist</h3>
+              <p id="plViewDesc" style="font-size:11px; color:var(--muted); margin:0;">Descripción</p>
             </div>
-            <div style="display:flex; gap:6px;">
-              <button class="btn-chip active" onclick="playSelectedPlaylist()">▶ Reproducir</button>
-              <button class="btn-chip" style="background:#3a1822; border-color:#6e2438;" onclick="deleteSelectedPlaylist()">🗑</button>
+            <div style="display:flex; gap:5px; align-items:center;">
+              <button class="btn-chip active" id="btnPlayPlAction" onclick="playSelectedPlaylist()" style="padding:6px 12px; font-size:11px;">▶ Reproducir</button>
+              <button class="btn-chip" id="btnTogglePlCollapse" onclick="togglePlaylistCollapse()" title="Reducir / Mostrar lista de canciones" style="padding:6px 9px; font-size:11px;">➖ Reducir</button>
+              <button class="btn-chip" style="background:#3a1822; border-color:#6e2438; padding:6px 9px;" onclick="deleteSelectedPlaylist()" title="Eliminar Playlist">🗑</button>
             </div>
           </div>
-          <div style="display:flex; gap:6px; margin: 8px 0;">
-            <button class="btn-chip active" style="flex:1; font-size:11px; padding:7px 10px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir varias canciones a esta Playlist</button>
+
+          <div style="display:flex; gap:6px; margin: 8px 0 6px;">
+            <button class="btn-chip active" style="flex:1; font-size:11px; padding:7px 10px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir varias canciones</button>
+            <button class="btn-chip" style="font-size:11px; padding:7px 10px;" onclick="shufflePlaySelectedPlaylist()">🔀 Aleatorio</button>
           </div>
-          <div id="playlistTracksList" class="track-list" style="margin-top:6px;"></div>
+
+          <!-- Contenedor colapsable de la lista de canciones -->
+          <div id="plTracksCollapsibleContainer">
+            <div id="playlistTracksList" class="track-list" style="margin-top:6px;"></div>
+            <div id="plExpandMoreBar" style="display:none; margin-top:6px; text-align:center;">
+              <button class="btn-chip" id="btnExpandMoreTracks" onclick="togglePlaylistExpandFull()" style="width:100%; font-size:11px; padding:8px 12px; background:#1e1e28; border-color:#353545;">
+                ▼ Ver todas las canciones
+              </button>
+            </div>
+          </div>
+
+          <!-- Resumen cuando la lista está reducida -->
+          <div id="plCollapsedSummary" style="display:none; padding:10px 12px; text-align:center; background:#161620; border-radius:8px; margin-top:6px;">
+            <span style="font-size:11px; color:var(--muted);">Lista reducida para mayor comodidad visual.<br>Pulsa <b>[➕ Mostrar lista]</b> para ver las canciones o <b>[▶ Reproducir]</b> para escuchar la playlist.</span>
+          </div>
         </div>
 
         <div style="margin-top:14px; text-align:center;">
@@ -671,6 +714,13 @@ let playlists = [
 let selectedPlaylistId = "pl_synth";
 let pendingTrackIdForPlaylist = null;
 
+let activePlaybackQueue = [...tracks];
+let activeQueueIndex = 0;
+let activeQueueName = "Toda la biblioteca";
+let isPlaylistListCollapsed = false;
+let isPlaylistExpandedFull = false;
+const playlistMaxVisibleCount = 4;
+
 let currentIndex = 0;
 let isPlaying = false;
 let shuffleMode = false;
@@ -812,13 +862,35 @@ function importLocalFiles(ev) {
   if (files.length > 0) playTrackIndex(0);
 }
 
-/* ---------------- MOTOR DE REPRODUCCIÓN NATIVO ANDROID + CONTROLES ---------------- */
+/* ---------------- MOTOR DE REPRODUCCIÓN NATIVO ANDROID + CONTROLES CONTEXTUALES ---------------- */
+function playTrackFromQueue(queueList, indexInQueue, contextName) {
+  if (!queueList || !queueList.length) return;
+  activePlaybackQueue = [...queueList];
+  activeQueueIndex = Math.max(0, Math.min(indexInQueue, activePlaybackQueue.length - 1));
+  activeQueueName = contextName || "Playlist";
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.indexOf(t);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
+}
+
 function playTrackIndex(idx) {
   if (idx < 0 || idx >= tracks.length) return;
+  const t = tracks[idx];
+  const qIdx = activePlaybackQueue ? activePlaybackQueue.findIndex(x => x.id === t.id) : -1;
+  if (qIdx >= 0) {
+    activeQueueIndex = qIdx;
+  } else {
+    activePlaybackQueue = [...tracks];
+    activeQueueIndex = idx;
+    activeQueueName = "Biblioteca";
+  }
   currentIndex = idx;
-  const t = tracks[currentIndex];
-  const token = document.getElementById("gdToken").value.trim();
+  executePlayTrack(t);
+}
 
+function executePlayTrack(t) {
+  const token = document.getElementById("gdToken").value.trim();
   if (hasNativeAndroid) {
     isPlaying = true;
     updatePlayerUI();
@@ -833,19 +905,28 @@ function playTrackIndex(idx) {
       updatePlayerUI();
     });
   }
+  highlightPlayingTracks();
 }
 
 function togglePlay() {
   if (hasNativeAndroid) {
     if (!isPlaying && currentIndex === 0 && document.getElementById("lblCurTime").textContent === "0:00") {
-      playTrackIndex(currentIndex);
+      if (activePlaybackQueue.length > 0) {
+        executePlayTrack(activePlaybackQueue[activeQueueIndex]);
+      } else {
+        playTrackIndex(currentIndex);
+      }
     } else {
       window.AndroidMedia.togglePlayPause();
     }
     return;
   }
   if (!audio.src && tracks.length > 0) {
-    playTrackIndex(currentIndex);
+    if (activePlaybackQueue.length > 0) {
+      executePlayTrack(activePlaybackQueue[activeQueueIndex]);
+    } else {
+      playTrackIndex(currentIndex);
+    }
     return;
   }
   if (audio.paused) { audio.play(); isPlaying = true; }
@@ -854,18 +935,34 @@ function togglePlay() {
 }
 
 function nextTrack() {
-  if (!tracks.length) return;
-  if (shuffleMode && tracks.length > 1) {
-    let nxt = Math.floor(Math.random() * tracks.length);
-    if (nxt === currentIndex) nxt = (nxt + 1) % tracks.length;
-    playTrackIndex(nxt);
-  } else {
-    playTrackIndex((currentIndex + 1) % tracks.length);
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    activePlaybackQueue = [...tracks];
   }
+  if (!activePlaybackQueue.length) return;
+
+  if (shuffleMode && activePlaybackQueue.length > 1) {
+    let nxt = Math.floor(Math.random() * activePlaybackQueue.length);
+    if (nxt === activeQueueIndex) nxt = (nxt + 1) % activePlaybackQueue.length;
+    activeQueueIndex = nxt;
+  } else {
+    activeQueueIndex = (activeQueueIndex + 1) % activePlaybackQueue.length;
+  }
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.indexOf(t);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
 }
 
 function prevTrack() {
-  playTrackIndex((currentIndex - 1 + tracks.length) % tracks.length);
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    activePlaybackQueue = [...tracks];
+  }
+  if (!activePlaybackQueue.length) return;
+  activeQueueIndex = (activeQueueIndex - 1 + activePlaybackQueue.length) % activePlaybackQueue.length;
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.indexOf(t);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
 }
 
 function seekAudio(val) {
@@ -965,14 +1062,26 @@ window.onNativeMediaCommand = function(cmd) {
 };
 
 function updatePlayerUI() {
-  const t = tracks[currentIndex];
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
   if (t) {
     const badge = t.cloud ? (t.downloaded ? " ✔" : " ☁️") : "";
     document.getElementById("nowTitle").textContent = t.title + badge;
-    document.getElementById("nowArtist").textContent = `${t.artist} • ${t.album}`;
+    const ctxText = activeQueueName ? ` • 🎵 ${activeQueueName}` : "";
+    document.getElementById("nowArtist").textContent = `${t.artist}${ctxText}`;
   }
   document.getElementById("btnPlay").textContent = isPlaying ? "⏸" : "▶";
   renderTracks();
+  highlightPlayingTracks();
+}
+
+function highlightPlayingTracks() {
+  const currentId = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) ? activePlaybackQueue[activeQueueIndex].id : (tracks[currentIndex] ? tracks[currentIndex].id : null);
+  document.querySelectorAll(".track-item").forEach(el => {
+    const tid = el.getAttribute("data-track-id");
+    if (tid) {
+      el.classList.toggle("playing", tid === currentId);
+    }
+  });
 }
 
 function fmtTime(sec) {
@@ -1070,15 +1179,17 @@ function renderTracks() {
   const curTrack = tracks[currentIndex];
 
   filtered.forEach((t) => {
-    const realIdx = tracks.indexOf(t);
     const isSelected = selectedTrackIds.has(t.id);
+    const isThisPlaying = isPlaying && ((activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id) || (tracks[currentIndex]?.id === t.id));
     const div = document.createElement("div");
-    div.className = "track-item" + (curTrack && curTrack.id === t.id ? " playing" : "") + (isSelected ? " selected" : "");
+    div.className = "track-item" + (isThisPlaying ? " playing" : "") + (isSelected ? " selected" : "");
+    div.setAttribute("data-track-id", t.id);
     div.onclick = (ev) => {
       if (isMultiSelectMode) {
         toggleTrackSelection(t.id, ev);
       } else {
-        playTrackIndex(realIdx);
+        const idxInFiltered = filtered.indexOf(t);
+        playTrackFromQueue(filtered, idxInFiltered >= 0 ? idxInFiltered : 0, activeFilter === "all" ? "Biblioteca" : "Canciones");
       }
     };
 
@@ -1212,6 +1323,31 @@ function renderHomePlaylists() {
   renderActivePlaylistDetail();
 }
 
+function togglePlaylistCollapse() {
+  isPlaylistListCollapsed = !isPlaylistListCollapsed;
+  const container = document.getElementById("plTracksCollapsibleContainer");
+  const summary = document.getElementById("plCollapsedSummary");
+  const btn = document.getElementById("btnTogglePlCollapse");
+  if (container && summary && btn) {
+    container.style.display = isPlaylistListCollapsed ? "none" : "block";
+    summary.style.display = isPlaylistListCollapsed ? "block" : "none";
+    btn.textContent = isPlaylistListCollapsed ? "➕ Mostrar lista" : "➖ Reducir lista";
+    btn.classList.toggle("active", isPlaylistListCollapsed);
+  }
+}
+
+function togglePlaylistExpandFull() {
+  isPlaylistExpandedFull = !isPlaylistExpandedFull;
+  if (selectedPlaylistId === "pl_liked" || selectedPlaylistId === "pl_cloud") {
+    const specialList = selectedPlaylistId === "pl_liked" ? tracks.filter(t => t.liked) : tracks.filter(t => t.cloud);
+    const specialName = selectedPlaylistId === "pl_liked" ? "💜 Canciones que te gustan" : "☁️ Mi Google Drive";
+    const specialDesc = selectedPlaylistId === "pl_liked" ? "Tus temas favoritos" : "Nube privada Google Drive";
+    selectAndDisplaySpecialPlaylist(selectedPlaylistId, specialName, specialDesc, specialList);
+  } else {
+    renderActivePlaylistDetail();
+  }
+}
+
 function selectAndDisplaySpecialPlaylist(id, name, desc, trackList) {
   selectedPlaylistId = id;
   renderHomePlaylists();
@@ -1219,16 +1355,43 @@ function selectAndDisplaySpecialPlaylist(id, name, desc, trackList) {
   if (!activeBox) return;
   activeBox.style.display = "block";
   document.getElementById("plViewTitle").textContent = name;
-  document.getElementById("plViewDesc").textContent = `${desc} • ${trackList.length} pistas`;
+  document.getElementById("plViewDesc").textContent = desc;
+  const badgeEl = document.getElementById("plTrackCountBadge");
+  if (badgeEl) badgeEl.textContent = `${trackList.length} canciones`;
+
+  const container = document.getElementById("plTracksCollapsibleContainer");
+  const summary = document.getElementById("plCollapsedSummary");
+  const btn = document.getElementById("btnTogglePlCollapse");
+  if (container && summary && btn) {
+    container.style.display = isPlaylistListCollapsed ? "none" : "block";
+    summary.style.display = isPlaylistListCollapsed ? "block" : "none";
+    btn.textContent = isPlaylistListCollapsed ? "➕ Mostrar lista" : "➖ Reducir lista";
+    btn.classList.toggle("active", isPlaylistListCollapsed);
+  }
 
   const plListEl = document.getElementById("playlistTracksList");
   plListEl.innerHTML = "";
-  trackList.forEach(t => {
-    const realIdx = tracks.indexOf(t);
+
+  if (trackList.length === 0) {
+    plListEl.innerHTML = `<div style="padding:14px; text-align:center; color:var(--muted); font-size:12px;">No hay canciones en esta lista.</div>`;
+    const expandBar = document.getElementById("plExpandMoreBar");
+    if (expandBar) expandBar.style.display = "none";
+    return;
+  }
+
+  const maxVisible = isPlaylistExpandedFull ? trackList.length : playlistMaxVisibleCount;
+  const visibleList = trackList.slice(0, maxVisible);
+
+  visibleList.forEach((t, idxInFull) => {
+    const isThisPlaying = isPlaying && (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id);
     const row = document.createElement("div");
-    row.className = "track-item";
-    row.onclick = () => playTrackIndex(realIdx);
+    row.className = "track-item" + (isThisPlaying ? " playing" : "");
+    row.setAttribute("data-track-id", t.id);
+    row.onclick = () => playTrackFromQueue(trackList, idxInFull, name);
     row.innerHTML = `
+      <div style="font-size:11px; font-weight:800; color:${isThisPlaying ? 'var(--green-bright)' : 'var(--muted)'}; width:18px; text-align:center;">
+        ${isThisPlaying ? '▶' : (idxInFull + 1)}
+      </div>
       <div class="track-thumb" style="width:36px;height:36px;font-size:14px;background:linear-gradient(135deg,${t.color || '#1db954'},#181824)">♪</div>
       <div class="track-meta">
         <div class="track-title">${t.title}</div>
@@ -1237,6 +1400,18 @@ function selectAndDisplaySpecialPlaylist(id, name, desc, trackList) {
     `;
     plListEl.appendChild(row);
   });
+
+  const expandBar = document.getElementById("plExpandMoreBar");
+  if (expandBar) {
+    if (trackList.length > playlistMaxVisibleCount) {
+      expandBar.style.display = "block";
+      document.getElementById("btnExpandMoreTracks").textContent = isPlaylistExpandedFull
+        ? "▲ Reducir lista a 4 canciones"
+        : `▼ Ver todas las canciones (${trackList.length - playlistMaxVisibleCount} más)`;
+    } else {
+      expandBar.style.display = "none";
+    }
+  }
 }
 
 function renderActivePlaylistDetail() {
@@ -1256,29 +1431,50 @@ function renderActivePlaylistDetail() {
 
   activeBox.style.display = "block";
   document.getElementById("plViewTitle").textContent = "🎵 " + curPl.name;
-  document.getElementById("plViewDesc").textContent = `${curPl.desc || 'Playlist personalizada'} • ${curPl.trackIds.length} canciones`;
+  document.getElementById("plViewDesc").textContent = curPl.desc || "Playlist personalizada";
+  const badgeEl = document.getElementById("plTrackCountBadge");
+  if (badgeEl) badgeEl.textContent = `${curPl.trackIds.length} canciones`;
+
+  const container = document.getElementById("plTracksCollapsibleContainer");
+  const summary = document.getElementById("plCollapsedSummary");
+  const btn = document.getElementById("btnTogglePlCollapse");
+  if (container && summary && btn) {
+    container.style.display = isPlaylistListCollapsed ? "none" : "block";
+    summary.style.display = isPlaylistListCollapsed ? "block" : "none";
+    btn.textContent = isPlaylistListCollapsed ? "➕ Mostrar lista" : "➖ Reducir lista";
+    btn.classList.toggle("active", isPlaylistListCollapsed);
+  }
 
   const plListEl = document.getElementById("playlistTracksList");
   plListEl.innerHTML = "";
 
-  if (curPl.trackIds.length === 0) {
+  const plTracks = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
+
+  if (plTracks.length === 0) {
     plListEl.innerHTML = `
       <div style="padding:14px; text-align:center; color:var(--muted); font-size:12px;">
         Esta playlist aún no tiene canciones.<br>
         <button class="btn-chip active" style="margin-top:8px; font-size:11px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir varias canciones ahora</button>
       </div>
     `;
+    const expandBar = document.getElementById("plExpandMoreBar");
+    if (expandBar) expandBar.style.display = "none";
     return;
   }
 
-  curPl.trackIds.forEach(tid => {
-    const t = tracks.find(x => x.id === tid);
-    if (!t) return;
-    const realIdx = tracks.indexOf(t);
+  const maxVisible = isPlaylistExpandedFull ? plTracks.length : playlistMaxVisibleCount;
+  const visibleList = plTracks.slice(0, maxVisible);
+
+  visibleList.forEach((t, idxInFull) => {
+    const isThisPlaying = isPlaying && (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id);
     const row = document.createElement("div");
-    row.className = "track-item";
-    row.onclick = () => playTrackIndex(realIdx);
+    row.className = "track-item" + (isThisPlaying ? " playing" : "");
+    row.setAttribute("data-track-id", t.id);
+    row.onclick = () => playTrackFromQueue(plTracks, idxInFull, curPl.name);
     row.innerHTML = `
+      <div style="font-size:11px; font-weight:800; color:${isThisPlaying ? 'var(--green-bright)' : 'var(--muted)'}; width:18px; text-align:center;">
+        ${isThisPlaying ? '▶' : (idxInFull + 1)}
+      </div>
       <div class="track-thumb" style="width:36px;height:36px;font-size:14px;background:linear-gradient(135deg,${t.color || '#1db954'},#181824)">♪</div>
       <div class="track-meta">
         <div class="track-title">${t.title}</div>
@@ -1291,7 +1487,7 @@ function renderActivePlaylistDetail() {
     rmBtn.title = "Quitar de esta Playlist";
     rmBtn.onclick = (ev) => {
       ev.stopPropagation();
-      curPl.trackIds = curPl.trackIds.filter(id => id !== tid);
+      curPl.trackIds = curPl.trackIds.filter(id => id !== t.id);
       savePersistentState();
       renderHomePlaylists();
       uploadPlaylistsToDrive();
@@ -1299,6 +1495,18 @@ function renderActivePlaylistDetail() {
     row.appendChild(rmBtn);
     plListEl.appendChild(row);
   });
+
+  const expandBar = document.getElementById("plExpandMoreBar");
+  if (expandBar) {
+    if (plTracks.length > playlistMaxVisibleCount) {
+      expandBar.style.display = "block";
+      document.getElementById("btnExpandMoreTracks").textContent = isPlaylistExpandedFull
+        ? "▲ Reducir lista a 4 canciones"
+        : `▼ Ver todas las canciones (${plTracks.length - playlistMaxVisibleCount} más)`;
+    } else {
+      expandBar.style.display = "none";
+    }
+  }
 }
 
 /* ---------------- SELECCIÓN MÚLTIPLE DESDE DENTRO DE UNA PLAYLIST ---------------- */
@@ -1460,20 +1668,58 @@ function closeAddToPlaylistAndCreateNew() {
 }
 
 function playSelectedPlaylist() {
+  let list = [];
+  let name = "";
   if (selectedPlaylistId === "pl_liked") {
-    const liked = tracks.filter(t => t.liked);
-    if (liked.length > 0) playTrackIndex(tracks.indexOf(liked[0]));
+    list = tracks.filter(t => t.liked);
+    name = "Canciones que te gustan";
+  } else if (selectedPlaylistId === "pl_cloud") {
+    list = tracks.filter(t => t.cloud);
+    name = "Mi Google Drive";
+  } else {
+    const curPl = playlists.find(p => p.id === selectedPlaylistId);
+    if (!curPl || !curPl.trackIds.length) {
+      showToast("Esta playlist no tiene canciones");
+      return;
+    }
+    list = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
+    name = curPl.name;
+  }
+  if (!list.length) {
+    showToast("Esta playlist no tiene canciones disponibles");
     return;
   }
-  if (selectedPlaylistId === "pl_cloud") {
-    const cloud = tracks.filter(t => t.cloud);
-    if (cloud.length > 0) playTrackIndex(tracks.indexOf(cloud[0]));
+  playTrackFromQueue(list, 0, name);
+  showToast(`▶ Reproduciendo playlist «${name}» (${list.length} canciones)`);
+}
+
+function shufflePlaySelectedPlaylist() {
+  let list = [];
+  let name = "";
+  if (selectedPlaylistId === "pl_liked") {
+    list = tracks.filter(t => t.liked);
+    name = "Canciones que te gustan";
+  } else if (selectedPlaylistId === "pl_cloud") {
+    list = tracks.filter(t => t.cloud);
+    name = "Mi Google Drive";
+  } else {
+    const curPl = playlists.find(p => p.id === selectedPlaylistId);
+    if (!curPl || !curPl.trackIds.length) {
+      showToast("Esta playlist no tiene canciones");
+      return;
+    }
+    list = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
+    name = curPl.name;
+  }
+  if (!list.length) {
+    showToast("Esta playlist no tiene canciones disponibles");
     return;
   }
-  const curPl = playlists.find(p => p.id === selectedPlaylistId);
-  if (!curPl || !curPl.trackIds.length) return;
-  const firstTrack = tracks.find(x => x.id === curPl.trackIds[0]);
-  if (firstTrack) playTrackIndex(tracks.indexOf(firstTrack));
+  shuffleMode = true;
+  updateShuffleUI();
+  const rnd = Math.floor(Math.random() * list.length);
+  playTrackFromQueue(list, rnd, name);
+  showToast(`🔀 Modo aleatorio activado en «${name}»`);
 }
 
 function deleteSelectedPlaylist() {

@@ -257,6 +257,11 @@ class AudioEngine(QObject):
             return
 
         if self.history:
+            ctx_ids = {t.id for t in self.context_tracks}
+            # Descartar entradas del historial que no pertenecen a la playlist/cola activa
+            while self.history and ctx_ids and self.history[-1].id not in ctx_ids:
+                self.history.pop()
+        if self.history:
             prev = self.history.pop()
             self.play_track(prev, None, record_history=False)
             return

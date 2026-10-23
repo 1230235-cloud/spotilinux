@@ -314,4 +314,26 @@ QMenu::item:selected {
     background-color: #3E3E3E;
     color: #1DB954;
 }
+
+QFrame#ActivePlaylistHomeCard {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a2720, stop:1 #121417);
+    border: 1px solid rgba(29, 185, 84, 0.4);
+    border-radius: 12px;
+}
+
+QFrame#CompactTrackRow {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+}
+
+QFrame#CompactTrackRow:hover {
+    background-color: rgba(29, 185, 84, 0.12);
+    border-color: rgba(29, 185, 84, 0.35);
+}
+
+QFrame#CompactTrackRow[playing="true"] {
+    background-color: rgba(29, 185, 84, 0.18);
+    border-color: #1DB954;
+}
 """
