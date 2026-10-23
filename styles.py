@@ -12,7 +12,8 @@ QMainWindow, QWidget#RootContainer {
 
 QFrame#SidebarCard, QFrame#MainCard, QFrame#RightCard {
     background-color: #121212;
-    border-radius: 10px;
+    border: 1px solid #1C1C1C;
+    border-radius: 12px;
 }
 
 QFrame#BottomPlayerBar {
@@ -31,12 +32,17 @@ QFrame#NowPlayingMiniCard {
     border-radius: 10px;
 }
 
+QPushButton {
+    outline: none;
+}
+
 QPushButton#NavButton {
     background-color: transparent;
     color: #B3B3B3;
     border: none;
-    border-radius: 6px;
-    padding: 9px 14px;
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+    padding: 10px 14px;
     text-align: left;
     font-size: 14px;
     font-weight: 600;
@@ -44,53 +50,75 @@ QPushButton#NavButton {
 
 QPushButton#NavButton:hover {
     color: #FFFFFF;
-    background-color: #1F1F1F;
+    background-color: #1C1C1C;
+}
+
+QPushButton#NavButton:pressed {
+    background-color: #151515;
 }
 
 QPushButton#NavButton[active="true"] {
     color: #FFFFFF;
-    background-color: #282828;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(29,185,84,0.20), stop:1 #202020);
+    border-left: 3px solid #1DB954;
     font-weight: 700;
 }
 
 QPushButton#ActionChipButton {
-    background-color: #232323;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2A2A, stop:1 #202020);
     color: #EAEAEA;
-    border: 1px solid #303030;
-    border-radius: 15px;
-    padding: 6px 13px;
+    border: 1px solid #343434;
+    border-radius: 16px;
+    padding: 7px 15px;
     font-size: 12px;
     font-weight: 600;
 }
 
 QPushButton#ActionChipButton:hover {
-    background-color: #2E2E2E;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #343434, stop:1 #282828);
     border-color: #1DB954;
     color: #FFFFFF;
 }
 
+QPushButton#ActionChipButton:pressed {
+    background-color: #1A1A1A;
+    border-color: #17A04A;
+}
+
 QPushButton#ActionChipButton[active="true"] {
-    background-color: #1DB954;
-    color: #000000;
-    border-color: #1DB954;
-    font-weight: 700;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22D45F, stop:1 #17A84B);
+    color: #04140A;
+    border: 1px solid #1ED760;
+    font-weight: 800;
+}
+
+QPushButton#ActionChipButton[active="true"]:hover {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3BE675, stop:1 #1DB954);
+}
+
+QPushButton#ActionChipButton[active="true"]:pressed {
+    background-color: #14933F;
 }
 
 QPushButton#SpotifyGreenPlayBig {
-    background-color: #1DB954;
-    color: #000000;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2BE06A, stop:1 #17A84B);
+    color: #04140A;
     border: none;
-    border-radius: 26px;
+    border-radius: 25px;
     font-size: 20px;
     font-weight: bold;
 }
 
 QPushButton#SpotifyGreenPlayBig:hover {
-    background-color: #1ED760;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #45F07D, stop:1 #1DB954);
+}
+
+QPushButton#SpotifyGreenPlayBig:pressed {
+    background-color: #148F3E;
 }
 
 QPushButton#TransportPlayButton {
-    background-color: #FFFFFF;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FFFFFF, stop:1 #E4E4E4);
     color: #000000;
     border: none;
     border-radius: 18px;
@@ -99,7 +127,11 @@ QPushButton#TransportPlayButton {
 }
 
 QPushButton#TransportPlayButton:hover {
-    background-color: #1ED760;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3BE675, stop:1 #1DB954);
+}
+
+QPushButton#TransportPlayButton:pressed {
+    background-color: #17A04A;
 }
 
 QPushButton#TransportIconBtn {
@@ -114,29 +146,38 @@ QPushButton#TransportIconBtn {
 
 QPushButton#TransportIconBtn:hover {
     color: #FFFFFF;
-    background-color: #1A1A1A;
+    background-color: #1F1F1F;
+}
+
+QPushButton#TransportIconBtn:pressed {
+    background-color: #151515;
 }
 
 QPushButton#TransportIconBtn[active="true"] {
-    color: #1DB954;
-    background-color: rgba(29, 185, 84, 0.22);
-    border: 1px solid rgba(29, 185, 84, 0.7);
+    color: #1ED760;
+    background-color: rgba(29, 185, 84, 0.18);
+    border: 1px solid rgba(29, 185, 84, 0.65);
     font-weight: bold;
 }
 
 QPushButton#GhostSmallButton {
-    background-color: #242424;
+    background-color: #202020;
     color: #DCDCDC;
-    border: none;
+    border: 1px solid #2E2E2E;
     border-radius: 12px;
-    padding: 4px 10px;
+    padding: 4px 11px;
     font-size: 11px;
     font-weight: 600;
 }
 
 QPushButton#GhostSmallButton:hover {
-    background-color: #333333;
+    background-color: #2C2C2C;
+    border-color: #1DB954;
     color: #FFFFFF;
+}
+
+QPushButton#GhostSmallButton:pressed {
+    background-color: #171717;
 }
 
 QLineEdit#SearchInput {
@@ -148,9 +189,13 @@ QLineEdit#SearchInput {
     font-size: 13px;
 }
 
+QLineEdit#SearchInput:hover {
+    border: 1px solid #3A3A3A;
+}
+
 QLineEdit#SearchInput:focus {
     background-color: #2A2A2A;
-    border: 1px solid #FFFFFF;
+    border: 1px solid #1DB954;
 }
 
 QListWidget#PlaylistSidebarList, QListWidget#QueueListWidget {
@@ -231,6 +276,10 @@ QSlider::handle:horizontal {
 
 QSlider::handle:horizontal:hover {
     background: #1ED760;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
 }
 
 QSlider::groove:vertical {
@@ -270,16 +319,25 @@ QComboBox QAbstractItemView {
     selection-color: #000000;
 }
 
+QToolTip {
+    background-color: #1E1E1E;
+    color: #F2F2F2;
+    border: 1px solid #2F2F2F;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12px;
+}
+
 QScrollBar:vertical {
     background: transparent;
-    width: 8px;
-    margin: 0px;
+    width: 10px;
+    margin: 2px;
 }
 
 QScrollBar::handle:vertical {
-    background: #3E3E3E;
-    min-height: 30px;
-    border-radius: 4px;
+    background: #3A3A3A;
+    min-height: 34px;
+    border-radius: 3px;
 }
 
 QScrollBar::handle:vertical:hover {

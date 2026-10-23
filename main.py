@@ -170,6 +170,7 @@ class HeroBannerWidget(QFrame):
 
         self.lbl_subtitle = QLabel("Tus pistas locales, nube de Google Drive y Maomao bailando al compás")
         self.lbl_subtitle.setStyleSheet("color: #D0D0D8; font-size: 13px;")
+        self.lbl_subtitle.setWordWrap(True)
 
         self.lbl_stats = QLabel("0 canciones")
         self.lbl_stats.setStyleSheet("color: #FFFFFF; font-size: 12px; font-weight: 600;")
@@ -1037,13 +1038,16 @@ class SpotiLinuxWindow(QMainWindow):
         center_lay.addWidget(self.hero_banner)
 
         self.quick_scroll = QScrollArea()
+        self.quick_scroll.setObjectName("HomeScroll")
         self.quick_scroll.setWidgetResizable(True)
         self.quick_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.quick_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.quick_scroll.setStyleSheet("background: transparent; border: none;")
+        # Estilos acotados por nombre: un estilo sin selector se heredaría a todos los botones hijos
+        self.quick_scroll.setStyleSheet("QScrollArea#HomeScroll { background: transparent; border: none; }")
 
         self.quick_grid_container = QWidget()
-        self.quick_grid_container.setStyleSheet("background: transparent;")
+        self.quick_grid_container.setObjectName("HomeGridContainer")
+        self.quick_grid_container.setStyleSheet("QWidget#HomeGridContainer { background: transparent; }")
         self.quick_grid_main_layout = QVBoxLayout(self.quick_grid_container)
         self.quick_grid_main_layout.setContentsMargins(4, 2, 4, 10)
         self.quick_grid_main_layout.setSpacing(14)
@@ -1403,7 +1407,12 @@ class SpotiLinuxWindow(QMainWindow):
         self.engine.position_changed.connect(self._on_engine_position_changed)
         self.engine.queue_changed.connect(self._refresh_queue_ui)
         self.engine.spectrum_updated.connect(self._on_spectrum_frame)
+        self.engine.beat_info.connect(self._on_beat_info)
         self.engine.eq_status_changed.connect(self.eq_panel.set_status_text)
+
+    def _on_beat_info(self, bpm: float, beat_pos: float, conf: float, onset: float) -> None:
+        self.maomao_widget.set_beat(bpm, beat_pos, conf, onset)
+        self.visualizer.set_beat(bpm, beat_pos, conf, onset)
 
     def _on_spectrum_frame(self, bars, waveform) -> None:
         self.visualizer.update_audio_data(bars, waveform)
@@ -1548,19 +1557,20 @@ class SpotiLinuxWindow(QMainWindow):
 
         # 1. Tarjeta de Estado de Cuenta de Google y Sincronización en la Nube
         acc_frame = QFrame()
+        acc_frame.setObjectName("AccountCard")
         acc_frame.setStyleSheet(
-            "background-color: rgba(30, 215, 96, 0.08); border: 1px solid rgba(30, 215, 96, 0.25); "
-            "border-radius: 8px; padding: 10px;"
+            "QFrame#AccountCard { background-color: rgba(30, 215, 96, 0.07); "
+            "border: 1px solid rgba(30, 215, 96, 0.22); border-radius: 10px; }"
         )
         acc_lay = QHBoxLayout(acc_frame)
-        acc_lay.setContentsMargins(12, 8, 12, 8)
+        acc_lay.setContentsMargins(12, 6, 12, 6)
         acc_lay.setSpacing(12)
 
         has_user = bool(self.store.google_user.get("name") or self.store.google_user.get("email"))
         has_token = bool(self.store.gdrive_config.access_token)
 
         lbl_acc_icon = QLabel("👤" if has_user else "☁️")
-        lbl_acc_icon.setStyleSheet("font-size: 24px; background: transparent;")
+        lbl_acc_icon.setStyleSheet("font-size: 22px; background: transparent; border: none;")
         acc_lay.addWidget(lbl_acc_icon)
 
         acc_text_col = QVBoxLayout()
@@ -1580,15 +1590,18 @@ class SpotiLinuxWindow(QMainWindow):
                 "dispositivo como en Spotify"
             )
 
-        lbl_title.setStyleSheet("color: #FFFFFF; font-size: 13px; background: transparent;")
-        lbl_sub.setStyleSheet("color: #B3B3B3; font-size: 11px; background: transparent;")
+        lbl_title.setStyleSheet("color: #FFFFFF; font-size: 13px; background: transparent; border: none;")
+        lbl_sub.setStyleSheet("color: #B3B3B3; font-size: 11px; background: transparent; border: none;")
+        lbl_sub.setWordWrap(True)
+        lbl_title.setWordWrap(True)
         acc_text_col.addWidget(lbl_title)
         acc_text_col.addWidget(lbl_sub)
         acc_lay.addLayout(acc_text_col, stretch=1)
 
         btn_sync = QPushButton("🔄 Sincronizar Nube" if (has_user or has_token) else "🔑 Conectar Google")
-        btn_sync.setObjectName("ActionChipButton" if (has_user or has_token) else "SpotifyGreenPlayBig")
-        btn_sync.setFixedHeight(34)
+        btn_sync.setObjectName("ActionChipButton")
+        btn_sync.setProperty("active", "false" if (has_user or has_token) else "true")
+        btn_sync.setFixedHeight(32)
         btn_sync.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_sync.clicked.connect(self._sync_or_connect_google)
         acc_lay.addWidget(btn_sync)
@@ -1602,7 +1615,8 @@ class SpotiLinuxWindow(QMainWindow):
 
         # 3. Cuadrícula de Playlists Disponibles
         grid_widget = QWidget()
-        grid_widget.setStyleSheet("background: transparent;")
+        grid_widget.setObjectName("HomePlaylistGridHolder")
+        grid_widget.setStyleSheet("QWidget#HomePlaylistGridHolder { background: transparent; }")
         grid_lay = QGridLayout(grid_widget)
         grid_lay.setContentsMargins(0, 0, 0, 0)
         grid_lay.setSpacing(12)
@@ -1636,7 +1650,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         idx = 0
         for title, sub, pix, key in cards_data:
-            row, col = divmod(idx, 3)
+            row, col = divmod(idx, 2)
             grid_lay.addWidget(
                 QuickAccessCard(
                     title,
@@ -1650,7 +1664,7 @@ class SpotiLinuxWindow(QMainWindow):
                 col,
             )
             idx += 1
-        row, col = divmod(idx, 3)
+        row, col = divmod(idx, 2)
         grid_lay.addWidget(
             QuickAccessCard(
                 "➕ Crear Nueva Playlist",
@@ -1728,7 +1742,6 @@ class SpotiLinuxWindow(QMainWindow):
             self.home_preview_key = f"playlist:{first_pid}" if first_pid else "liked"
             name, tracks = self._get_home_preview_tracks(self.home_preview_key)
 
-        header = QHBoxLayout()
         info = QVBoxLayout()
         info.setSpacing(2)
         lbl_badge = QLabel(f"PLAYLIST SELECCIONADA  •  {len(tracks)} canciones")
@@ -1737,10 +1750,12 @@ class SpotiLinuxWindow(QMainWindow):
         lbl_name.setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: 900; background: transparent; border: none;")
         info.addWidget(lbl_badge)
         info.addWidget(lbl_name)
-        header.addLayout(info, stretch=1)
+        lay.addLayout(info)
 
         key = self.home_preview_key
-        btn_play = QPushButton("▶ Reproducir")
+        buttons_row = QHBoxLayout()
+        buttons_row.setSpacing(8)
+        btn_play = QPushButton("▶  Reproducir")
         btn_play.setObjectName("ActionChipButton")
         btn_play.setProperty("active", "true")
         btn_play.clicked.connect(lambda _c=False, k=key: self._play_home_key(k))
@@ -1756,8 +1771,9 @@ class SpotiLinuxWindow(QMainWindow):
         btn_collapse.clicked.connect(self._toggle_home_preview_collapsed)
         for b in (btn_play, btn_shuffle, btn_open, btn_collapse):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            header.addWidget(b)
-        lay.addLayout(header)
+            buttons_row.addWidget(b)
+        buttons_row.addStretch()
+        lay.addLayout(buttons_row)
 
         if self.home_preview_collapsed:
             lbl = QLabel("Lista reducida. Pulsa «➕ Mostrar lista» para ver las canciones.")

@@ -39,6 +39,8 @@ import java.util.List;
 
 public class MainActivity extends Activity {
     private static MainActivity instance;
+    /** true mientras la pantalla de la app está visible: solo entonces se envía el espectro al WebView (ahorra batería). */
+    public static volatile boolean uiVisible = true;
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private static final int FILE_CHOOSER_RESULT_CODE = 1001;
@@ -124,6 +126,10 @@ public class MainActivity extends Activity {
                 perms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
             }
         }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            // Solo para analizar el espectro de la música de la propia app (Visualizer). No se graba el micrófono.
+            perms.add(Manifest.permission.RECORD_AUDIO);
+        }
         if (!perms.isEmpty()) {
             requestPermissions(perms.toArray(new String[0]), PERMISSIONS_REQUEST_CODE);
         }
@@ -133,6 +139,10 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSIONS_REQUEST_CODE) {
+            MediaPlaybackService svc = MediaPlaybackService.getInstance();
+            if (svc != null) {
+                svc.retryVisualizer();
+            }
             // Al otorgar permisos de audio, rastrear automáticamente los archivos del dispositivo
             new Thread(new Runnable() {
                 @Override
@@ -488,9 +498,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        uiVisible = false;
         if (webView != null) {
             webView.resumeTimers();
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        uiVisible = true;
     }
 
     @Override

@@ -30,18 +30,22 @@
   /* Header superior */
   .top-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 14px 7px;
+    padding: 10px 14px 8px;
     background: linear-gradient(180deg, #1b3b2b 0%, #090c0a 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     flex-shrink: 0;
   }
   .logo-box { display: flex; align-items: center; gap: 8px; }
-  .logo-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .logo-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
   .logo-title { font-size: 17px; font-weight: 900; letter-spacing: 0.4px; }
   .maomao-pill {
-    background: #1d3c30; color: var(--green-bright);
-    font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;
-    border: 1px solid rgba(29, 185, 84, 0.35); cursor: pointer;
+    background: linear-gradient(180deg, #214637 0%, #163026 100%); color: var(--green-bright);
+    font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 14px;
+    border: 1px solid rgba(30, 215, 96, 0.45); cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    transition: transform 0.14s ease, border-color 0.18s ease;
   }
+  .maomao-pill:active { transform: scale(0.95); }
 
   /* Contenedor principal adaptable (Vertical = 1 columna, Horizontal = 2 columnas) */
   .workspace-body {
@@ -55,35 +59,48 @@
   /* Buscador y acciones rápidas */
   .search-row { padding: 0 0 8px 0; display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
   .search-input {
-    flex: 1; background: #242429; border: 1px solid #35353d; color: #fff;
-    padding: 8px 12px; border-radius: 20px; font-size: 12px; outline: none; min-width: 0;
-    user-select: text;
+    flex: 1; background: #1e1e24; border: 1px solid rgba(255, 255, 255, 0.12); color: #fff;
+    padding: 8px 13px; border-radius: 20px; font-size: 12px; outline: none; min-width: 0;
+    user-select: text; transition: border-color 0.2s ease, background 0.2s ease;
   }
+  .search-input:focus { border-color: var(--green-bright); background: #25252d; }
   .btn-chip {
-    background: #23232a; color: #fff; border: 1px solid #363640;
-    border-radius: 18px; padding: 6px 11px; font-size: 11px; font-weight: 700; cursor: pointer;
+    background: linear-gradient(180deg, #282830 0%, #1d1d24 100%); color: #f0f0f5;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 18px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer;
     white-space: nowrap; flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+    transition: transform 0.12s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   }
-  .btn-chip.active { background: var(--green); color: #000; border-color: var(--green); }
+  .btn-chip:hover { border-color: rgba(30, 215, 96, 0.5); background: linear-gradient(180deg, #30303a 0%, #23232c 100%); }
+  .btn-chip:active { transform: scale(0.95); }
+  .btn-chip.active {
+    background: linear-gradient(135deg, #24e068 0%, #1DB954 100%);
+    color: #041208; border-color: #5ef092; font-weight: 800;
+    box-shadow: 0 3px 12px rgba(29, 185, 84, 0.38);
+  }
 
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
 
   /* Escenario de Maomao + Espectro */
   .stage-card {
-    background: linear-gradient(180deg, #15241f 0%, #101215 100%);
-    border: 1px solid #243830; border-radius: 14px; padding: 9px;
+    background: linear-gradient(180deg, #15251f 0%, #0f1114 100%);
+    border: 1px solid rgba(42, 118, 102, 0.55); border-radius: 15px; padding: 9px;
     display: flex; flex-direction: column;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.48);
   }
   .stage-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
   .stage-label { font-size: 11px; font-weight: 800; color: var(--green-bright); letter-spacing: 0.6px; }
   canvas#maomaoCanvas {
-    width: 100%; height: 175px; display: block; border-radius: 10px;
-    background: radial-gradient(circle at 50% 60%, rgba(29,185,84,0.18), rgba(12,14,16,0.95));
+    width: 100%; height: 175px; display: block; border-radius: 11px;
+    background: radial-gradient(circle at 50% 60%, rgba(29,185,84,0.18), rgba(10,12,15,0.96));
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
   canvas#visCanvas {
-    width: 100%; height: 56px; display: block; margin-top: 6px; border-radius: 8px;
-    background: #0d0e11;
+    width: 100%; height: 56px; display: block; margin-top: 6px; border-radius: 9px;
+    background: #0b0c0f;
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   /* Lista de canciones */
@@ -91,26 +108,40 @@
   .track-list { display: flex; flex-direction: column; gap: 6px; }
   .track-item {
     display: flex; align-items: center; gap: 9px;
-    background: var(--card); padding: 8px 9px; border-radius: 10px;
-    border: 1px solid transparent;
+    background: linear-gradient(180deg, #17171c 0%, #121216 100%);
+    padding: 8px 10px; border-radius: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;
   }
-  .track-item.playing { border-color: rgba(29, 185, 84, 0.55); background: #18241d; }
+  .track-item:active { transform: scale(0.99); }
+  .track-item.playing {
+    border-color: rgba(30, 215, 96, 0.65);
+    background: linear-gradient(90deg, rgba(29, 185, 84, 0.2) 0%, #151f19 100%);
+    box-shadow: 0 2px 12px rgba(29, 185, 84, 0.18);
+  }
   .track-thumb {
-    width: 42px; height: 42px; border-radius: 8px; background: #282830;
+    width: 42px; height: 42px; border-radius: 9px; background: #282830;
     display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   }
   .track-meta { flex: 1; overflow: hidden; min-width: 0; }
   .track-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .track-item.playing .track-title { color: var(--green-bright); }
   .track-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .icon-action-btn {
-    background: #202028; border: 1px solid #32323e; color: #e0e0e6;
-    font-size: 13px; font-weight: 700; border-radius: 8px; padding: 5px 8px; cursor: pointer; flex-shrink: 0;
+    background: linear-gradient(180deg, #272732 0%, #1c1c24 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12); color: #e8e8f0;
+    font-size: 13px; font-weight: 700; border-radius: 9px; padding: 5px 9px; cursor: pointer; flex-shrink: 0;
+    transition: transform 0.12s ease, border-color 0.15s ease;
   }
+  .icon-action-btn:hover { border-color: var(--green-bright); color: var(--green-bright); }
+  .icon-action-btn:active { transform: scale(0.92); }
   .like-btn {
     background: none; border: none; color: var(--muted); font-size: 18px; padding: 4px 5px; cursor: pointer; flex-shrink: 0;
+    transition: transform 0.14s ease, color 0.14s ease;
   }
-  .like-btn.liked { color: var(--green); }
+  .like-btn:active { transform: scale(1.2); }
+  .like-btn.liked { color: var(--green-bright); text-shadow: 0 0 8px rgba(30, 215, 96, 0.45); }
 
   /* Tarjetas de Playlists */
   .playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 9px; margin-bottom: 12px; }
@@ -213,8 +244,9 @@
   /* Barra reproductora inferior */
   .player-dock {
     position: fixed; bottom: 52px; left: 8px; right: 8px;
-    background: rgba(24, 24, 31, 0.97); border: 1px solid #2e2e3a; border-radius: 12px;
-    padding: 7px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.75); z-index: 20;
+    background: linear-gradient(180deg, rgba(28, 30, 38, 0.98) 0%, rgba(18, 19, 24, 0.99) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.11); border-radius: 14px;
+    padding: 8px 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.82); z-index: 20;
   }
   .dock-top { display: flex; align-items: center; gap: 10px; }
   .dock-title-box { flex: 1; overflow: hidden; min-width: 0; }
@@ -223,24 +255,27 @@
   .dock-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .ctrl-btn { 
     position: relative;
-    background: none; 
-    border: none; 
-    color: #fff; 
-    font-size: 16px; 
-    padding: 4px 6px; 
+    background: rgba(255, 255, 255, 0.04); 
+    border: 1px solid rgba(255, 255, 255, 0.08); 
+    color: #e4e4ec; 
+    font-size: 15px; 
+    width: 32px;
+    height: 32px;
     cursor: pointer; 
-    border-radius: 8px;
+    border-radius: 16px;
     display: inline-flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all 0.16s ease;
   }
+  .ctrl-btn:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.22); }
+  .ctrl-btn:active { transform: scale(0.91); }
   .ctrl-btn.active { 
     color: var(--green-bright); 
     background: rgba(29, 185, 84, 0.22);
-    box-shadow: 0 0 10px rgba(29, 185, 84, 0.45);
-    border: 1px solid rgba(29, 185, 84, 0.5);
+    box-shadow: 0 0 12px rgba(29, 185, 84, 0.42);
+    border: 1px solid rgba(30, 215, 96, 0.65);
   }
   .ctrl-btn .active-dot {
     display: inline-block;
@@ -248,7 +283,7 @@
     height: 4px;
     background-color: var(--green-bright);
     border-radius: 50%;
-    margin-top: 2px;
+    margin-top: 1px;
     box-shadow: 0 0 4px var(--green-bright);
   }
   .toast-popup {
@@ -256,13 +291,13 @@
     bottom: 85px;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background: #1ED760;
-    color: #000;
+    background: linear-gradient(135deg, #24e068 0%, #1DB954 100%);
+    color: #031207;
     font-size: 12px;
     font-weight: 800;
     padding: 7px 16px;
     border-radius: 20px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.65);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.7);
     opacity: 0;
     pointer-events: none;
     transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -274,26 +309,32 @@
     transform: translateX(-50%) translateY(0);
   }
   .play-circle {
-    width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: #000;
-    border: none; font-size: 14px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, #25e069 0%, #1DB954 100%); color: #041208;
+    border: 1px solid #63f296; font-size: 15px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    box-shadow: 0 3px 12px rgba(29, 185, 84, 0.45);
+    transition: transform 0.14s ease, box-shadow 0.16s ease;
   }
-  .seek-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-  .seek-row span { font-size: 10px; color: var(--muted); min-width: 28px; }
+  .play-circle:active { transform: scale(0.92); }
+  .seek-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .seek-row span { font-size: 10px; color: var(--muted); min-width: 28px; font-variant-numeric: tabular-nums; }
   .seek-row input[type=range] { flex: 1; accent-color: var(--green); height: 4px; }
 
   /* Navegación inferior */
   .bottom-nav {
     position: fixed; bottom: 0; left: 0; right: 0; height: 50px;
-    background: #09090b; border-top: 1px solid #1f1f26;
+    background: linear-gradient(180deg, #0d0e12 0%, #07080a 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     display: flex; justify-content: space-around; align-items: center; z-index: 25;
   }
   .nav-item {
     background: none; border: none; color: var(--muted); font-size: 10px; font-weight: 700;
     display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
-    padding: 4px 10px;
+    padding: 4px 12px; border-radius: 10px; transition: color 0.16s ease, background 0.16s ease;
   }
   .nav-item .ico { font-size: 15px; }
-  .nav-item.active { color: var(--green-bright); }
+  .nav-item.active { color: var(--green-bright); background: rgba(29, 185, 84, 0.1); }
 
   /* Modales flotantes (Inicio de sesión Google Drive / Crear Playlist / Agregar a Playlist) */
   .modal-backdrop {
@@ -698,12 +739,12 @@
 const hasNativeAndroid = Boolean(window.AndroidMedia && typeof window.AndroidMedia.playSource === "function");
 
 const DEMO_TRACKS = [
-  { id: "t1", title: "Midnight Horizon", artist: "Neon Pulse", album: "Outrun Dreams 1984", genre: "Synthwave", src: "tracks/01_midnight_horizon.mp3", liked: true, cloud: false, downloaded: true, color: "#ec38bc" },
-  { id: "t2", title: "Rainy Tokyo Coffee", artist: "Kuroshio Beats", album: "Late Night Study", genre: "Lo-Fi Chill", src: "tracks/02_rainy_tokyo_lofi.mp3", liked: true, cloud: false, downloaded: true, color: "#f2994a" },
-  { id: "t3", title: "Emerald Groove", artist: "Solstice Club", album: "Ibiza Sunset", genre: "Deep House", src: "tracks/03_emerald_deep_house.mp3", liked: false, cloud: false, downloaded: true, color: "#1db954" },
-  { id: "t4", title: "Cybernetic Odyssey", artist: "Valkyrie Protocol", album: "Neo-Veracruz 2099", genre: "Electro", src: "tracks/04_cybernetic_odyssey.mp3", liked: false, cloud: false, downloaded: true, color: "#ff2a54" },
-  { id: "t5", title: "Aurora Borealis", artist: "Nordic Echoes", album: "Glacier Reflections", genre: "Ambient", src: "tracks/05_aurora_borealis.mp3", liked: false, cloud: false, downloaded: true, color: "#00d2ff" },
-  { id: "t6", title: "Velvet Starlight", artist: "The Midnight Cruisers", album: "Coastline Drive", genre: "Indie Synthpop", src: "tracks/06_velvet_starlight.mp3", liked: false, cloud: false, downloaded: true, color: "#9b51e0" }
+  { id: "t1", title: "Midnight Horizon", artist: "Neon Pulse", album: "Outrun Dreams 1984", genre: "Synthwave", src: "tracks/01_midnight_horizon.mp3", liked: true, cloud: false, downloaded: true, color: "#ec38bc", bpm: 112 },
+  { id: "t2", title: "Rainy Tokyo Coffee", artist: "Kuroshio Beats", album: "Late Night Study", genre: "Lo-Fi Chill", src: "tracks/02_rainy_tokyo_lofi.mp3", liked: true, cloud: false, downloaded: true, color: "#f2994a", bpm: 82 },
+  { id: "t3", title: "Emerald Groove", artist: "Solstice Club", album: "Ibiza Sunset", genre: "Deep House", src: "tracks/03_emerald_deep_house.mp3", liked: false, cloud: false, downloaded: true, color: "#1db954", bpm: 124 },
+  { id: "t4", title: "Cybernetic Odyssey", artist: "Valkyrie Protocol", album: "Neo-Veracruz 2099", genre: "Electro", src: "tracks/04_cybernetic_odyssey.mp3", liked: false, cloud: false, downloaded: true, color: "#ff2a54", bpm: 100 },
+  { id: "t5", title: "Aurora Borealis", artist: "Nordic Echoes", album: "Glacier Reflections", genre: "Ambient", src: "tracks/05_aurora_borealis.mp3", liked: false, cloud: false, downloaded: true, color: "#00d2ff", bpm: 90 },
+  { id: "t6", title: "Velvet Starlight", artist: "The Midnight Cruisers", album: "Coastline Drive", genre: "Indie Synthpop", src: "tracks/06_velvet_starlight.mp3", liked: false, cloud: false, downloaded: true, color: "#9b51e0", bpm: 118 }
 ];
 
 let tracks = [...DEMO_TRACKS];
@@ -891,6 +932,7 @@ function playTrackIndex(idx) {
 
 function executePlayTrack(t) {
   const token = document.getElementById("gdToken").value.trim();
+  onTrackChangedForRhythm(t);
   if (hasNativeAndroid) {
     isPlaying = true;
     updatePlayerUI();
@@ -1043,6 +1085,7 @@ function shufflePlayAll() {
 window.onNativeProgress = function(posMs, durMs, playingState) {
   isPlaying = Boolean(playingState);
   nativeDurationMs = durMs > 0 ? durMs : 28000;
+  syncSmoothClockFromNative(posMs, isPlaying);
   document.getElementById("lblCurTime").textContent = fmtTime(posMs / 1000);
   document.getElementById("lblDurTime").textContent = fmtTime(nativeDurationMs / 1000);
   document.getElementById("seekBar").value = Math.min(1000, Math.floor((posMs / nativeDurationMs) * 1000));
@@ -2192,12 +2235,159 @@ function cycleVisMode() {
   visMode = (visMode + 1) % 2;
 }
 
-/* ---------------- LIENZOS ADAPTATIVOS Y ANIMACIÓN 60 FPS ---------------- */
+/* ---------------- LIENZOS ADAPTATIVOS, MOTOR RÍTMICO Y ANIMACIÓN 60 FPS ---------------- */
 const mmCanvas = document.getElementById("maomaoCanvas");
 const mmCtx = mmCanvas.getContext("2d");
 const vCanvas = document.getElementById("visCanvas");
 const vCtx = vCanvas.getContext("2d");
-let phase = 0;
+
+const NUM_SPEC_BARS = 28;
+let specBars = new Array(NUM_SPEC_BARS).fill(0);
+let specPeaks = new Array(NUM_SPEC_BARS).fill(0);
+let prevRawMag = new Array(NUM_SPEC_BARS).fill(0);
+let agcCeiling = 0.65;
+let lastNativeSpecAt = 0;
+
+let trackKnownBpm = 112;
+let currentBpm = 112;
+let beatConfidence = 0.85;
+let onsetImpulse = 0;
+let danceAmp = 0;
+let idleTimeSec = 0;
+let lastFrameTimeMs = performance.now();
+
+// Reloj monótono interpolado para fase de beat libre de saltos
+let clockBasePosSec = 0;
+let clockBaseWallSec = performance.now() / 1000;
+let onsetTimestamps = [];
+let fluxAvg = 0.05;
+let lastOnsetWallSec = 0;
+
+function onTrackChangedForRhythm(trackObj) {
+  clockBasePosSec = 0;
+  clockBaseWallSec = performance.now() / 1000;
+  onsetTimestamps = [];
+  if (trackObj && trackObj.bpm && trackObj.bpm > 40) {
+    trackKnownBpm = trackObj.bpm;
+    currentBpm = trackObj.bpm;
+    beatConfidence = 0.92;
+  } else {
+    trackKnownBpm = 0;
+    currentBpm = 116;
+    beatConfidence = 0.65;
+  }
+}
+
+function syncSmoothClockFromNative(posMs, playingState) {
+  const posSec = Math.max(0, (posMs || 0) / 1000);
+  const nowSec = performance.now() / 1000;
+  if (!playingState) {
+    clockBasePosSec = posSec;
+    clockBaseWallSec = nowSec;
+    return;
+  }
+  const pred = clockBasePosSec + (nowSec - clockBaseWallSec);
+  const drift = posSec - pred;
+  if (Math.abs(drift) > 0.14) {
+    clockBasePosSec = posSec;
+    clockBaseWallSec = nowSec;
+  } else {
+    clockBasePosSec += drift * 0.22;
+  }
+}
+
+function getSmoothPlaybackSec() {
+  if (!isPlaying) return clockBasePosSec;
+  if (!hasNativeAndroid && audio && !audio.paused && !isNaN(audio.currentTime)) {
+    return audio.currentTime;
+  }
+  const nowSec = performance.now() / 1000;
+  return Math.max(0, clockBasePosSec + (nowSec - clockBaseWallSec));
+}
+
+/**
+ * Recibe las 28 bandas FFT reales enviadas desde MediaPlaybackService.java (Android Visualizer).
+ * Aplica escala dB, inclinación espectral (+3.5 dB/octava) y control automático de ganancia (AGC)
+ * más detección de onsets de graves para estimar el BPM en pistas externas.
+ */
+window.onNativeSpectrum = function(rawBins) {
+  if (!Array.isArray(rawBins) || rawBins.length === 0) return;
+  lastNativeSpecAt = performance.now();
+
+  const eqBoostBass = Math.max(0.55, 1 + currentEqValues[0] / 18);
+  const eqBoostMid  = Math.max(0.55, 1 + currentEqValues[2] / 18);
+  const eqBoostHigh = Math.max(0.55, 1 + currentEqValues[4] / 18);
+
+  let rawValues = new Array(NUM_SPEC_BARS).fill(0);
+  let bassFlux = 0;
+
+  for (let i = 0; i < NUM_SPEC_BARS; i++) {
+    const m = Math.max(0, Number(rawBins[i] || 0));
+    // Conversión a dB con compensación de agudos (+3.5 dB/octava aprox.)
+    const db = 20 * Math.log10(m / 90 + 1e-4) + (i / NUM_SPEC_BARS) * 18;
+    let norm = Math.max(0, Math.min(1.4, (db + 26) / 36));
+    const eqGain = i < 8 ? eqBoostBass : (i < 18 ? eqBoostMid : eqBoostHigh);
+    norm *= eqGain;
+    rawValues[i] = norm;
+
+    if (i < 9) {
+      const diff = norm - prevRawMag[i];
+      if (diff > 0) bassFlux += diff;
+    }
+    prevRawMag[i] = norm;
+  }
+
+  // AGC suave
+  const framePeak = Math.max(...rawValues, 0.05);
+  if (framePeak > agcCeiling) {
+    agcCeiling = 0.78 * agcCeiling + 0.22 * framePeak;
+  } else {
+    agcCeiling = Math.max(0.38, 0.992 * agcCeiling + 0.008 * framePeak);
+  }
+
+  for (let i = 0; i < NUM_SPEC_BARS; i++) {
+    const scaled = Math.pow(Math.min(1, rawValues[i] / (agcCeiling * 0.92)), 1.32);
+    if (scaled >= specBars[i]) {
+      specBars[i] = 0.48 * specBars[i] + 0.52 * scaled;
+    } else {
+      specBars[i] = 0.80 * specBars[i] + 0.20 * scaled;
+    }
+    if (specBars[i] >= specPeaks[i]) {
+      specPeaks[i] = specBars[i];
+    } else {
+      specPeaks[i] = Math.max(0, specPeaks[i] - 0.014);
+    }
+  }
+
+  // Detección de golpe (onset) y estimación de BPM para pistas sin BPM predefinido
+  fluxAvg = 0.88 * fluxAvg + 0.12 * bassFlux;
+  const nowSec = performance.now() / 1000;
+  if (bassFlux > fluxAvg * 1.45 && bassFlux > 0.22 && (nowSec - lastOnsetWallSec) > 0.26) {
+    onsetImpulse = Math.min(1, 0.55 + bassFlux * 0.25);
+    lastOnsetWallSec = nowSec;
+    if (!trackKnownBpm) {
+      onsetTimestamps.push(nowSec);
+      if (onsetTimestamps.length > 14) onsetTimestamps.shift();
+      if (onsetTimestamps.length >= 5) {
+        let intervals = [];
+        for (let k = 1; k < onsetTimestamps.length; k++) {
+          let dt = onsetTimestamps[k] - onsetTimestamps[k - 1];
+          while (dt > 0.92) dt *= 0.5;
+          while (dt < 0.34) dt *= 2.0;
+          if (dt >= 0.35 && dt <= 0.90) intervals.push(dt);
+        }
+        if (intervals.length >= 4) {
+          intervals.sort((a, b) => a - b);
+          const med = intervals[Math.floor(intervals.length / 2)];
+          const estBpm = Math.round(60 / med);
+          if (estBpm >= 68 && estBpm <= 172) {
+            currentBpm = Math.round(currentBpm * 0.75 + estBpm * 0.25);
+          }
+        }
+      }
+    }
+  }
+};
 
 function syncCanvasDimensions() {
   const rectM = mmCanvas.getBoundingClientRect();
@@ -2215,27 +2405,149 @@ function syncCanvasDimensions() {
 window.addEventListener("resize", syncCanvasDimensions);
 window.addEventListener("orientationchange", () => setTimeout(syncCanvasDimensions, 120));
 
-function animateLoop() {
-  requestAnimationFrame(animateLoop);
-
-  let bass = 0, mid = 0, high = 0;
-  if (isPlaying) {
-    const eqBoostBass = Math.max(0.5, 1 + currentEqValues[0] / 18);
-    const eqBoostMid = Math.max(0.5, 1 + currentEqValues[2] / 18);
-    const eqBoostHigh = Math.max(0.5, 1 + currentEqValues[4] / 18);
-    bass = Math.min(1.0, (0.45 + 0.38 * Math.abs(Math.sin(phase * 2.1))) * eqBoostBass);
-    mid = Math.min(1.0, (0.36 + 0.28 * Math.abs(Math.cos(phase * 1.6))) * eqBoostMid);
-    high = Math.min(1.0, (0.30 + 0.24 * Math.abs(Math.sin(phase * 3.2))) * eqBoostHigh);
+function computeDancePose(beatPos, styleIdx, amp, idleSec) {
+  if (amp < 0.02) {
+    const br = Math.sin(idleSec * 2.1);
+    return {
+      bounce: (br + 1) * 1.1,
+      swayX: Math.sin(idleSec * 1.05) * 1.8,
+      hipX: 0,
+      torsoRot: Math.sin(idleSec * 1.05) * 1.2,
+      headTilt: Math.sin(idleSec * 1.4) * 0.04,
+      armL: 0.08 * br,
+      armR: -0.08 * br,
+      stepL: 0,
+      stepR: 0,
+      skirtSwing: 0,
+      bunBounce: Math.max(0, br) * 1.2,
+      earTwitch: 0,
+      beatPulse: 0
+    };
   }
 
-  const speed = isPlaying ? (0.095 + (bass * 0.45 + mid * 0.35) * 0.22) : 0.03;
-  phase += speed;
+  // Normalizar tempo de baile a un rango cómodo (72 - 142 BPM)
+  let danceBpm = currentBpm;
+  let bScale = 1.0;
+  if (danceBpm > 142) bScale = 0.5;
+  else if (danceBpm < 72) bScale = 2.0;
 
-  drawMaomaoStage(bass, mid, high);
-  drawSpectrum(bass, mid, high);
+  const db = beatPos * bScale;
+  const frac = ((db % 1) + 1) % 1;
+  const beatInBar = ((Math.floor(db) % 4) + 4) % 4;
+  const phrasePos = ((db % 8) + 8) % 8;
+
+  const beatPulse = Math.pow(Math.max(0, Math.cos((frac - 0.06) * Math.PI)), 2.6);
+  const groove = Math.pow(Math.sin(frac * Math.PI), 1.35);
+  const bounce = (groove * 9.5 + onsetImpulse * 2.5) * amp;
+
+  const halfCycle = Math.sin(db * Math.PI * 0.5);
+  const quarterCycle = Math.sin(db * Math.PI);
+  const swayX = halfCycle * 11.5 * amp;
+  const hipX = -quarterCycle * 3.8 * amp;
+  const torsoRot = halfCycle * 3.8 * amp;
+  const headTilt = (quarterCycle * 0.105 + Math.sin(db * Math.PI * 0.25) * 0.04) * amp;
+
+  const stepWave = Math.sin(db * Math.PI);
+  const stepL = Math.max(0, stepWave) * 5.2 * amp;
+  const stepR = Math.max(0, -stepWave) * 5.2 * amp;
+  const skirtSwing = (quarterCycle * 4.8 + Math.sin(db * Math.PI * 2) * 1.5) * amp;
+
+  let armL = 0, armR = 0;
+  if (styleIdx === 0) {
+    // Danza Imperial: mangas fluidas con fraseo de 8 tiempos
+    armL = (0.48 * Math.sin(db * Math.PI * 0.5 + 0.35) + 0.26 * Math.sin(db * Math.PI)) * amp;
+    armR = (-0.48 * Math.sin(db * Math.PI * 0.5 - 0.35) + 0.26 * Math.cos(db * Math.PI)) * amp;
+    if (phrasePos >= 6.0) {
+      const lift = Math.sin(((phrasePos - 6.0) / 2.0) * Math.PI);
+      armL += 0.36 * lift * amp;
+      armR -= 0.36 * lift * amp;
+    }
+  } else if (styleIdx === 1) {
+    // Recolección de Hierbas: balanceo alegre de boticaria
+    armL = (0.56 * Math.sin(db * Math.PI) + 0.18 * Math.cos(db * Math.PI * 0.5)) * amp;
+    armR = (0.56 * Math.sin(db * Math.PI) - 0.18 * Math.cos(db * Math.PI * 0.5)) * amp;
+  } else {
+    // Paso Neko :3: zarpazos rítmicos alternando cada beat
+    const pawL = beatInBar % 2 === 0 ? groove : groove * 0.35;
+    const pawR = beatInBar % 2 === 1 ? groove : groove * 0.35;
+    armL = (0.32 + 0.52 * pawL) * amp;
+    armR = -(0.32 + 0.52 * pawR) * amp;
+  }
+
+  const bunBounce = (groove * 4.5 + beatPulse * 2.2) * amp;
+  const earTwitch = (beatPulse * 5.0 + Math.max(0, Math.sin(db * Math.PI * 2)) * 2.0) * amp;
+
+  return {
+    bounce, swayX, hipX, torsoRot, headTilt,
+    armL, armR, stepL, stepR, skirtSwing,
+    bunBounce, earTwitch, beatPulse
+  };
 }
 
-function drawMaomaoStage(bass, mid, high) {
+function animateLoop(nowMs) {
+  requestAnimationFrame(animateLoop);
+  if (typeof nowMs !== "number") nowMs = performance.now();
+  const dt = Math.min(0.08, Math.max(0.004, (nowMs - lastFrameTimeMs) / 1000));
+  lastFrameTimeMs = nowMs;
+  idleTimeSec += dt;
+
+  const posSec = getSmoothPlaybackSec();
+  const beatPos = posSec * (currentBpm / 60);
+
+  if (isPlaying) {
+    danceAmp = Math.min(1, danceAmp + dt * 3.8);
+  } else {
+    danceAmp = Math.max(0, danceAmp - dt * 4.2);
+  }
+  onsetImpulse = Math.max(0, onsetImpulse - dt * 5.2);
+
+  // Si el visualizador nativo de Android no envió trama en los últimos 220 ms (p.ej. sin permiso RECORD_AUDIO o en navegador),
+  // generamos un espectro armónico suave bloqueado exactamente a la fase del beat (sin vibración caótica)
+  const nativeActive = isPlaying && (nowMs - lastNativeSpecAt < 220);
+  if (!nativeActive) {
+    const frac = ((beatPos % 1) + 1) % 1;
+    const kickEnv = Math.pow(Math.max(0, Math.cos((frac - 0.05) * Math.PI)), 3.0);
+    const snareEnv = Math.floor(beatPos) % 2 === 1 ? kickEnv * 0.85 : kickEnv * 0.25;
+    const hatEnv = Math.pow(Math.abs(Math.sin(beatPos * Math.PI)), 2.2) * 0.55;
+
+    const eqBoostBass = Math.max(0.55, 1 + currentEqValues[0] / 18);
+    const eqBoostMid  = Math.max(0.55, 1 + currentEqValues[2] / 18);
+    const eqBoostHigh = Math.max(0.55, 1 + currentEqValues[4] / 18);
+
+    for (let i = 0; i < NUM_SPEC_BARS; i++) {
+      let target = 0;
+      if (isPlaying) {
+        const x = i / (NUM_SPEC_BARS - 1);
+        const sub = Math.exp(-Math.pow(x / 0.22, 2)) * (0.28 + 0.62 * kickEnv) * eqBoostBass;
+        const mid = Math.exp(-Math.pow((x - 0.46) / 0.25, 2)) * (0.22 + 0.42 * snareEnv + 0.14 * Math.sin(beatPos * Math.PI * 0.5 + i * 0.35)) * eqBoostMid;
+        const air = Math.exp(-Math.pow((x - 0.82) / 0.22, 2)) * (0.16 + 0.38 * hatEnv) * eqBoostHigh;
+        target = Math.min(0.95, Math.max(0.05, sub + mid + air));
+      }
+      if (target >= specBars[i]) {
+        specBars[i] = 0.45 * specBars[i] + 0.55 * target;
+      } else {
+        specBars[i] = 0.82 * specBars[i] + 0.18 * target;
+      }
+      if (specBars[i] >= specPeaks[i]) specPeaks[i] = specBars[i];
+      else specPeaks[i] = Math.max(0, specPeaks[i] - 0.012);
+    }
+    if (isPlaying && kickEnv > 0.88) onsetImpulse = Math.max(onsetImpulse, 0.55);
+  }
+
+  let bass = 0, mid = 0, high = 0;
+  for (let i = 0; i < 8; i++) bass += specBars[i];
+  for (let i = 8; i < 18; i++) mid += specBars[i];
+  for (let i = 18; i < NUM_SPEC_BARS; i++) high += specBars[i];
+  bass /= 8;
+  mid /= 10;
+  high /= (NUM_SPEC_BARS - 18);
+
+  const pose = computeDancePose(beatPos, maomaoStyle, danceAmp, idleTimeSec);
+  drawMaomaoStage(pose, beatPos, bass, mid, high);
+  drawSpectrum(beatPos, pose.beatPulse, bass, mid, high);
+}
+
+function drawMaomaoStage(pose, beatPos, bass, mid, high) {
   const w = mmCanvas.width, h = mmCanvas.height;
   mmCtx.clearRect(0, 0, w, h);
 
@@ -2243,40 +2555,68 @@ function drawMaomaoStage(bass, mid, high) {
   const floorY = h - 12;
   const scaleFactor = Math.min(w / 240, (h - 18) / 168);
 
-  const grad = mmCtx.createRadialGradient(cx, floorY - 55 * scaleFactor, 6, cx, floorY - 55 * scaleFactor, (65 + bass * 40) * scaleFactor);
-  grad.addColorStop(0, `rgba(29, 185, 84, ${0.22 + bass * 0.45})`);
-  grad.addColorStop(0.6, `rgba(162, 32, 68, ${0.12 + mid * 0.25})`);
+  // Halo rítmico sincronizado con el beat
+  const haloR = (68 + (pose.beatPulse * 20 + bass * 16) * danceAmp) * scaleFactor;
+  const grad = mmCtx.createRadialGradient(cx, floorY - 55 * scaleFactor, 6, cx, floorY - 55 * scaleFactor, haloR);
+  grad.addColorStop(0, `rgba(29, 185, 84, ${(0.18 + (pose.beatPulse * 0.24 + bass * 0.18) * danceAmp).toFixed(3)})`);
+  grad.addColorStop(0.6, `rgba(162, 32, 68, ${(0.10 + mid * 0.22 * danceAmp).toFixed(3)})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
   mmCtx.fillStyle = grad;
   mmCtx.beginPath();
-  mmCtx.arc(cx, floorY - 55 * scaleFactor, 90 * scaleFactor, 0, Math.PI * 2);
+  mmCtx.arc(cx, floorY - 55 * scaleFactor, 92 * scaleFactor, 0, Math.PI * 2);
   mmCtx.fill();
 
-  const bounce = isPlaying ? Math.abs(Math.sin(phase * 2)) * (5 + bass * 11) : Math.sin(phase) * 1.5;
-  const swayX = isPlaying ? Math.sin(phase) * (8 + mid * 13) : 0;
-  const headTilt = isPlaying ? Math.sin(phase) * (0.11 + mid * 0.16) : Math.sin(phase * 0.5) * 0.03;
-  const armL = isPlaying ? Math.sin(phase * 2) * (0.42 + mid * 0.60) : 0.1;
-  const armR = isPlaying ? Math.cos(phase * 2) * (0.42 + mid * 0.60) : -0.1;
+  // Sombra elíptica en el piso
+  mmCtx.fillStyle = "rgba(0, 0, 0, 0.45)";
+  mmCtx.beginPath();
+  mmCtx.ellipse(cx + pose.swayX * scaleFactor, floorY + 2, Math.max(12, (28 - pose.bounce * 0.35) * scaleFactor), 4.5 * scaleFactor, 0, 0, Math.PI * 2);
+  mmCtx.fill();
 
   mmCtx.save();
-  mmCtx.translate(cx + swayX * scaleFactor, floorY - bounce * scaleFactor);
+  mmCtx.translate(cx + pose.swayX * scaleFactor, floorY - pose.bounce * scaleFactor);
   mmCtx.scale(scaleFactor, scaleFactor);
 
-  // Falda carmesí (Hanfu)
+  // Pies con pasitos alternados al ritmo del beat
+  mmCtx.fillStyle = "#2b1c20";
+  mmCtx.beginPath();
+  mmCtx.roundRect(-14, -7 - pose.stepL, 10, 6, 3);
+  mmCtx.roundRect(4, -7 - pose.stepR, 10, 6, 3);
+  mmCtx.fill();
+
+  // Falda carmesí (Hanfu) con vuelo rítmico
+  const sw = pose.skirtSwing + pose.hipX;
   mmCtx.fillStyle = "#a22044";
   mmCtx.strokeStyle = "#480d1e";
   mmCtx.lineWidth = 2;
   mmCtx.beginPath();
   mmCtx.moveTo(-17, -52);
   mmCtx.lineTo(17, -52);
-  mmCtx.lineTo(25, -6);
-  mmCtx.lineTo(-25, -6);
+  mmCtx.lineTo(25 + sw, -6);
+  mmCtx.lineTo(-25 + sw, -6);
   mmCtx.closePath();
   mmCtx.fill();
   mmCtx.stroke();
 
+  // Pliegues de la falda
+  mmCtx.strokeStyle = "rgba(65, 10, 25, 0.55)";
+  mmCtx.lineWidth = 1.2;
+  [-8, 0, 8].forEach(px => {
+    mmCtx.beginPath();
+    mmCtx.moveTo(px * 0.6, -50);
+    mmCtx.lineTo(px + sw * 0.65, -8);
+    mmCtx.stroke();
+  });
+
+  // Torso con rotación suave
+  mmCtx.save();
+  mmCtx.translate(0, -54);
+  mmCtx.rotate((pose.torsoRot * Math.PI) / 180);
+  mmCtx.translate(0, 54);
+
   // Chaqueta verde jade de boticaria
   mmCtx.fillStyle = "#2a7666";
+  mmCtx.strokeStyle = "#174238";
+  mmCtx.lineWidth = 2;
   mmCtx.beginPath();
   mmCtx.roundRect(-18, -86, 36, 36, 7);
   mmCtx.fill();
@@ -2297,19 +2637,25 @@ function drawMaomaoStage(bass, mid, high) {
   // Manga izquierda
   mmCtx.save();
   mmCtx.translate(-17, -79);
-  mmCtx.rotate(-0.6 + armL);
+  mmCtx.rotate(-0.55 + pose.armL);
   mmCtx.fillStyle = "#2e7e6c";
   mmCtx.beginPath();
   mmCtx.roundRect(-28, -5, 28, 13, 5);
   mmCtx.fill();
   mmCtx.fillStyle = "#ffe2ce";
   mmCtx.beginPath(); mmCtx.arc(-29, 1, 5, 0, Math.PI * 2); mmCtx.fill();
+  if (maomaoStyle === 1) {
+    mmCtx.fillStyle = "#35d472";
+    mmCtx.beginPath();
+    mmCtx.ellipse(-34, -4, 5, 2.5, -0.4, 0, Math.PI * 2);
+    mmCtx.fill();
+  }
   mmCtx.restore();
 
   // Manga derecha
   mmCtx.save();
   mmCtx.translate(17, -79);
-  mmCtx.rotate(0.6 + armR);
+  mmCtx.rotate(0.55 + pose.armR);
   mmCtx.fillStyle = "#2e7e6c";
   mmCtx.beginPath();
   mmCtx.roundRect(0, -5, 28, 13, 5);
@@ -2321,22 +2667,21 @@ function drawMaomaoStage(bass, mid, high) {
   // Cabeza de Maomao
   mmCtx.save();
   mmCtx.translate(0, -90);
-  mmCtx.rotate(headTilt);
+  mmCtx.rotate(pose.headTilt);
 
   if (maomaoStyle === 2) {
     mmCtx.fillStyle = "#1e583e";
     mmCtx.beginPath();
-    mmCtx.moveTo(-24, -34); mmCtx.lineTo(-32, -52 - bass * 5); mmCtx.lineTo(-10, -42); mmCtx.fill();
+    mmCtx.moveTo(-24, -34); mmCtx.lineTo(-32, -52 - pose.earTwitch); mmCtx.lineTo(-10, -42); mmCtx.fill();
     mmCtx.beginPath();
-    mmCtx.moveTo(24, -34); mmCtx.lineTo(32, -52 - bass * 5); mmCtx.lineTo(10, -42); mmCtx.fill();
+    mmCtx.moveTo(24, -34); mmCtx.lineTo(32, -52 - pose.earTwitch); mmCtx.lineTo(10, -42); mmCtx.fill();
   }
 
-  const bunBounce = bass * 5;
   [-1, 1].forEach(sign => {
     mmCtx.fillStyle = "#ee6c8a";
-    mmCtx.beginPath(); mmCtx.arc(sign * 24, -23 - bunBounce, 7, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.beginPath(); mmCtx.arc(sign * 24, -23 - pose.bunBounce, 7, 0, Math.PI * 2); mmCtx.fill();
     mmCtx.fillStyle = "#1e583e";
-    mmCtx.beginPath(); mmCtx.arc(sign * 31, -23 - bunBounce, 10.5, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.beginPath(); mmCtx.arc(sign * 31, -23 - pose.bunBounce, 10.5, 0, Math.PI * 2); mmCtx.fill();
   });
 
   // Rostro
@@ -2375,56 +2720,150 @@ function drawMaomaoStage(bass, mid, high) {
   mmCtx.arc(0, -28, 25, Math.PI, 0);
   mmCtx.fill();
 
-  mmCtx.restore();
-  mmCtx.restore();
+  mmCtx.restore(); // Cabeza
+  mmCtx.restore(); // Torso
+  mmCtx.restore(); // Escenario
 
-  if (isPlaying) {
-    mmCtx.fillStyle = "#1ed760";
+  // Notas flotantes sincronizadas con el beat
+  if (danceAmp > 0.1) {
+    mmCtx.fillStyle = `rgba(30, 215, 96, ${(0.55 + 0.35 * pose.beatPulse) * danceAmp})`;
     mmCtx.font = "bold 12px sans-serif";
     ["♪", "♫", "🌿", "✦"].forEach((sym, i) => {
-      const t = (phase * 0.7 + i * 1.5) % (Math.PI * 2);
-      const nx = cx + Math.cos(t + i) * (46 + i * 10) * scaleFactor;
-      const ny = floorY - (40 + (t / (Math.PI * 2)) * 75) * scaleFactor;
+      const cyc = ((beatPos * 0.25 + i * 0.25) % 1 + 1) % 1;
+      const nx = cx + Math.cos(cyc * Math.PI * 2 + i * 1.4) * (44 + i * 11) * scaleFactor;
+      const ny = floorY - (34 + cyc * 82) * scaleFactor;
       mmCtx.fillText(sym, nx, ny);
     });
   }
+
+  // Indicador de BPM y compás de 4 tiempos en la esquina superior derecha
+  mmCtx.font = "bold 10px sans-serif";
+  mmCtx.fillStyle = isPlaying ? "#1ed760" : "#8a8a96";
+  const bpmText = isPlaying ? `♩ ${Math.round(currentBpm)} BPM` : "En pausa";
+  mmCtx.textAlign = "right";
+  mmCtx.fillText(bpmText, w - 8, 14);
+  mmCtx.textAlign = "left";
+
+  const beatInBar = ((Math.floor(beatPos) % 4) + 4) % 4;
+  for (let b = 0; b < 4; b++) {
+    const dotX = w - 38 + b * 9;
+    const dotY = 23;
+    const isActiveBeat = isPlaying && b === beatInBar;
+    mmCtx.fillStyle = isActiveBeat ? (b === 0 ? "#1ed760" : "#00d2ff") : "rgba(255,255,255,0.18)";
+    mmCtx.beginPath();
+    mmCtx.arc(dotX, dotY, isActiveBeat ? 3.2 : 2.1, 0, Math.PI * 2);
+    mmCtx.fill();
+  }
 }
 
-function drawSpectrum(bass, mid, high) {
+function drawSpectrum(beatPos, beatPulse, bass, mid, high) {
   const w = vCanvas.width, h = vCanvas.height;
   vCtx.clearRect(0, 0, w, h);
 
-  if (visMode === 1) {
-    vCtx.strokeStyle = "#1ed760";
-    vCtx.lineWidth = 2;
+  // Líneas guía sutiles de analizador profesional
+  vCtx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+  vCtx.lineWidth = 1;
+  [0.3, 0.6].forEach(f => {
+    const gy = Math.round(h * f) + 0.5;
     vCtx.beginPath();
-    const len = 64;
-    for (let i = 0; i < len; i++) {
-      const x = 6 + (i / (len - 1)) * (w - 12);
-      const sample = isPlaying ? 0.48 * Math.sin(phase * 3 + i * 0.25) * (0.6 + bass * 0.6) : 0;
-      const y = (h / 2) - sample * (h * 0.38);
-      if (i === 0) vCtx.moveTo(x, y);
-      else vCtx.lineTo(x, y);
+    vCtx.moveTo(6, gy);
+    vCtx.lineTo(w - 6, gy);
+    vCtx.stroke();
+  });
+
+  if (visMode === 1) {
+    // Modo Onda Neón sincronizada con el espectro real y el pulso del beat
+    const midY = h * 0.52;
+    const ampScale = h * 0.40 * (0.82 + 0.25 * beatPulse);
+    const pts = [];
+    const nPts = 56;
+
+    for (let i = 0; i < nPts; i++) {
+      const u = i / (nPts - 1);
+      const x = 6 + u * (w - 12);
+      const bPos = u * (NUM_SPEC_BARS - 1);
+      const idx = Math.min(NUM_SPEC_BARS - 2, Math.floor(bPos));
+      const frac = bPos - idx;
+      const env = specBars[idx] * (1 - frac) + specBars[idx + 1] * frac;
+      const edge = Math.sin(u * Math.PI);
+      const carrier = Math.sin(u * Math.PI * 5 - beatPos * Math.PI) * 0.68
+                    + Math.sin(u * Math.PI * 10 + beatPos * Math.PI * 0.5) * 0.32;
+      const y = midY - env * edge * carrier * ampScale;
+      pts.push({ x, y });
     }
+
+    // Relleno bajo la onda
+    const fillGrad = vCtx.createLinearGradient(0, 4, 0, h - 2);
+    fillGrad.addColorStop(0, "rgba(30, 215, 96, 0.32)");
+    fillGrad.addColorStop(1, "rgba(0, 210, 255, 0.02)");
+    vCtx.fillStyle = fillGrad;
+    vCtx.beginPath();
+    vCtx.moveTo(pts[0].x, midY);
+    pts.forEach(p => vCtx.lineTo(p.x, p.y));
+    vCtx.lineTo(pts[pts.length - 1].x, midY);
+    vCtx.closePath();
+    vCtx.fill();
+
+    // Trazo principal
+    const strokeGrad = vCtx.createLinearGradient(6, 0, w - 6, 0);
+    strokeGrad.addColorStop(0, "#1DB954");
+    strokeGrad.addColorStop(0.5, "#1ed760");
+    strokeGrad.addColorStop(1, "#00d2ff");
+    vCtx.strokeStyle = strokeGrad;
+    vCtx.lineWidth = 2.2;
+    vCtx.beginPath();
+    pts.forEach((p, idx) => {
+      if (idx === 0) vCtx.moveTo(p.x, p.y);
+      else vCtx.lineTo(p.x, p.y);
+    });
     vCtx.stroke();
     return;
   }
 
-  const n = 28;
+  // Modo Barras de Espectro con cabezales flotantes (Peak Caps) y reflejo inferior
+  const n = NUM_SPEC_BARS;
   const gap = 3;
   const barW = Math.max(2, (w - 16 - gap * (n - 1)) / n);
+  const baseLine = h - 7;
+  const maxBarH = baseLine - 5;
+
+  // Línea base que pulsa suavemente con el beat
+  vCtx.strokeStyle = `rgba(30, 215, 96, ${(0.18 + 0.35 * beatPulse * danceAmp).toFixed(2)})`;
+  vCtx.lineWidth = 1;
+  vCtx.beginPath();
+  vCtx.moveTo(6, baseLine + 0.5);
+  vCtx.lineTo(w - 6, baseLine + 0.5);
+  vCtx.stroke();
 
   for (let i = 0; i < n; i++) {
-    let val = 0.06;
-    if (isPlaying) {
-      const bandEnv = i < 8 ? bass : (i < 18 ? mid : high);
-      val = Math.min(1.0, 0.12 + bandEnv * (0.55 + 0.45 * Math.abs(Math.sin(phase * 2.3 + i * 0.42))));
-    }
-    const bh = val * (h - 10);
+    const val = isPlaying ? Math.max(0.05, specBars[i]) : Math.max(0.03, specBars[i]);
+    const bh = Math.max(2, val * maxBarH);
     const x = 8 + i * (barW + gap);
-    const y = h - 4 - bh;
-    vCtx.fillStyle = i % 2 === 0 ? "#1DB954" : "#00d2ff";
-    vCtx.fillRect(x, y, barW, bh);
+    const y = baseLine - bh;
+
+    const barGrad = vCtx.createLinearGradient(0, y, 0, baseLine);
+    if (i % 2 === 0) {
+      barGrad.addColorStop(0, "#25e86c");
+      barGrad.addColorStop(1, "#15883e");
+    } else {
+      barGrad.addColorStop(0, "#24d8ff");
+      barGrad.addColorStop(1, "#137a94");
+    }
+    vCtx.fillStyle = barGrad;
+    vCtx.beginPath();
+    vCtx.roundRect(x, y, barW, bh, 2);
+    vCtx.fill();
+
+    // Cabezal de pico flotante
+    const pkH = Math.max(bh, specPeaks[i] * maxBarH);
+    const pkY = Math.max(2, baseLine - pkH - 2.5);
+    vCtx.fillStyle = i % 2 === 0 ? "#80ffaa" : "#88ecff";
+    vCtx.fillRect(x, pkY, barW, 1.8);
+
+    // Sutil reflejo inferior
+    const refH = Math.min(5, bh * 0.16);
+    vCtx.fillStyle = i % 2 === 0 ? "rgba(29, 185, 84, 0.22)" : "rgba(0, 210, 255, 0.22)";
+    vCtx.fillRect(x, baseLine + 1, barW, refH);
   }
 }
 

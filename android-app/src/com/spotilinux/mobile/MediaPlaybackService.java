@@ -17,6 +17,7 @@ import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.MediaPlayer;
 import android.media.audiofx.Equalizer;
+import android.media.audiofx.Visualizer;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.net.Uri;
@@ -50,6 +51,8 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
     private MediaPlayer mediaPlayer;
     private Equalizer audioEqualizer;
+    private Visualizer audioVisualizer;
+    private int visualizerSessionId = -1;
     private MediaSession mediaSession;
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
@@ -117,6 +120,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     }
 
     private void initMediaPlayer() {
+        releaseVisualizer();
         if (mediaPlayer != null) {
             try {
                 mediaPlayer.release();
@@ -138,6 +142,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                 isPrepared = true;
                 mp.setLooping(repeatOne);
                 setupHardwareEqualizer(mp.getAudioSessionId());
+                setupVisualizer(mp.getAudioSessionId());
                 if (requestAudioFocus()) {
                     acquireLocks();
                     mp.start();
@@ -170,6 +175,79 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                 return true;
             }
         });
+    }
+
+    /**
+     * Analiza el espectro REAL de la reproducción (FFT del propio MediaPlayer) y lo envía al WebView
+     * como 28 bandas logarítmicas. Maomao y las ondas se sincronizan con esta señal.
+     * Requiere el permiso RECORD_AUDIO (Android lo exige para Visualizer; no se captura el micrófono).
+     */
+    private void setupVisualizer(int audioSessionId) {
+        visualizerSessionId = audioSessionId;
+        releaseVisualizer();
+        try {
+            audioVisualizer = new Visualizer(audioSessionId);
+            int[] range = Visualizer.getCaptureSizeRange();
+            final int captureSize = Math.min(1024, range[1]);
+            audioVisualizer.setCaptureSize(captureSize);
+            int rate = Math.min(Visualizer.getMaxCaptureRate(), 24000); // hasta 24 Hz
+            audioVisualizer.setDataCaptureListener(new Visualizer.OnDataCaptureListener() {
+                @Override
+                public void onWaveFormDataCapture(Visualizer v, byte[] waveform, int samplingRate) {
+                }
+
+                @Override
+                public void onFftDataCapture(Visualizer v, byte[] fft, int samplingRateMilliHz) {
+                    if (!MainActivity.uiVisible || !isPlaying) return;
+                    final int bars = 28;
+                    float sr = samplingRateMilliHz / 1000f;
+                    if (sr <= 0) sr = 44100f;
+                    float binHz = sr / captureSize;
+                    int maxBin = fft.length / 2 - 1;
+                    double fMin = 45.0, fMax = Math.min(9000.0, sr * 0.45);
+                    StringBuilder sb = new StringBuilder("[");
+                    for (int b = 0; b < bars; b++) {
+                        double lo = fMin * Math.pow(fMax / fMin, b / (double) bars);
+                        double hi = fMin * Math.pow(fMax / fMin, (b + 1) / (double) bars);
+                        int ia = Math.max(1, (int) Math.floor(lo / binHz));
+                        int ib = Math.min(maxBin, Math.max(ia, (int) Math.ceil(hi / binHz)));
+                        double peak = 0.0;
+                        for (int k = ia; k <= ib; k++) {
+                            double re = fft[2 * k];
+                            double im = fft[2 * k + 1];
+                            double m = Math.sqrt(re * re + im * im);
+                            if (m > peak) peak = m;
+                        }
+                        if (b > 0) sb.append(',');
+                        sb.append((int) Math.round(peak));
+                    }
+                    sb.append(']');
+                    MainActivity.dispatchJs("if(window.onNativeSpectrum){window.onNativeSpectrum(" + sb + ");}");
+                }
+            }, rate, false, true);
+            audioVisualizer.setEnabled(true);
+        } catch (Exception e) {
+            // Sin permiso RECORD_AUDIO o dispositivo sin soporte: la interfaz usa un ritmo suave de respaldo
+            audioVisualizer = null;
+        }
+    }
+
+    private void releaseVisualizer() {
+        if (audioVisualizer != null) {
+            try {
+                audioVisualizer.setEnabled(false);
+                audioVisualizer.release();
+            } catch (Exception ignored) {
+            }
+            audioVisualizer = null;
+        }
+    }
+
+    /** Se llama cuando el usuario concede RECORD_AUDIO después de que ya empezó la reproducción. */
+    public void retryVisualizer() {
+        if (audioVisualizer == null && visualizerSessionId >= 0 && mediaPlayer != null && isPrepared) {
+            setupVisualizer(visualizerSessionId);
+        }
     }
 
     private void setupHardwareEqualizer(int audioSessionId) {
@@ -652,6 +730,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         if (uiSyncHandler != null) {
             uiSyncHandler.removeCallbacksAndMessages(null);
         }
+        releaseVisualizer();
         if (audioEqualizer != null) {
             try {
                 audioEqualizer.release();

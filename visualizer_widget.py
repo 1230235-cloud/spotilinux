@@ -57,6 +57,15 @@ class AudioVisualizerWidget(QWidget):
         self.accent_color = QColor(29, 185, 84)  # Spotify Green #1DB954
         self.cover_pixmap: Optional[QPixmap] = None
         self._angle: float = 0.0
+        self.beat_frac: float = 0.0   # 0 en el beat, →1 antes del siguiente
+        self.beat_onset: float = 0.0
+        self._playing: bool = False
+
+    def set_beat(self, bpm: float, beat_pos: float, confidence: float, onset: float) -> None:
+        """Sincroniza el pulso visual con la rejilla de beats real de la canción."""
+        self._playing = bpm > 0
+        self.beat_frac = (beat_pos - math.floor(beat_pos)) if bpm > 0 else 0.0
+        self.beat_onset = max(onset, self.beat_onset * 0.82)
 
     def set_mode(self, mode: str) -> None:
         if mode in ("bars", "wave", "radial"):
@@ -100,8 +109,7 @@ class AudioVisualizerWidget(QWidget):
             else:
                 self.peaks[i] = max(0.0, self.peaks[i] - 0.014)
 
-        energy = float(np.mean(self.bars)) if len(self.bars) else 0.0
-        self._angle = (self._angle + 0.8 + energy * 4.5) % 360.0
+        self._angle = (self._angle + 0.35) % 360.0
         self.update()
 
     def mousePressEvent(self, event) -> None:
@@ -123,6 +131,16 @@ class AudioVisualizerWidget(QWidget):
         grad_bg.setColorAt(0.0, QColor(22, 22, 26))
         grad_bg.setColorAt(1.0, QColor(12, 12, 14))
         painter.fillPath(bg_path, grad_bg)
+
+        # Rejilla horizontal muy tenue (da lectura de nivel, aspecto de analizador profesional)
+        painter.setPen(QPen(QColor(255, 255, 255, 12), 1.0))
+        for frac in (0.25, 0.5, 0.75):
+            gy = 26.0 + (h - 40.0) * frac
+            painter.drawLine(QPointF(12.0, gy), QPointF(w - 12.0, gy))
+        # Borde fino
+        painter.setPen(QPen(QColor(255, 255, 255, 18), 1.0))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1.0, h - 1.0), 10.0, 10.0)
 
         if self.mode == "bars":
             self._draw_bars(painter, w, h)
@@ -156,6 +174,11 @@ class AudioVisualizerWidget(QWidget):
         bar_grad.setColorAt(0.45, QColor(29, 185, 84))
         bar_grad.setColorAt(1.0, QColor(17, 105, 48))
 
+        # Línea base con pulso en cada beat
+        base_alpha = int(40 + 90 * (1.0 - self.beat_frac) ** 2) if self._playing else 40
+        painter.setPen(QPen(QColor(29, 185, 84, base_alpha), 1.4))
+        painter.drawLine(QPointF(pad_x, h - pad_bottom + 1.0), QPointF(w - pad_x, h - pad_bottom + 1.0))
+
         for i in range(n):
             val = float(np.clip(self.bars[i], 0.03, 1.0))
             bh = val * usable_h
@@ -166,6 +189,13 @@ class AudioVisualizerWidget(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bar_grad)
             painter.drawRoundedRect(rect, 2.5, 2.5)
+
+            # Reflejo tenue bajo la línea base
+            refl_h = min(bh * 0.28, pad_bottom - 3.0)
+            if refl_h > 1.0:
+                painter.setBrush(QColor(29, 185, 84, 38))
+                painter.drawRoundedRect(QRectF(x, h - pad_bottom + 2.0, bar_w, refl_h), 2.0, 2.0)
+                painter.setBrush(bar_grad)
 
             # Indicador de pico flotante
             pk = float(np.clip(self.peaks[i], 0.03, 1.0))
@@ -220,7 +250,8 @@ class AudioVisualizerWidget(QWidget):
         max_len = min(w, h) * 0.22
 
         energy = float(np.mean(self.bars)) if len(self.bars) else 0.0
-        pulse_r = base_r * (1.0 + energy * 0.18)
+        beat_kick = (1.0 - self.beat_frac) ** 3 if self._playing else 0.0
+        pulse_r = base_r * (1.0 + energy * 0.10 + beat_kick * 0.09 + self.beat_onset * 0.04)
 
         # Halo radial reactivo
         halo = QRadialGradient(QPointF(cx, cy), pulse_r + max_len)

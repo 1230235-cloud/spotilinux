@@ -27,10 +27,14 @@
   - **Página Principal estilo Spotify**: Tanto en Linux como en Android, la pantalla de Inicio (`🏠 Inicio`) no muestra una lista plana de canciones sueltas; en su lugar, destaca las **Playlists Disponibles** (Favoritos, Google Drive, playlists personalizadas y tarjeta para crear una nueva). Al pulsar cualquier playlist se abre su vista detallada con sus pistas.
   - **Selección Múltiple de Canciones**: Permite seleccionar varias canciones a la vez con checkboxes (`☑️`) o selección extendida (`Ctrl+Click`/`Shift+Click`) y agregarlas todas juntas a cualquier playlist existente o nueva con un solo clic.
   - **Sincronización en la Nube con Cuenta de Google & Google Drive**: Al vincular la cuenta de Google, SpotiLinux sincroniza automáticamente las playlists y favoritos en `spotilinux_cloud_playlists.json` dentro del Google Drive del usuario, permitiendo acceder a las mismas listas desde cualquier teléfono o PC con esa cuenta (roaming multiplataforma estilo Spotify).
-- **Figura Animada de Maomao (*The Apothecary Diaries*) Bailando al Compás**:
-  - Renderizado vectorial a 60 FPS (`QPainter` en Linux y HTML5 `Canvas` en Android) donde Maomao baila sincronizada en tiempo real con las bandas de frecuencia de la música (sub-bajos `20–160 Hz` marcan el paso y rebote de rodillas; medios `200–2000 Hz` mueven el torso, abanico/hierbas medicinales y mangas del hanfu; agudos `2–12 kHz` animan las orejitas de gato, el parpadeo y las partículas brillantes). Incluye 4 pasos de baile intercambiables.
-- **Visualizador FFT en Vivo (60 FPS) y Ecualizador de 5 Bandas**:
-  - Bandas en `60 Hz`, `230 Hz`, `910 Hz`, `3.6 kHz` y `14 kHz` con presets (*Plano, Bass Boost, Synthwave, Lo-Fi Chill, Vocal, Rock, Club*) y visualizador en modos *Barras*, *Onda* y *Radial*.
+- **Figura Animada de Maomao (*The Apothecary Diaries*) Bailando al Compás Real (BPM & Beat Grid)**:
+  - Renderizado vectorial a 60 FPS (`QPainter` en Linux y HTML5 `Canvas` en Android) donde Maomao baila sincronizada con el **tempo real (BPM) y la rejilla de pulsos (`beat_pos`)** de la canción, evitando oscilaciones caóticas por picos instantáneos de energía.
+  - Incluye normalización automática half/double-time al rango natural de baile (`72–142 BPM`), fraseo coreográfico de 4 y 8 tiempos, indicador en vivo `♩ XXX BPM` con 4 luces de compás en la esquina superior derecha y 3 estilos de danza intercambiables (*Danza Imperial*, *Recolección de Hierbas 🌿*, *Paso Neko :3 🐾*).
+- **Analizador de Espectro Musical (dB + Tilt + AGC) y Ecualizador de 5 Bandas**:
+  - Espectro logarítmico (`45 Hz – 9 kHz`) con conversión a decibelios (`dB`), compensación de agudos (`+3.5 dB/octava`), control automático de ganancia lento (`AGC`) y ataque/decaimiento musical para que las barras, la onda neón y el modo radial se muevan con suavidad profesional al ritmo del beat.
+  - Bandas de ecualización en `60 Hz`, `230 Hz`, `910 Hz`, `3.6 kHz` y `14 kHz` con presets (*Plano, Bass Boost, Synthwave, Lo-Fi Chill, Vocal, Rock, Club*).
+- **Diseño Visual y Botonera Profesional**:
+  - Conserva la paleta oficial (negro `#000000`, grafito `#121212`, verde esmeralda `#1DB954`/`#1ED760`, carmesí `#A22044` y jade `#2A7666`) con botones rediseñados (`NavButton`, `ActionChipButton`, `SpotifyGreenPlayBig`, `TransportPlayButton`, `TransportIconBtn`, `GhostSmallButton`) con gradientes sutiles, bordes iluminados, estados `:hover`/`:pressed` y jerarquía tipográfica limpia.
 
 ---
 
@@ -47,13 +51,14 @@ spotify-linux/
 ├── build_android_apk.sh          # Compilador y firmador del APK de Android (dist/SpotiLinux-Mobile.apk)
 │
 ├── main.py                       # Ventana principal PyQt6, vistas, diálogos, menús y señales
-├── audio_engine.py               # Motor QMediaPlayer + decodificador PCM/FFT NumPy + EQ FFmpeg
-├── maomao_widget.py              # Widget QPainter a 60 FPS de Maomao bailando al ritmo del espectro
-├── visualizer_widget.py          # Visualizador FFT (Barras/Onda/Radial) y panel del Ecualizador
+├── audio_engine.py               # Motor QMediaPlayer + reloj monótono + análisis rítmico/espectral + EQ FFmpeg
+├── rhythm.py                     # Extractor de BPM/rejilla de beats (spectral flux + comb filter) y SpectrumAnalyzer (dB + AGC)
+├── maomao_widget.py              # Widget QPainter a 60 FPS de Maomao bailando sincronizada a beat_pos y BPM
+├── visualizer_widget.py          # Visualizador FFT (Barras/Onda/Radial) bloqueado al beat y panel del Ecualizador
 ├── gdrive_sync.py                # Cliente Google Drive API v3, OAuth2 loopback, auto-carpeta Music y caché
 ├── storage.py                    # Persistencia JSON, Playlists, Favoritos y carpeta music_library/
 ├── metadata.py                   # Extractor ID3/FLAC/Vorbis (mutagen), portadas APIC y color dominante
-├── styles.py                     # Hoja de estilos QSS oscura estilo Spotify (#121212 / #1DB954)
+├── styles.py                     # Hoja de estilos QSS profesional manteniendo la paleta #121212 / #1DB954
 ├── generate_demos.py             # Sintetizador de 6 pistas musicales de demostración con tags ID3
 │
 ├── music_library/                # Carpeta persistente de la app en Linux donde se guardan las canciones rastreadas/descargadas
@@ -70,13 +75,13 @@ spotify-linux/
 │   └── SpotiLinux-Mobile.apk     # Instalador APK firmado para teléfonos Android
 │
 └── android-app/                  # Código fuente nativo e híbrido de la aplicación Android
-    ├── AndroidManifest.xml       # Permisos, MainActivity y MediaPlaybackService (foreground mediaPlayback)
+    ├── AndroidManifest.xml       # Permisos (incl. RECORD_AUDIO para Visualizer), MainActivity y MediaPlaybackService
     ├── src/com/spotilinux/mobile/
-    │   ├── MainActivity.java         # Puente @JavascriptInterface (AndroidMedia), escáner MediaStore, descargas Drive y persistencia JSON
-    │   └── MediaPlaybackService.java # Servicio nativo en 1er plano con MediaPlayer, Equalizer, AudioFocus, WakeLock, MediaSession y Notificación
+    │   ├── MainActivity.java         # Puente @JavascriptInterface (AndroidMedia), permisos, escáner MediaStore, descargas Drive y persistencia JSON
+    │   └── MediaPlaybackService.java # Servicio nativo en 1er plano con MediaPlayer, Equalizer, Visualizer FFT, AudioFocus, WakeLock y MediaSession
     ├── assets/www/
-    │   ├── index.html                # UI móvil responsiva (vertical/horizontal), Maomao Canvas, Playlists, Google Drive y controles conectados a Java
-    │   └── demo_tracks/              # Pistas demo integradas dentro del APK
+    │   ├── index.html                # UI móvil responsiva, Maomao y ondas sincronizadas al beat/FFT nativo, Playlists y Google Drive
+    │   └── tracks/                   # Pistas demo integradas dentro del APK
     └── res/                          # Iconos mipmap y recursos Android
 ```
 
@@ -84,27 +89,31 @@ spotify-linux/
 
 ## 🖥️ 3. Arquitectura Detallada: Versión de Escritorio Linux
 
-### 3.1 Flujo de Audio, Espectro FFT y Ecualizador (`audio_engine.py`)
-- **`AudioEngine`**:
-  - Utiliza `QMediaPlayer` y `QAudioOutput` de `PyQt6.QtMultimedia` para reproducción de baja latencia.
-  - Cuando se carga una pista, lanza **`WaveformDecodeWorker` (`QThread`)**, que invoca `ffmpeg` para decodificar la pista a PCM mono (`22050 Hz`, `int16`) en memoria RAM.
-  - Un `QTimer` a **60 FPS (`16 ms`)** calcula la ventana de muestras correspondiente al milisegundo exacto de reproducción (`player.position()`), aplica una ventana de Hanning y ejecuta `np.fft.rfft`, agrupando las magnitudes en **28 bandas logarítmicas** (`bars`) y **96 puntos de forma de onda** (`waveform`).
-  - Emite la señal `spectrum_updated(bars, waveform)` en cada fotograma hacia `AudioVisualizerWidget` y `MaomaoDancerWidget`.
-- **Ecualizador de 5 Bandas (`EQRenderWorker`)**:
-  - Cuando el usuario activa el ecualizador o cambia una banda (`60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz`), `EQRenderWorker` ejecuta `ffmpeg` en segundo plano con una cadena de filtros `equalizer=f=...:width_type=o:w=1.2:g=...` y hace un *hot-swap* transparente manteniendo el milisegundo exacto de reproducción (`seek_ms`).
+### 3.1 Motor Rítmico (`rhythm.py`), Espectro Musical y Ecualizador (`audio_engine.py`)
+- **`rhythm.py` (Análisis de Tempo, Rejilla de Beats y Espectro Musical)**:
+  - **`analyze_rhythm(samples, sr)`**: Calcula la envolvente de flujo espectral (*spectral flux* con compresión logarítmica enfatizando sub-bajos/bombo y caja), estima el tempo mediante un banco de filtros peine resonantes (*comb filter* entre `68–180 BPM` con refinamiento de `0.05 BPM`) y construye una rejilla de tiempos de pulso (`beat_times`) re-anclada localmente a los onsets reales de la canción.
+  - **`beat_position(beat_times, bpm, t)`**: Devuelve la posición continua de beat (`float`, ej. `14.35` = 35 % entre el beat 14 y el 15) para cualquier instante `t` en segundos, además de la intensidad de golpe (`onset`).
+  - **`SpectrumAnalyzer`**: Procesa ventanas de `2048` muestras con ventana de Hann, agrupa en **32 bandas logarítmicas** (`45 Hz – 9 kHz`), convierte a escala de decibelios (`dB`) con inclinación espectral de `+3.5 dB/octava` y aplica control automático de ganancia lento (`AGC` con techo `0.90` y exponente `1.35`) más suavizado exponencial de ataque/caída.
+- **`AudioEngine` (`audio_engine.py`)**:
+  - Utiliza `QMediaPlayer` y `QAudioOutput` de `PyQt6.QtMultimedia`.
+  - Cuando se carga una pista, lanza **`PCMAnalyzerWorker` (`QThread`)**, que decodifica la pista a PCM mono (`22050 Hz`) y ejecuta `analyze_rhythm` en segundo plano (~`0.1 s` por canción).
+  - **Reloj monótono interpolado (`_smooth_position_sec()`)**: `QMediaPlayer.position()` solo se actualiza cada `50–100 ms`. Para evitar saltos en la animación a 60 FPS, `AudioEngine` interpola la posición usando `time.monotonic()` y corrige derivas suavemente.
+  - Emite dos señales a **60 FPS (`16 ms`)**:
+    1. `spectrum_updated(bars, bass, mid, high)`
+    2. `beat_info(bpm, beat_pos, confidence, onset)`
+- **Ecualizador de 5 Bandas (`EQFilterWorker`)**:
+  - Cuando el usuario activa el ecualizador o cambia una banda (`60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz`), `EQFilterWorker` ejecuta `ffmpeg` en segundo plano con una cadena de filtros `equalizer=f=...:width_type=o:w=1.2:g=...` y hace un *hot-swap* transparente manteniendo el milisegundo exacto de reproducción (`seek_ms`).
 
-### 3.2 Animación de Maomao al Compás (`maomao_widget.py`)
-- **`MaomaoDancerWidget`**:
-  - Recibe las 28 barras del espectro a 60 FPS en `update_from_spectrum(bars, is_playing)`.
-  - Divide la energía en tres bandas musicales:
-    - **Sub-bajos y graves (`bars[0:6]`)**: Controlan el detector de pulso/beat (`beat_pulse`), el rebote vertical de rodillas (`bounce`) y los anillos de luz bajo sus pies.
-    - **Medios y voces (`bars[6:16]`)**: Controlan el balanceo lateral de caderas (`hip_sway`), la inclinación de cabeza (`head_tilt`) y el movimiento de brazos sosteniendo su abanico o ramita de hierbas medicinales.
-    - **Agudos (`bars[16:28]`)**: Controlan el movimiento de las orejitas de gato (`ear_twitch`), el vuelo de los listones del cabello y la emisión de partículas/notas musicales.
-  - Soporta 4 estilos de baile conmutables (`next_dance_style()`):
-    1. `0`: *Danza Imperial con Abanico*
-    2. `1`: *Pasito Boticaria Feliz (Hierbas)*
-    3. `2`: *Neko Groove Nocturno*
-    4. `3`: *Giro Ceremonial del Palacio*
+### 3.2 Coreografía de Maomao (`maomao_widget.py`) y Visualizador (`visualizer_widget.py`)
+- **`MaomaoDancerWidget` (`maomao_widget.py`)**:
+  - **Por qué antes se veía acelerada/"medio loca"**: Anteriormente incrementaba una fase libre en cada frame multiplicada por la energía de graves, provocando saltos bruscos de postura en cada pico de volumen.
+  - **Solución implementada (`set_beat` + `_dance_pose`)**: La postura completa de Maomao (rebote de rodillas `bounce`, balanceo de cadera/torso `sway_x`/`hip_x`, pasitos alternados `step_l`/`step_r`, vuelo de la falda `skirt_swing`, brazos `arm_l`/`arm_r` y orejitas `ear_twitch`) es una **función pura y continua de `beat_pos`**, normalizada automáticamente al rango de baile cómodo (`72–142 BPM`) y modulada por una amplitud suavizada (`self.amp`).
+  - Incluye variaciones de frase cada 8 tiempos, indicador en vivo `♩ XXX BPM` y 4 círculos luminosos del compás (`1-2-3-4`) en la esquina superior derecha.
+- **`AudioVisualizerWidget` (`visualizer_widget.py`)**:
+  - Recibe `set_beat(bpm, beat_pos, confidence, onset)` además de las barras suavizadas.
+  - **Modo Barras**: Cabezales flotantes (*peak caps*), reflejo inferior en el piso, líneas guía en dB y línea base que pulsa con el beat.
+  - **Modo Onda Neón**: Onda bicapa suave cuya envolvente sigue la distribución espectral real y cuya fase avanza bloqueada al beat (sin temblor aleatorio).
+  - **Modo Radial**: Anillo central que late con el pulso del beat y barras radiales con velocidad angular constante y suave.
 
 ### 3.3 Nube Privada de Google Drive (`gdrive_sync.py`)
 - **`GoogleDriveConfig`**: Almacena `access_token`, `refresh_token`, `client_id`, `client_secret`, `api_key` y `folder_id`.
@@ -165,8 +174,9 @@ spotify-linux/
 | `saveAppStateJson(json)` / `loadAppStateJson()` | Guarda y carga en disco nativo (`spotilinux_state.json`) las Playlists, Favoritos, credenciales de Google Drive y pistas importadas. |
 | `openExternalAuth(url)` | Abre el navegador del sistema para autenticación OAuth de Google si el usuario lo requiere. |
 
-A su vez, `MediaPlaybackService.java` (vía `MainActivity.notifyWebProgress` / `dispatchMediaCommandToWeb`) envía actualizaciones cada `250 ms` hacia el `WebView` llamando a:
-- `window.onNativeProgress(positionMs, durationMs, isPlaying)`
+A su vez, `MediaPlaybackService.java` (vía `MainActivity.notifyWebProgress` / `dispatchMediaCommandToWeb` / `dispatchJs`) envía actualizaciones hacia el `WebView` llamando a:
+- `window.onNativeProgress(positionMs, durationMs, isPlaying)` → sincroniza el reloj monótono interpolado (`getSmoothPlaybackSec()`) para que la fase del beat a 60 FPS no tenga saltos.
+- `window.onNativeSpectrum([b0, b1, ..., b27])` → alimentado por `android.media.audiofx.Visualizer` conectado al `audioSessionId` del `MediaPlayer` nativo (hasta 24 Hz cuando `MainActivity.uiVisible == true`), entregando 28 bandas logarítmicas (`45 Hz – 9 kHz`) que `index.html` procesa con escala dB, inclinación espectral, AGC y detector de onsets/BPM en vivo. Si el usuario no concede `RECORD_AUDIO`, usa un generador espectral armónico bloqueado al beat.
 - `window.onNativeMediaCommand('next' | 'ended_next' | 'prev' | 'play' | 'toggle')` → `nextTrack()` / `prevTrack()` usan la **cola activa** (ver 4.4), así los botones de audífonos/notificación también respetan la playlist.
 
 ### 4.3 Interfaz Móvil Responsiva (`android-app/assets/www/index.html`)
@@ -228,3 +238,5 @@ Si eres un agente de IA encargado de añadir nuevas funciones o corregir detalle
    - Linux: pasa la lista de la playlist como `context_list` (`_play_track_or_stream_from_cloud` / `_play_home_key`). Android: usa `playTrackFromQueue(...)`. Nunca vuelvas a recorrer toda la biblioteca en `next/prev/shuffle` cuando se está reproduciendo una playlist.
 7. **El Inicio muestra playlists, no la biblioteca**:
    - La lista de canciones de la playlist seleccionada en Inicio debe seguir siendo reducible (➖/➕) y limitada por defecto (4 canciones, “Ver todas”). La biblioteca completa vive en `💿 Tu Biblioteca` (Linux) / `💿 Canciones` (Android).
+8. **En PyQt6, nunca uses `setStyleSheet("background: transparent;")` sin selector de `#objectName` en contenedores padres**:
+   - Una regla sin selector en un `QScrollArea` o `QWidget` contenedor se hereda en cascada a todos los `QPushButton` hijos y borra los estilos globales de `styles.py`. Usa siempre `#NombreDelContenedor { background: transparent; border: none; }`.

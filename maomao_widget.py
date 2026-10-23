@@ -5,6 +5,7 @@ que baila en tiempo real al compás de la música (bajos, medios y agudos FFT).
 """
 
 import math
+import time
 from typing import Optional
 import numpy as np
 from PyQt6.QtCore import Qt, QPointF, QRectF
@@ -41,10 +42,17 @@ class MaomaoDancerWidget(QWidget):
         self.high_energy: float = 0.0
         self.overall_energy: float = 0.0
 
-        self.phase: float = 0.0
-        self.beat_pulse: float = 0.0
+        self.phase: float = 0.0          # reloj de animación en reposo (respiración)
+        self.beat_pulse: float = 0.0     # acento de golpe (0..1) a partir de la envolvente real
         self.dance_style: int = 0  # 0: Baile Imperial, 1: Fiesta de Hierbas, 2: Giro Neko :3
         self.STYLE_NAMES = ["Baile Imperial", "Fiesta de Hierbas 🌿", "Modo Neko :3 🐾"]
+
+        # Ritmo detectado (lo entrega AudioEngine.beat_info): baila sobre la rejilla de beats
+        self.bpm: float = 0.0
+        self.beat_pos: float = 0.0       # posición continua en beats
+        self.beat_conf: float = 0.0
+        self.amp: float = 0.0            # amplitud de movimiento suavizada (0..1)
+        self._fallback_t0: float = time.monotonic()
 
         self._blink_timer: float = 0.0
 
@@ -59,39 +67,109 @@ class MaomaoDancerWidget(QWidget):
         super().mousePressEvent(event)
 
     def update_from_spectrum(self, bars: np.ndarray, is_playing: bool) -> None:
+        """Energías por rango de frecuencia (solo para brillo, moños y expresión; el ritmo viene de set_beat)."""
         self.is_playing = is_playing
         if not is_playing or len(bars) == 0:
             self.bass_energy *= 0.85
             self.mid_energy *= 0.85
             self.high_energy *= 0.85
             self.overall_energy *= 0.85
-            self.beat_pulse *= 0.85
+            self.amp *= 0.90
             self.phase = (self.phase + 0.04) % (2 * math.pi * 100)
             self._blink_timer = (self._blink_timer + 0.04) % 12.0
             self.update()
             return
 
-        # Extraer energía por rangos de frecuencia
         bass = float(np.mean(bars[:7]))
         mid = float(np.mean(bars[7:20]))
         high = float(np.mean(bars[20:]))
-
-        # Detección de golpe de ritmo (beat kick)
-        if bass > self.bass_energy + 0.08:
-            self.beat_pulse = min(1.0, bass * 1.35)
-        else:
-            self.beat_pulse *= 0.82
-
-        self.bass_energy = self.bass_energy * 0.45 + bass * 0.55
-        self.mid_energy = self.mid_energy * 0.50 + mid * 0.50
-        self.high_energy = self.high_energy * 0.50 + high * 0.50
-        self.overall_energy = (self.bass_energy * 0.45 + self.mid_energy * 0.35 + self.high_energy * 0.20)
-
-        # Velocidad del compás proporcional a la energía musical
-        speed = 0.14 + self.overall_energy * 0.28 + (0.06 if self.dance_style == 2 else 0.0)
-        self.phase = (self.phase + speed) % (2 * math.pi * 100)
+        self.bass_energy = self.bass_energy * 0.6 + bass * 0.4
+        self.mid_energy = self.mid_energy * 0.6 + mid * 0.4
+        self.high_energy = self.high_energy * 0.6 + high * 0.4
+        self.overall_energy = self.bass_energy * 0.45 + self.mid_energy * 0.35 + self.high_energy * 0.20
+        # La amplitud sigue la sonoridad general con inercia (no cada golpe individual)
+        target = min(1.0, self.overall_energy * 1.5)
+        self.amp += (target - self.amp) * 0.08
         self._blink_timer = (self._blink_timer + 0.05) % 10.0
+
+    def set_beat(self, bpm: float, beat_pos: float, confidence: float, onset: float) -> None:
+        """Recibe la posición en beats sincronizada con la reproducción y repinta."""
+        self.bpm = bpm
+        self.beat_pos = beat_pos
+        self.beat_conf = confidence
+        self.beat_pulse = max(onset, self.beat_pulse * 0.80)
         self.update()
+
+    # ---------------- Coreografía: todo en función de la posición en beats ---------------- #
+
+    def _dance_pose(self) -> dict:
+        """Calcula la pose a partir de la posición en beats. Movimiento suave y periódico."""
+        if not self.is_playing:
+            return {
+                "lift": math.sin(self.phase) * 1.6, "sway": math.sin(self.phase * 0.5) * 2.0,
+                "head": math.sin(self.phase * 0.5) * 2.5, "arm_l": math.sin(self.phase) * 4.0,
+                "arm_r": -math.sin(self.phase) * 4.0, "step_l": 0.0, "step_r": 0.0,
+                "skirt": 0.0, "frac": 0.0, "beat_idx": 0, "db": 0.0, "bob": 0.0, "dancing": False,
+            }
+
+        bpm = self.bpm
+        if bpm > 0:
+            b = self.beat_pos
+        else:
+            # Aún analizando la canción: balanceo suave a 100 BPM para no quedarse quieta
+            bpm = 100.0
+            b = (time.monotonic() - self._fallback_t0) * bpm / 60.0
+
+        # Normalizar a un rango cómodo de baile (70-140 BPM): canciones rápidas = medio tiempo
+        db = b
+        if bpm > 142.0:
+            db = b / 2.0
+        elif bpm < 72.0:
+            db = b * 2.0
+
+        frac = db - math.floor(db)
+        k = 0.50 + 0.50 * min(1.0, self.amp * 1.2)      # intensidad 0.5..1.0
+        if self.bpm > 0:
+            k *= 0.80 + 0.20 * self.beat_conf            # menos confianza = movimiento más sobrio
+        section = int(math.floor(db / 8.0)) % 2          # cada 8 tiempos cambia el patrón de brazos
+
+        # Rebote: aterriza justo en el beat (lift = 0) y sube entre beats
+        lift = (math.sin(math.pi * frac) ** 0.85) * (3.5 + 7.0 * k)
+        # Balanceo lateral: izquierda en tiempos pares, derecha en impares
+        sway = math.sin(math.pi * db) * (5.0 + 8.0 * k)
+        head = math.sin(math.pi * (db - 0.25)) * (3.0 + 5.0 * k)
+        skirt = math.sin(math.pi * (db - 0.2)) * (3.0 + 6.0 * k)
+        step_l = max(0.0, math.sin(math.pi * db)) * (3.0 + 5.0 * k)
+        step_r = max(0.0, -math.sin(math.pi * db)) * (3.0 + 5.0 * k)
+
+        pulse = math.exp(-frac * 3.4)  # golpe corto justo en el beat
+        if self.dance_style == 0:      # Imperial: brazos fluidos y elegantes
+            a = 16.0 + 18.0 * k
+            arm_l = math.sin(math.pi * db + 0.5) * a
+            arm_r = math.sin(math.pi * db + math.pi + 0.5) * a if section == 0 else math.sin(math.pi * db + 0.5) * -a
+            bob = 0.0
+        elif self.dance_style == 1:    # Hierbas: brazos que bombean con el beat
+            a = 20.0 + 24.0 * k
+            on_even = (int(math.floor(db)) % 2 == 0)
+            if section == 0:
+                arm_l = a * pulse if on_even else a * 0.25
+                arm_r = a * 0.25 if on_even else a * pulse
+            else:
+                arm_l = a * pulse
+                arm_r = -a * pulse
+            bob = 0.0
+        else:                          # Neko: cabeceo al doble de velocidad y brazos cortos
+            a = 12.0 + 14.0 * k
+            arm_l = math.sin(2 * math.pi * db) * a
+            arm_r = -math.sin(2 * math.pi * db) * a
+            bob = math.sin(2 * math.pi * db) * (3.0 + 3.5 * k)
+            head += bob
+
+        return {
+            "lift": lift, "sway": sway, "head": head, "arm_l": arm_l, "arm_r": arm_r,
+            "step_l": step_l, "step_r": step_r, "skirt": skirt, "frac": frac,
+            "beat_idx": int(math.floor(b)) % 4, "db": db, "bob": bob, "dancing": True,
+        }
 
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
@@ -127,29 +205,25 @@ class MaomaoDancerWidget(QWidget):
         painter.drawEllipse(QPointF(cx, floor_y + 2), shadow_w, 6.5)
 
         if self.is_playing:
-            ring_w = shadow_w + 10.0 + (self.phase * 12.0) % 24.0
-            painter.setPen(QPen(QColor(29, 185, 84, int(140 * self.bass_energy)), 1.5))
+            # Onda en el suelo que nace en cada beat y se expande suavemente
+            pose_f = self._dance_pose()["frac"]
+            ring_w = shadow_w + 6.0 + pose_f * 40.0
+            alpha = int(150 * (1.0 - pose_f) ** 1.6 * (0.4 + 0.6 * self.amp))
+            painter.setPen(QPen(QColor(29, 185, 84, alpha), 1.8))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(QPointF(cx, floor_y + 2), ring_w, 8.0)
+            painter.drawEllipse(QPointF(cx, floor_y + 2), ring_w, 3.0 + pose_f * 7.0)
 
-        # 2. Parámetros cinemáticos del baile de Maomao
-        if self.is_playing:
-            bounce = abs(math.sin(self.phase * 2.0)) * (5.0 + self.bass_energy * 10.0)
-            sway_x = math.sin(self.phase) * (9.0 + self.mid_energy * 15.0)
-            head_tilt = math.sin(self.phase) * (7.0 + self.mid_energy * 12.0)
-            arm_wave_l = math.sin(self.phase * 2.0) * (26.0 + self.mid_energy * 42.0)
-            arm_wave_r = math.cos(self.phase * 2.0) * (26.0 + self.mid_energy * 42.0)
-            step_l = max(0.0, math.sin(self.phase)) * (5.0 + self.bass_energy * 10.0)
-            step_r = max(0.0, -math.sin(self.phase)) * (5.0 + self.bass_energy * 10.0)
-        else:
-            # Pose idle respirando suavemente
-            bounce = math.sin(self.phase) * 1.8
-            sway_x = math.sin(self.phase * 0.5) * 2.0
-            head_tilt = math.sin(self.phase * 0.5) * 2.5
-            arm_wave_l = math.sin(self.phase) * 4.0
-            arm_wave_r = -math.sin(self.phase) * 4.0
-            step_l = 0.0
-            step_r = 0.0
+        # 2. Parámetros cinemáticos del baile de Maomao (sincronizados con el compás)
+        pose = self._dance_pose()
+        bounce = pose["lift"]
+        sway_x = pose["sway"]
+        head_tilt = pose["head"]
+        arm_wave_l = pose["arm_l"]
+        arm_wave_r = pose["arm_r"]
+        step_l = pose["step_l"]
+        step_r = pose["step_r"]
+        skirt_sway_v = pose["skirt"]
+        beat_frac = pose["frac"]
 
         body_x = cx + sway_x
         base_y = floor_y - bounce
@@ -167,7 +241,7 @@ class MaomaoDancerWidget(QWidget):
         painter.drawRoundedRect(QRectF(6.0, -10.0 - step_r, 14.0, 9.0), 4.0, 4.0)
 
         # ---------------- FALDA LARGA CARMESÍ (HANFU) ---------------- #
-        skirt_sway = math.sin(self.phase) * (5.0 + self.mid_energy * 10.0) if self.is_playing else 0.0
+        skirt_sway = skirt_sway_v
         skirt_path = QPainterPath()
         skirt_path.moveTo(-18.0, -56.0)
         skirt_path.lineTo(18.0, -56.0)
@@ -258,7 +332,7 @@ class MaomaoDancerWidget(QWidget):
 
         # Orejas Neko opcionales en el estilo 3 ("Modo Neko :3")
         if self.dance_style == 2:
-            ear_bounce = self.bass_energy * 5.0
+            ear_bounce = self.beat_pulse * 5.0
             painter.setPen(QPen(QColor(18, 52, 38), 1.8))
             painter.setBrush(QColor(30, 88, 62))
             left_ear = QPainterPath()
@@ -280,7 +354,7 @@ class MaomaoDancerWidget(QWidget):
         painter.drawEllipse(QPointF(0, -24), 33.0, 31.0)
 
         # Dos moños laterales característicos de Maomao con cintas rosas/coral (rebotan con el bajo)
-        bun_offset = self.bass_energy * 6.5 if self.is_playing else 0.0
+        bun_offset = (self.beat_pulse * 5.0 + self.bass_energy * 2.0) if self.is_playing else 0.0
         for sign in (-1.0, 1.0):
             bx = sign * 33.0
             by = -25.0 - bun_offset
@@ -370,16 +444,17 @@ class MaomaoDancerWidget(QWidget):
         painter.restore()  # Fin cabeza
         painter.restore()  # Fin transformación cuerpo
 
-        # 3. Notas musicales y destellos flotantes cuando suena la música
+        # 3. Notas musicales flotantes: una nueva sale en cada beat y sube con calma
         if self.is_playing:
             font_notes = QFont("Sans Serif", 11, QFont.Weight.Bold)
             painter.setFont(font_notes)
             symbols = ["♪", "♫", "🌿", "✦"]
+            base = pose["db"]
             for i, sym in enumerate(symbols):
-                t_off = (self.phase * 0.7 + i * 1.57) % (2 * math.pi)
-                nx = cx + math.cos(t_off * 1.3 + i) * (54.0 + i * 12.0)
-                ny = (floor_y - 55.0) - ((t_off / (2 * math.pi)) * 95.0)
-                alpha = int(220 * math.sin((t_off / (2 * math.pi)) * math.pi))
+                life = ((base * 0.25) + i * 0.25) % 1.0   # cada símbolo vive 4 tiempos
+                nx = cx + math.sin((base * 0.25 + i * 0.25) * 2 * math.pi) * (46.0 + i * 8.0)
+                ny = (floor_y - 55.0) - life * 100.0
+                alpha = int(210 * math.sin(life * math.pi) * (0.35 + 0.65 * self.amp))
                 color = QColor(29, 185, 84, alpha) if i % 2 == 0 else QColor(245, 130, 165, alpha)
                 painter.setPen(color)
                 painter.drawText(QPointF(nx, ny), sym)
@@ -389,6 +464,17 @@ class MaomaoDancerWidget(QWidget):
         painter.setFont(QFont("Sans Serif", 8, QFont.Weight.Bold))
         status_txt = f"🌿 {self.STYLE_NAMES[self.dance_style].upper()}"
         painter.drawText(QRectF(10, 6, w - 20, 16), Qt.AlignmentFlag.AlignLeft, status_txt)
-        bpm_badge = "● AL COMPÁS" if self.is_playing else "○ PAUSA"
         painter.setPen(QColor(29, 185, 84, 215) if self.is_playing else QColor(150, 150, 160, 160))
-        painter.drawText(QRectF(10, 6, w - 20, 16), Qt.AlignmentFlag.AlignRight, bpm_badge)
+        if self.is_playing:
+            bpm_txt = f"♩ {self.bpm:.0f} BPM" if self.bpm > 0 else "♩ analizando…"
+            painter.drawText(QRectF(10, 6, w - 20, 16), Qt.AlignmentFlag.AlignRight, bpm_txt)
+            # Cuatro puntos de compás: el activo se ilumina en cada beat
+            bi = pose["beat_idx"]
+            for i in range(4):
+                active = (i == bi)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(29, 185, 84, 235) if active else QColor(90, 100, 96, 150))
+                r_dot = 3.2 + (1.4 * (1.0 - beat_frac) if active else 0.0)
+                painter.drawEllipse(QPointF(w - 14.0 - (3 - i) * 11.0, 28.0), r_dot, r_dot)
+        else:
+            painter.drawText(QRectF(10, 6, w - 20, 16), Qt.AlignmentFlag.AlignRight, "○ PAUSA")

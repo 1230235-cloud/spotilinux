@@ -8,6 +8,7 @@ ecualizador paramétrico de 5 bandas y gestión de cola / Shuffle / Repeat.
 import hashlib
 import random
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 import numpy as np
@@ -15,6 +16,7 @@ from PyQt6.QtCore import QObject, QThread, QTimer, QUrl, pyqtSignal
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 
 from metadata import TrackMetadata
+from rhythm import SpectrumAnalyzer, analyze_rhythm, beat_position
 
 EQ_BANDS = [
     {"freq": 60, "label": "60 Hz", "width": 50},
@@ -38,9 +40,9 @@ EQ_PRESETS: dict[str, list[float]] = {
 class PCMAnalyzerWorker(QThread):
     """Decodifica el archivo de audio a PCM mono ligero (11025 Hz) en segundo plano para FFT exacta."""
 
-    finished_pcm = pyqtSignal(str, object, int)
+    finished_pcm = pyqtSignal(str, object, int, object)  # id, samples, sample_rate, rhythm(dict)
 
-    def __init__(self, track_id: str, filepath: str, sample_rate: int = 11025) -> None:
+    def __init__(self, track_id: str, filepath: str, sample_rate: int = 22050) -> None:
         super().__init__()
         self.track_id = track_id
         self.filepath = filepath
@@ -58,10 +60,14 @@ class PCMAnalyzerWorker(QThread):
                 "-f", "s16le",
                 "-",
             ]
-            res = subprocess.run(cmd, capture_output=True, timeout=12)
+            res = subprocess.run(cmd, capture_output=True, timeout=25)
             if res.returncode == 0 and res.stdout:
                 samples = np.frombuffer(res.stdout, dtype=np.int16).astype(np.float32) / 32768.0
-                self.finished_pcm.emit(self.track_id, samples, self.sample_rate)
+                try:
+                    rhythm = analyze_rhythm(samples, self.sample_rate)
+                except Exception:
+                    rhythm = {"bpm": 0.0, "confidence": 0.0, "beat_times": np.zeros(0), "env": np.zeros(1), "fps": 86.0}
+                self.finished_pcm.emit(self.track_id, samples, self.sample_rate, rhythm)
         except Exception:
             pass
 
@@ -116,6 +122,7 @@ class AudioEngine(QObject):
     position_changed = pyqtSignal(int, int)     # pos_ms, duration_ms
     queue_changed = pyqtSignal()
     spectrum_updated = pyqtSignal(object, object)  # (spectrum_32_bars, waveform_128_pts)
+    beat_info = pyqtSignal(float, float, float, float)  # (bpm, beat_pos, confianza, onset 0..1)
     eq_status_changed = pyqtSignal(str)
 
     def __init__(self, eq_cache_dir: Path) -> None:
@@ -140,8 +147,16 @@ class AudioEngine(QObject):
 
         # Datos PCM en memoria para análisis FFT real a 60 FPS
         self._pcm_samples: Optional[np.ndarray] = None
-        self._pcm_sr: int = 11025
+        self._pcm_sr: int = 22050
         self._smooth_bars = np.zeros(32, dtype=np.float32)
+        self._analyzer = SpectrumAnalyzer(32)
+        self._rhythm: Optional[dict] = None
+        self._onset_smooth: float = 0.0
+        # Posición interpolada (QMediaPlayer actualiza la posición a saltos de ~50-100 ms)
+        self._pos_ref_ms: float = 0.0
+        self._pos_ref_wall: float = 0.0
+        self._last_raw_pos: int = -1
+        self.sync_offset_ms: float = 45.0  # compensa la latencia de salida de audio
         self._pcm_worker: Optional[PCMAnalyzerWorker] = None
         self._eq_worker: Optional[EQRenderWorker] = None
         self._pending_seek_ms: int = -1
@@ -176,6 +191,8 @@ class AudioEngine(QObject):
 
         self.current_track = track
         self._pcm_samples = None
+        self._rhythm = None
+        self._last_raw_pos = -1
         self._pending_seek_ms = -1
 
         # Iniciar decodificación PCM en segundo plano para el visualizador FFT
@@ -364,74 +381,84 @@ class AudioEngine(QObject):
 
     # -------------------- Análisis FFT & Visualizador -------------------- #
 
-    def _on_pcm_ready(self, track_id: str, samples: np.ndarray, sr: int) -> None:
+    def _on_pcm_ready(self, track_id: str, samples: np.ndarray, sr: int, rhythm: dict) -> None:
         if self.current_track and self.current_track.id == track_id:
             self._pcm_samples = samples
             self._pcm_sr = sr
+            self._rhythm = rhythm
+
+    def _smooth_position_sec(self) -> float:
+        """Posición de reproducción en segundos, interpolada con reloj monotónico (sin saltos)."""
+        raw = self.player.position()
+        now = time.monotonic()
+        if raw != self._last_raw_pos:
+            self._last_raw_pos = raw
+            predicted = self._pos_ref_ms + (now - self._pos_ref_wall) * 1000.0
+            # Si hay un salto grande (seek) o es la primera muestra, reanclar; si no, corregir suavemente
+            if abs(predicted - raw) > 160.0 or self._pos_ref_wall == 0.0:
+                self._pos_ref_ms = float(raw)
+            else:
+                self._pos_ref_ms = predicted + (raw - predicted) * 0.25
+            self._pos_ref_wall = now
+        est = self._pos_ref_ms + (now - self._pos_ref_wall) * 1000.0
+        return max(0.0, (est - self.sync_offset_ms) / 1000.0)
 
     def _update_visualizer_frame(self) -> None:
+        num_bars = 32
         if not self.is_playing():
             # Decaimiento suave a cero cuando está en pausa
-            self._smooth_bars *= 0.82
-            wave_zero = np.zeros(128, dtype=np.float32)
-            self.spectrum_updated.emit(self._smooth_bars.copy(), wave_zero)
+            self._smooth_bars *= 0.86
+            self._onset_smooth *= 0.8
+            self._pos_ref_wall = 0.0  # reanclar la posición interpolada al reanudar
+            self.spectrum_updated.emit(self._smooth_bars.copy(), np.zeros(128, dtype=np.float32))
+            self.beat_info.emit(0.0, 0.0, 0.0, 0.0)
             return
 
-        pos_sec = self.player.position() / 1000.0
-        num_bars = 32
+        pos_sec = self._smooth_position_sec()
 
-        if self._pcm_samples is not None and len(self._pcm_samples) > 1024:
-            center_idx = int(pos_sec * self._pcm_sr)
-            win_size = 1024
-            start = max(0, min(len(self._pcm_samples) - win_size, center_idx - win_size // 2))
-            chunk = self._pcm_samples[start : start + win_size]
-
-            # Forma de onda submuestreada a 128 puntos
-            wave_pts = np.interp(
-                np.linspace(0, len(chunk) - 1, 128),
-                np.arange(len(chunk)),
-                chunk,
-            ).astype(np.float32)
-
-            # FFT con ventana de Hann
-            windowed = chunk * np.hanning(len(chunk))
-            fft_mag = np.abs(np.fft.rfft(windowed))[: win_size // 2]
-
-            # Agrupar logarítmicamente en 32 barras de frecuencia
-            edges = np.unique(np.logspace(0, np.log10(len(fft_mag) - 1), num_bars + 1).astype(int))
-            raw_bars = np.zeros(num_bars, dtype=np.float32)
-            for i in range(num_bars):
-                lo = edges[min(i, len(edges) - 1)]
-                hi = max(lo + 1, edges[min(i + 1, len(edges) - 1)])
-                val = float(np.mean(fft_mag[lo:hi])) if hi > lo else 0.0
-                # Compensación de frecuencias altas para balance visual
-                tilt = 1.0 + (i / num_bars) * 2.4
-                raw_bars[i] = min(1.0, (val * tilt) / 8.5)
+        if self._pcm_samples is not None and len(self._pcm_samples) > 2048:
+            sr = self._pcm_sr
+            win = 2048
+            center_idx = int(pos_sec * sr)
+            start = max(0, min(len(self._pcm_samples) - win, center_idx - win // 2))
+            chunk = self._pcm_samples[start:start + win]
+            raw_bars, wave_pts = self._analyzer.process(chunk, sr)
         else:
-            # Animación reactiva mientras termina de decodificar los primeros milisegundos
-            t = pos_sec * 8.0
-            idx = np.arange(num_bars, dtype=np.float32)
-            raw_bars = 0.25 + 0.2 * np.sin(t + idx * 0.4)
-            wave_pts = 0.25 * np.sin(np.linspace(0, 4 * np.pi, 128) + t).astype(np.float32)
+            # Aún decodificando: sin movimiento inventado (las barras bajan suavemente)
+            raw_bars = np.zeros(num_bars, dtype=np.float32)
+            wave_pts = np.zeros(128, dtype=np.float32)
 
         # Reflejar ganancias del ecualizador de 5 bandas en el espectro visual
         if self.eq_enabled:
             band_centers = np.linspace(0, num_bars - 1, 5)
             eq_curve = np.interp(np.arange(num_bars), band_centers, self.eq_gains)
-            eq_mult = 10.0 ** (eq_curve / 24.0)
+            eq_mult = 10.0 ** (eq_curve / 30.0)
             raw_bars = np.clip(raw_bars * eq_mult, 0.0, 1.0)
-            wave_pts = np.clip(wave_pts * float(np.mean(eq_mult)), -1.0, 1.0)
 
-        # Suavizado temporal (ataque rápido, caída suave)
-        attack = 0.55
-        release = 0.22
-        for i in range(num_bars):
-            if raw_bars[i] > self._smooth_bars[i]:
-                self._smooth_bars[i] = self._smooth_bars[i] * (1 - attack) + raw_bars[i] * attack
-            else:
-                self._smooth_bars[i] = self._smooth_bars[i] * (1 - release) + raw_bars[i] * release
+        # Suavizado temporal: ataque rápido, caída lenta (se ve fluido y natural, no nervioso)
+        attack = 0.62
+        release = 0.13
+        up = raw_bars > self._smooth_bars
+        self._smooth_bars = np.where(
+            up,
+            self._smooth_bars * (1 - attack) + raw_bars * attack,
+            self._smooth_bars * (1 - release) + raw_bars * release,
+        ).astype(np.float32)
 
         self.spectrum_updated.emit(self._smooth_bars.copy(), wave_pts)
+
+        # Ritmo: posición en beats según la rejilla de tempo detectada
+        r = self._rhythm
+        if r and r.get("bpm", 0.0) > 0 and len(r.get("beat_times", [])) > 1:
+            bpm = float(r["bpm"])
+            bpos = beat_position(r["beat_times"], bpm, pos_sec)
+            env = r["env"]
+            fi = int(pos_sec * r["fps"])
+            onset_raw = float(env[fi]) / 3.5 if 0 <= fi < len(env) else 0.0
+            self._onset_smooth = max(min(1.0, onset_raw), self._onset_smooth * 0.80)
+            self.beat_info.emit(bpm, bpos, float(r.get("confidence", 0.0)), self._onset_smooth)
+        else:
+            self.beat_info.emit(0.0, 0.0, 0.0, 0.0)
 
     # -------------------- Callbacks internos de QtMultimedia -------------------- #
 
