@@ -15,11 +15,12 @@
 - **Reproducción Local con Auto-Rastreo y Carpeta Persistente de la Aplicación**:
   - **En Linux**: Rastrea automáticamente `~/Music`, `~/Música`, `~/Downloads` y `~/Descargas` y copia/guarda las canciones dentro de la carpeta propia de la aplicación (`music_library/`), además de persistir la base de datos en `data/library.json`. Así el usuario no tiene que re-importar archivos en cada sesión.
   - **En Android (`.apk`)**: Rastrea todos los archivos de audio del teléfono mediante `MediaStore.Audio.Media.EXTERNAL_CONTENT_URI` y los copia/guarda automáticamente en el directorio persistente de la aplicación (`/storage/emulated/0/Android/data/com.spotilinux.mobile/files/SpotiLinuxMusic`), evitando tener que re-importar canciones al cerrar o reiniciar la app.
-- **Nube Privada con Google Drive (Prompt Inicial + Autodetección de Carpeta `Music`/`Música` + Streaming vs. Descarga)**:
-  - Solicita conectarse a la cuenta de Google Drive desde el primer arranque (o mediante el botón `☁️ Drive`).
-  - Soporta inicio de sesión OAuth 2.0 (flujo automático en navegador / loopback, carga de `credentials.json`, Token OAuth2 `ya29...` o API Key).
-  - **Búsqueda automática de la carpeta de música**: Si el usuario no especifica un ID de carpeta, consulta automáticamente Google Drive API v3 buscando la carpeta `Music` / `Música` / `Musica` del usuario e importa todo su catálogo de audio.
-  - **Doble modo de reproducción en la nube**: Permite elegir globalmente o por canción entre **🎧 Escuchar en línea (Stream directo)** o **⬇️ Descargar a la carpeta de la aplicación (Offline)**.
+- **Nube Privada y Compartida con Google Drive + Sistema de Cuentas Multi-Dispositivo**:
+  - **Sistema de Cuentas de Usuario (`Usuario`, `Correo`, `Contraseña`)**: Permite registrarse o iniciar sesión tanto en Linux como en Android. Almacena las credenciales con hash SHA-256 (`spotilinux_database.json`) y sincroniza playlists, canciones favoritas y referencias de canciones de Drive para que cualquier usuario acceda a su música y listas desde cualquier PC o teléfono.
+  - **Carpeta Raíz Oficial de Google Drive y Subcarpeta `Musica`**: Vinculado por defecto a la carpeta compartida `1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT` (o cualquier ID personalizado). Dentro de esta carpeta se aloja la base de datos de cuentas (`spotilinux_database.json`) y la subcarpeta dedicada **`Musica`** que contiene las canciones disponibles para **🎧 Escuchar en línea (Streaming)** o **⬇️ Descargar (Offline)**, además de permitir a los usuarios **⬆️ Subir canciones directamente** desde la aplicación.
+  - **Verificación Estricta de Duplicados**: Activada por defecto tanto en descargas como en escaneo de Drive, evitando descargar canciones repetidas o duplicar entradas en la biblioteca local mediante identificadores canónicos `gd_<fileId>` y normalización de títulos y tamaños.
+  - Solicita conectarse a la cuenta de Google Drive desde el primer arranque (o mediante el botón `👤 Cuenta` / `☁️ Drive`).
+  - Soporta modo público sin token (vía scraping de `embeddedfolderview`) y OAuth 2.0 (navegador / loopback, carga de `credentials.json`, Token OAuth2 `ya29...` o API Key).
 - **Motor de Audio Nativo en Segundo Plano en Android (Solución al Silencio tras Pausa Prolongada con Audífonos)**:
   - Toda la reproducción de audio en Android ocurre dentro del servicio nativo en primer plano `MediaPlaybackService.java` usando `android.media.MediaPlayer` + `android.media.audiofx.Equalizer` + `PARTIAL_WAKE_LOCK` + `WifiLock` + `AudioFocusRequest` + `MediaSession` (`FLAG_HANDLES_MEDIA_BUTTONS`).
   - Esto garantiza que al pausar con audífonos Bluetooth/cableados o desde los Ajustes Rápidos de Android y esperar varios minutos, al volver a despausar con los audífonos o desde la pantalla de bloqueo **el audio siempre suene inmediatamente** sin necesidad de abrir la aplicación (evitando la suspensión del `AudioContext` de Chromium WebView).
@@ -93,11 +94,16 @@ spotify-linux/
 - **`rhythm.py` (Análisis de Tempo, Rejilla de Beats y Espectro Musical)**:
   - **`analyze_rhythm(samples, sr)`**: Calcula la envolvente de flujo espectral (*spectral flux* con compresión logarítmica enfatizando sub-bajos/bombo y caja), estima el tempo mediante un banco de filtros peine resonantes (*comb filter* entre `68–180 BPM` con refinamiento de `0.05 BPM`) y construye una rejilla de tiempos de pulso (`beat_times`) re-anclada localmente a los onsets reales de la canción.
   - **`beat_position(beat_times, bpm, t)`**: Devuelve la posición continua de beat (`float`, ej. `14.35` = 35 % entre el beat 14 y el 15) para cualquier instante `t` en segundos, además de la intensidad de golpe (`onset`).
-  - **`SpectrumAnalyzer`**: Procesa ventanas de `2048` muestras con ventana de Hann, agrupa en **32 bandas logarítmicas** (`45 Hz – 9 kHz`), convierte a escala de decibelios (`dB`) con inclinación espectral de `+3.5 dB/octava` y aplica control automático de ganancia lento (`AGC` con techo `0.90` y exponente `1.35`) más suavizado exponencial de ataque/caída.
+  - **`SpectrumAnalyzer`**: Procesa ventanas de `2048` muestras con ventana de Hann, agrupa en **32 bandas logarítmicas** (`45 Hz – 9 kHz`), convierte a escala de decibelios (`dB`) con inclinación espectral de `+3.5 dB/octava` y aplica:
+    - **Piso adaptativo por banda (`_band_floor`)**: Rastrea el nivel de ruido residual en cada frecuencia para asegurar que entre golpes de batería las barras desciendan limpiamente y reboten con gran rango dinámico.
+    - **Impulso de transitorios por flujo espectral (`flux_db`)**: Detecta onsets instantáneos y resalta los golpes percusivos (`beat_kick`) sin descalibrar el AGC general.
+    - **Control automático de ganancia lento (`AGC`)** con ataque ágil (`0.72`) y decaimiento musical (`0.25`) para respuesta inmediata y fluida al compás de la música.
 - **`AudioEngine` (`audio_engine.py`)**:
   - Utiliza `QMediaPlayer` y `QAudioOutput` de `PyQt6.QtMultimedia`.
   - Cuando se carga una pista, lanza **`PCMAnalyzerWorker` (`QThread`)**, que decodifica la pista a PCM mono (`22050 Hz`) y ejecuta `analyze_rhythm` en segundo plano (~`0.1 s` por canción).
+  - Reinicia los acumuladores del analizador espectral en cada cambio de pista (`reset()`).
   - **Reloj monótono interpolado (`_smooth_position_sec()`)**: `QMediaPlayer.position()` solo se actualiza cada `50–100 ms`. Para evitar saltos en la animación a 60 FPS, `AudioEngine` interpola la posición usando `time.monotonic()` y corrige derivas suavemente.
+  - Sincroniza la acentuación de bombo/caja con la posición de beat calculada (`beat_kick`), inyectando golpes vivos en las bandas graves (`0..5`) y medias-agudas en cada pulso real.
   - Emite dos señales a **60 FPS (`16 ms`)**:
     1. `spectrum_updated(bars, bass, mid, high)`
     2. `beat_info(bpm, beat_pos, confidence, onset)`
@@ -111,24 +117,35 @@ spotify-linux/
   - Incluye variaciones de frase cada 8 tiempos, indicador en vivo `♩ XXX BPM` y 4 círculos luminosos del compás (`1-2-3-4`) en la esquina superior derecha.
 - **`AudioVisualizerWidget` (`visualizer_widget.py`)**:
   - Recibe `set_beat(bpm, beat_pos, confidence, onset)` además de las barras suavizadas.
-  - **Modo Barras**: Cabezales flotantes (*peak caps*), reflejo inferior en el piso, líneas guía en dB y línea base que pulsa con el beat.
-  - **Modo Onda Neón**: Onda bicapa suave cuya envolvente sigue la distribución espectral real y cuya fase avanza bloqueada al beat (sin temblor aleatorio).
-  - **Modo Radial**: Anillo central que late con el pulso del beat y barras radiales con velocidad angular constante y suave.
+  - **HUD de Verificación Rítmica en Vivo**: En la esquina superior izquierda muestra un display translúcido con el tempo detectado (`♩ XXX BPM`) y **4 luces circulares de compás (`1-2-3-4`)** que se iluminan progresiva y enérgicamente en cada tiempo del compás para verificar de forma visual e inequívoca que la animación sigue la música real.
+  - **Modo Barras**: Cabezales flotantes (*peak caps*), reflejo inferior en el piso, líneas guía en dB, gradientes reactivos (el color cambia sutilmente con la intensidad de la música) y línea base que pulsa con el beat.
+  - **Modo Onda Neón**: Onda bicapa suave con resplandor cyan/verde cuya envolvente sigue la distribución espectral real y cuya fase avanza bloqueada al compás exacto (sin temblores erráticos).
+  - **Modo Radial**: Anillo central que late con el pulso del beat y barras radiales con velocidad angular constante, radio modulado por el espectro y partículas circundantes.
 
-### 3.3 Nube Privada de Google Drive (`gdrive_sync.py`)
-- **`GoogleDriveConfig`**: Almacena `access_token`, `refresh_token`, `client_id`, `client_secret`, `api_key` y `folder_id`.
-- **`GDriveOAuthLoopbackWorker`**: Levanta un servidor HTTP temporal en `127.0.0.1:8765`, abre el navegador del sistema en `https://accounts.google.com/o/oauth2/v2/auth` con scopes `drive.readonly` + `drive.file` (este último es necesario para escribir el JSON de playlists en la nube), captura el `code` de autorización y lo canjea automáticamente por `access_token` y `refresh_token`.
-- **Cuenta de Google y Playlists en la nube**:
-  - `fetch_google_user_profile(token)` → lee `drive/v3/about?fields=user` (nombre, correo, foto) y se guarda en `LibraryStore.google_user`.
-  - `sync_cloud_playlists_with_drive(token, payload)` + `GDriveCloudPlaylistSyncWorker` (QThread) → busca/crea `spotilinux_cloud_playlists.json` en el Drive, **combina** (unión, nunca borra) playlists y `likedIds` locales con los de la nube y sube el resultado. Formato compartido con Android: `{app, version, updatedAt, user, playlists:[{id,name,description,track_ids|trackIds}], likedIds}` (Linux usa `track_ids`, Android `trackIds`; ambos lados aceptan los dos).
-  - `main.py::_sync_playlists_to_cloud()` se llama al iniciar con token, al conectar la cuenta, al crear/editar/borrar playlists, al agregar/quitar canciones y al marcar favoritos.
-- **`GDriveSyncWorker`**:
-  - Si `config.folder_id` está vacío, realiza primero una consulta automática a Google Drive API v3 buscando carpetas llamadas `Music`, `Música` o `Musica`:
-    ```sql
-    trashed = false and mimeType = 'application/vnd.google-apps.folder' and (name contains 'Music' or name contains 'Musica' or name contains 'Música')
-    ```
-  - Lista todas las pistas de audio (`mimeType contains 'audio/'` o extensiones `.mp3, .flac, .wav, .m4a, .ogg, .opus`).
-  - Si el usuario eligió **Descargar a la aplicación (`download_immediately=True`)**, descarga los archivos a `music_library/` y extrae sus etiquetas ID3. Si eligió **Escuchar en línea (`download_immediately=False`)**, los registra con URI `gdrive://<file_id>/<filename>` para streaming bajo demanda mediante `GDriveStreamDownloadWorker`.
+### 3.3 Nube Compartida de Google Drive, Sistema de Cuentas y Prevención de Duplicados (`gdrive_sync.py`)
+- **Carpeta Raíz Oficial de Google Drive y Subcarpeta `Musica`**:
+  - `DEFAULT_ROOT_DRIVE_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT"` (carpeta con permisos de editor).
+  - `resolve_musica_subfolder_id(token, parent_id)` localiza (o crea automáticamente) la subcarpeta **`Musica`** dentro de la carpeta raíz compartida.
+  - Todas las canciones de la nube se leen, descargan y suben dentro de esta subcarpeta `Musica`.
+- **Sistema de Cuentas de Usuario (`AccountDialog` en `main.py` + `spotilinux_database.json`)**:
+  - Permite crear cuentas (`Usuario`, `Correo electrónico`, `Contraseña`) o iniciar sesión en múltiples dispositivos.
+  - Las contraseñas se almacenan protegidas mediante hash SHA-256 (`hash_password(raw)`).
+  - La base de datos multiusuario se sincroniza en el archivo `spotilinux_database.json` alojado en la raíz de Google Drive (`1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT`) y en la caché local `data/accounts_db.json`.
+  - Al iniciar sesión con una cuenta en cualquier dispositivo (Linux o Android), se sincronizan automáticamente:
+    1. Las playlists del usuario (`playlists`).
+    2. Las canciones marcadas como favoritas (`liked_ids`).
+    3. El catálogo de canciones de Google Drive (`drive_tracks`) asociadas a su cuenta.
+- **Prevención Estricta de Duplicados (`verify_duplicates`)**:
+  - Activada mediante el interruptor *"🛡️ Activar verificación de duplicados al descargar canciones de Google Drive"* en el diálogo de configuración.
+  - `canonical_drive_track_id(file_id)` genera identificadores deterministas `gd_<fileId>`.
+  - Al descargar archivos mediante `GDriveSyncWorker` o `GDriveStreamDownloadWorker`, `find_existing_local_duplicate()` compara el ID canónico, el hash de título/artista normalizado y el tamaño en bytes. Si la canción ya existe en `music_library/`, reutiliza el archivo local y omite la re-descarga.
+  - `storage.py::deduplicate_library()` purga automáticamente entradas repetidas en la biblioteca local.
+- **Subida de Canciones a Google Drive (`GDriveUploadWorker`)**:
+  - Botón **`⬆️ Subir a Drive (Musica)...`** disponible en la barra lateral y en la tarjeta de cuenta.
+  - Permite al usuario seleccionar uno o varios archivos de audio locales (`.mp3, .flac, .wav, .m4a, .ogg`) y subirlos directamente mediante HTTP POST multipart/resumable a la subcarpeta `Musica` dentro de `1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT`, verificando previamente que no existan duplicados en la nube.
+- **Sincronización Pública y OAuth 2.0**:
+  - `list_public_drive_folder_items()` permite explorar y reproducir canciones de la carpeta compartida sin necesidad de ingresar credenciales complejas mediante web scraping seguro de `embeddedfolderview`.
+  - Para usuarios con credenciales completas, `GDriveOAuthLoopbackWorker` realiza el handshake OAuth 2.0 estándar.
 
 ### 3.4 Persistencia y Carpeta Propia de Música (`storage.py`)
 - **`LibraryStore`**:
@@ -170,13 +187,14 @@ spotify-linux/
 | `setEqBand(bandIndex, gainDb)` | Ajusta en tiempo real las 5 bandas del `android.media.audiofx.Equalizer` de hardware. |
 | `scanDeviceMusic()` | Escanea `MediaStore.Audio.Media.EXTERNAL_CONTENT_URI` en un hilo de fondo, **copia todas las canciones del teléfono a la carpeta persistente de la app** (`/storage/emulated/0/Android/data/com.spotilinux.mobile/files/SpotiLinuxMusic`) y devuelve el arreglo JSON a `window.__onDeviceMusicScanned(json)`. |
 | `importAudioFiles()` | Abre el selector de archivos de Android (`ACTION_OPEN_DOCUMENT` con selección múltiple), copia los audios seleccionados a `SpotiLinuxMusic/` y los añade a la biblioteca. |
-| `downloadDriveTrack(fileId, fileName, token, apiKey, title, artist)` | Descarga una canción desde Google Drive API v3 directamente a la carpeta persistente `SpotiLinuxMusic/` en un hilo nativo de Java y notifica a `window.__onDriveTrackDownloaded(json)` para que quede disponible sin conexión. |
-| `saveAppStateJson(json)` / `loadAppStateJson()` | Guarda y carga en disco nativo (`spotilinux_state.json`) las Playlists, Favoritos, credenciales de Google Drive y pistas importadas. |
+| `downloadDriveTrack(fileId, fileName, token, apiKey, title, artist)` | Descarga una canción desde Google Drive API v3 directamente a la carpeta persistente `SpotiLinuxMusic/` usando nombres canónicos `gd_<fileId>__<safeTitle>.mp3`, **verifica duplicados** contra la biblioteca local y notifica a `window.__onDriveTrackDownloaded(json)` sin re-descargar archivos redundantes. |
+| `fetchPublicDriveFolder(folderId)` | Consulta la carpeta pública de Google Drive (`1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT` y su subcarpeta `Musica`) mediante el motor nativo de Java para evitar problemas de CORS en WebView y entrega los archivos a `window.__onPublicDriveFolderFetched(json)`. |
+| `saveAppStateJson(json)` / `loadAppStateJson()` | Guarda y carga en disco nativo (`spotilinux_state.json`) las Playlists, Favoritos, cuentas registradas, credenciales de Google Drive y pistas importadas. |
 | `openExternalAuth(url)` | Abre el navegador del sistema para autenticación OAuth de Google si el usuario lo requiere. |
 
 A su vez, `MediaPlaybackService.java` (vía `MainActivity.notifyWebProgress` / `dispatchMediaCommandToWeb` / `dispatchJs`) envía actualizaciones hacia el `WebView` llamando a:
 - `window.onNativeProgress(positionMs, durationMs, isPlaying)` → sincroniza el reloj monótono interpolado (`getSmoothPlaybackSec()`) para que la fase del beat a 60 FPS no tenga saltos.
-- `window.onNativeSpectrum([b0, b1, ..., b27])` → alimentado por `android.media.audiofx.Visualizer` conectado al `audioSessionId` del `MediaPlayer` nativo (hasta 24 Hz cuando `MainActivity.uiVisible == true`), entregando 28 bandas logarítmicas (`45 Hz – 9 kHz`) que `index.html` procesa con escala dB, inclinación espectral, AGC y detector de onsets/BPM en vivo. Si el usuario no concede `RECORD_AUDIO`, usa un generador espectral armónico bloqueado al beat.
+- `window.onNativeSpectrum([b0, b1, ..., b27])` → alimentado por `android.media.audiofx.Visualizer` conectado al `audioSessionId` del `MediaPlayer` nativo (hasta 24 Hz cuando `MainActivity.uiVisible == true`), entregando 28 bandas logarítmicas (`45 Hz – 9 kHz`) que `index.html` procesa con escala dB, piso adaptativo (`specFloor`), amplificación de transitorios (`fluxBoost`) y detector de onsets/BPM en vivo con HUD visible `♩ BPM • 1-2-3-4`. Si el usuario no concede `RECORD_AUDIO`, usa un generador espectral armónico bloqueado al beat.
 - `window.onNativeMediaCommand('next' | 'ended_next' | 'prev' | 'play' | 'toggle')` → `nextTrack()` / `prevTrack()` usan la **cola activa** (ver 4.4), así los botones de audífonos/notificación también respetan la playlist.
 
 ### 4.3 Interfaz Móvil Responsiva (`android-app/assets/www/index.html`)
@@ -184,11 +202,16 @@ A su vez, `MediaPlaybackService.java` (vía `MainActivity.notifyWebProgress` / `
   - En modo **Vertical (Portrait)**: El escenario de Maomao + Espectro se ubica en la parte superior y la lista de pistas/playlists debajo, con barra de reproducción flotante y navegación inferior.
   - En modo **Horizontal (Landscape)**: Mediante `@media (orientation: landscape) and (max-height: 600px)`, la pantalla se divide automáticamente en **2 columnas lado a lado** (izquierda: Maomao + Espectro FFT; derecha: buscador, pestañas y lista desplazable de canciones/playlists) y oculta los encabezados redundantes para aprovechar todo el alto disponible.
 - **Modal de Bienvenida al Inicio (`#welcomeModal`)**:
-  - Al abrir la app por primera vez, solicita directamente conectar la cuenta de Google Drive (buscando automáticamente la carpeta `Music` / `Música` en el Drive del usuario) o rastrear y guardar las canciones del dispositivo.
+  - Al abrir la app por primera vez, solicita directamente conectar la cuenta de Google Drive (apuntando por defecto a la carpeta compartida `1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT`) o rastrear y guardar las canciones del dispositivo.
 - **Pestañas de Navegación Móvil (barra inferior de 4 botones)**:
-  1. `🏠 Inicio`: Tarjeta de cuenta de Google, cuadrícula de **Playlists Disponibles** (Nueva, Favoritos, Google Drive y playlists del usuario) y tarjeta de la playlist seleccionada (`#activePlaylistBox`) con **▶ Reproducir**, **🔀 Aleatorio**, **➖ Reducir lista / ➕ Mostrar lista**, 🗑 y **＋ Añadir varias canciones**. Por defecto solo muestra 4 canciones (`playlistMaxVisibleCount`) con botón **▼ Ver todas**.
+  1. `🏠 Inicio`: Tarjeta de cuenta SpotiLinux / Google Drive, cuadrícula de **Playlists Disponibles** (Nueva, Favoritos, Google Drive y playlists del usuario) y tarjeta de la playlist seleccionada (`#activePlaylistBox`) con **▶ Reproducir**, **🔀 Aleatorio**, **➖ Reducir lista / ➕ Mostrar lista**, 🗑 y **＋ Añadir varias canciones**. Por defecto solo muestra 4 canciones (`playlistMaxVisibleCount`) con botón **▼ Ver todas**.
   2. `💿 Canciones`: Biblioteca completa con filtros (Todo / Guardadas / Favoritos / Drive) y modo **☑️ Seleccionar Varias** con barra flotante `＋ A Playlist`.
-  3. `☁️ Mi Cuenta`: Cuenta de Google, sincronización de `spotilinux_cloud_playlists.json`, `🔍 Buscar carpeta "Music" e Importar`, selector **🎧 En Línea / ⬇️ Descargar** y descarga individual por pista.
+  3. `☁️ Mi Cuenta`:
+     - **Sistema de Cuentas**: Formulario para **Crear Cuenta** (`Usuario`, `Correo`, `Contraseña`) e **Iniciar Sesión**, sincronizado con `spotilinux_database.json` para restaurar playlists y pistas en cualquier dispositivo.
+     - **Carpeta de Google Drive**: Pre-configurada con `1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT` (y subcarpeta `Musica`).
+     - **Control de Duplicados**: Casilla para activar/desactivar verificación estricta de duplicados al descargar canciones.
+     - **Subir Canciones**: Botón `⬆️ Subir a «Musica»` para subir archivos locales de audio a la carpeta compartida.
+     - **Doble modo**: Selector global **🎧 En Línea (Streaming directo)** vs **⬇️ Descargar (Offline)** y descarga individual por pista.
   4. `🎚 Ecualizador`: 5 bandas conectadas al DSP nativo + selector de baile de Maomao.
 
 ### 4.4 Cola de Reproducción por Playlist (Android)
@@ -221,7 +244,7 @@ El proyecto incluye un script autónomo (`build_android_apk.sh`) que utiliza Ope
 
 ## 🤖 6. Reglas de Oro para Otra IA que Continúe este Proyecto
 
-Si eres un agente de IA encargado de añadir nuevas funciones o corregir detalles en el futuro, **respeta estrictamente estas 7 reglas arquitectónicas**:
+Si eres un agente de IA encargado de añadir nuevas funciones o corregir detalles en el futuro, **respeta estrictamente estas 9 reglas arquitectónicas**:
 
 1. **Nunca muevas la reproducción de audio de Android de vuelta al `WebView`**:
    - Toda reproducción en Android debe seguir pasando por `window.AndroidMedia.playSource(...)` hacia `MediaPlaybackService.java` (`android.media.MediaPlayer`). El generador de espectro en `index.html` se sincroniza con `window.onNativeProgress(posMs, durMs, isPlaying)` para animar a Maomao sin bloquear el audio nativo ni depender de `AudioContext` en segundo plano.
@@ -240,3 +263,6 @@ Si eres un agente de IA encargado de añadir nuevas funciones o corregir detalle
    - La lista de canciones de la playlist seleccionada en Inicio debe seguir siendo reducible (➖/➕) y limitada por defecto (4 canciones, “Ver todas”). La biblioteca completa vive en `💿 Tu Biblioteca` (Linux) / `💿 Canciones` (Android).
 8. **En PyQt6, nunca uses `setStyleSheet("background: transparent;")` sin selector de `#objectName` en contenedores padres**:
    - Una regla sin selector en un `QScrollArea` o `QWidget` contenedor se hereda en cascada a todos los `QPushButton` hijos y borra los estilos globales de `styles.py`. Usa siempre `#NombreDelContenedor { background: transparent; border: none; }`.
+9. **Carpeta Raíz Oficial de Google Drive, Subcarpeta `Musica` y Verificación de Duplicados**:
+   - La carpeta raíz compartida oficial es `1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT`. La base de datos de cuentas (`spotilinux_database.json`) se guarda en la raíz, mientras que todas las canciones residen en la subcarpeta `Musica`.
+   - Utiliza siempre identificadores canónicos `gd_<fileId>` y verifica duplicados locales (`find_existing_local_duplicate` / `deduplicate_library`) antes de descargar o agregar canciones para evitar redundancias de archivos y registros duplicados.

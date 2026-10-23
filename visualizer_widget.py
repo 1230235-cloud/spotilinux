@@ -57,6 +57,8 @@ class AudioVisualizerWidget(QWidget):
         self.accent_color = QColor(29, 185, 84)  # Spotify Green #1DB954
         self.cover_pixmap: Optional[QPixmap] = None
         self._angle: float = 0.0
+        self.bpm: float = 0.0
+        self.beat_pos: float = 0.0
         self.beat_frac: float = 0.0   # 0 en el beat, →1 antes del siguiente
         self.beat_onset: float = 0.0
         self._playing: bool = False
@@ -64,8 +66,10 @@ class AudioVisualizerWidget(QWidget):
     def set_beat(self, bpm: float, beat_pos: float, confidence: float, onset: float) -> None:
         """Sincroniza el pulso visual con la rejilla de beats real de la canción."""
         self._playing = bpm > 0
+        self.bpm = bpm
+        self.beat_pos = beat_pos
         self.beat_frac = (beat_pos - math.floor(beat_pos)) if bpm > 0 else 0.0
-        self.beat_onset = max(onset, self.beat_onset * 0.82)
+        self.beat_onset = max(onset, self.beat_onset * 0.80)
 
     def set_mode(self, mode: str) -> None:
         if mode in ("bars", "wave", "radial"):
@@ -107,9 +111,10 @@ class AudioVisualizerWidget(QWidget):
             if self.bars[i] >= self.peaks[i]:
                 self.peaks[i] = self.bars[i]
             else:
-                self.peaks[i] = max(0.0, self.peaks[i] - 0.014)
+                self.peaks[i] = max(0.0, self.peaks[i] - 0.016)
 
-        self._angle = (self._angle + 0.35) % 360.0
+        energy = float(np.mean(self.bars)) if len(self.bars) else 0.0
+        self._angle = (self._angle + 0.30 + energy * 0.45) % 360.0
         self.update()
 
     def mousePressEvent(self, event) -> None:
@@ -124,59 +129,91 @@ class AudioVisualizerWidget(QWidget):
         w = float(self.width())
         h = float(self.height())
 
-        # Fondo oscuro redondeado
+        beat_kick = (1.0 - self.beat_frac) ** 2.6 if self._playing else 0.0
+        bass_e = float(np.mean(self.bars[:8])) if len(self.bars) >= 8 else 0.0
+        mid_e = float(np.mean(self.bars[8:20])) if len(self.bars) >= 20 else 0.0
+        high_e = float(np.mean(self.bars[20:])) if len(self.bars) > 20 else 0.0
+
+        # Fondo oscuro redondeado con resplandor sutil al golpe del beat
         bg_path = QPainterPath()
         bg_path.addRoundedRect(QRectF(0, 0, w, h), 10.0, 10.0)
         grad_bg = QLinearGradient(0, 0, 0, h)
-        grad_bg.setColorAt(0.0, QColor(22, 22, 26))
-        grad_bg.setColorAt(1.0, QColor(12, 12, 14))
+        top_glow = int(min(45, (beat_kick * 18 + bass_e * 22)))
+        grad_bg.setColorAt(0.0, QColor(18, 24 + top_glow // 2, 24))
+        grad_bg.setColorAt(1.0, QColor(10, 11, 14))
         painter.fillPath(bg_path, grad_bg)
 
         # Rejilla horizontal muy tenue (da lectura de nivel, aspecto de analizador profesional)
-        painter.setPen(QPen(QColor(255, 255, 255, 12), 1.0))
+        painter.setPen(QPen(QColor(255, 255, 255, 13), 1.0))
         for frac in (0.25, 0.5, 0.75):
             gy = 26.0 + (h - 40.0) * frac
             painter.drawLine(QPointF(12.0, gy), QPointF(w - 12.0, gy))
-        # Borde fino
-        painter.setPen(QPen(QColor(255, 255, 255, 18), 1.0))
+        # Borde fino reactivo al beat
+        border_alpha = int(22 + 55 * beat_kick) if self._playing else 18
+        painter.setPen(QPen(QColor(30, 215, 96, border_alpha), 1.0))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1.0, h - 1.0), 10.0, 10.0)
 
         if self.mode == "bars":
-            self._draw_bars(painter, w, h)
+            self._draw_bars(painter, w, h, beat_kick, bass_e, mid_e, high_e)
         elif self.mode == "wave":
-            self._draw_wave(painter, w, h)
+            self._draw_wave(painter, w, h, beat_kick, bass_e, mid_e, high_e)
         else:
-            self._draw_radial(painter, w, h)
+            self._draw_radial(painter, w, h, beat_kick, bass_e, mid_e, high_e)
 
-        # Etiqueta sutil del modo en la esquina superior derecha
-        mode_label = dict(self.MODES).get(self.mode, "FFT")
-        painter.setPen(QColor(165, 165, 175, 160))
+        # HUD superior izquierdo: verificación en vivo de BPM, compás 1-2-3-4 y respuesta por banda
         font = QFont("Sans Serif", 8, QFont.Weight.Bold)
         painter.setFont(font)
-        painter.drawText(QRectF(10, 8, w - 20, 18), Qt.AlignmentFlag.AlignRight, f"● {mode_label.upper()}")
+        if self._playing and self.bpm > 0:
+            painter.setPen(QColor(30, 215, 96, 225))
+            bpm_txt = f"♩ {int(round(self.bpm))} BPM"
+            painter.drawText(QRectF(12, 6, 90, 16), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, bpm_txt)
+            beat_in_bar = int(math.floor(self.beat_pos)) % 4
+            for b in range(4):
+                dx = 78.0 + b * 10.0
+                dy = 14.0
+                active_b = (b == beat_in_bar)
+                painter.setPen(Qt.PenStyle.NoPen)
+                if active_b:
+                    painter.setBrush(QColor(0, 242, 254) if b == 0 else QColor(30, 215, 96))
+                    painter.drawEllipse(QPointF(dx, dy), 3.4, 3.4)
+                else:
+                    painter.setBrush(QColor(255, 255, 255, 45))
+                    painter.drawEllipse(QPointF(dx, dy), 2.1, 2.1)
+        else:
+            painter.setPen(QColor(145, 145, 155, 150))
+            painter.drawText(QRectF(12, 6, 120, 16), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "♩ EN ESPERA")
 
-    def _draw_bars(self, painter: QPainter, w: float, h: float) -> None:
+        # Etiqueta del modo en la esquina superior derecha
+        mode_label = dict(self.MODES).get(self.mode, "FFT")
+        painter.setPen(QColor(185, 195, 205, 185))
+        painter.drawText(QRectF(10, 6, w - 20, 16), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"● {mode_label.upper()}")
+
+    def _draw_bars(
+        self,
+        painter: QPainter,
+        w: float,
+        h: float,
+        beat_kick: float,
+        bass_e: float,
+        mid_e: float,
+        high_e: float,
+    ) -> None:
         n = len(self.bars)
         if n == 0:
             return
         pad_x = 14.0
-        pad_top = 26.0
+        pad_top = 24.0
         pad_bottom = 14.0
         usable_w = max(10.0, w - pad_x * 2)
         usable_h = max(10.0, h - pad_top - pad_bottom)
 
-        gap = 3.5
+        gap = 3.2
         bar_w = max(2.5, (usable_w - gap * (n - 1)) / n)
 
-        bar_grad = QLinearGradient(0, pad_top, 0, h - pad_bottom)
-        bar_grad.setColorAt(0.0, QColor(0, 242, 254))
-        bar_grad.setColorAt(0.45, QColor(29, 185, 84))
-        bar_grad.setColorAt(1.0, QColor(17, 105, 48))
-
         # Línea base con pulso en cada beat
-        base_alpha = int(40 + 90 * (1.0 - self.beat_frac) ** 2) if self._playing else 40
-        painter.setPen(QPen(QColor(29, 185, 84, base_alpha), 1.4))
+        base_alpha = int(45 + 120 * beat_kick) if self._playing else 40
+        painter.setPen(QPen(QColor(30, 215, 96, base_alpha), 1.5))
         painter.drawLine(QPointF(pad_x, h - pad_bottom + 1.0), QPointF(w - pad_x, h - pad_bottom + 1.0))
 
         for i in range(n):
@@ -184,6 +221,28 @@ class AudioVisualizerWidget(QWidget):
             bh = val * usable_h
             x = pad_x + i * (bar_w + gap)
             y = h - pad_bottom - bh
+
+            # El gradiente de cada barra cambia dinámicamente con su altura, zona de frecuencia y el golpe del beat
+            bar_grad = QLinearGradient(0, y, 0, h - pad_bottom)
+            zone = i / max(1, n - 1)
+            if val > 0.78:
+                # Picos intensos iluminan en cian/rosa imperial
+                bar_grad.setColorAt(0.0, QColor(255, 75, 130) if zone < 0.3 else QColor(90, 250, 255))
+                bar_grad.setColorAt(0.45, QColor(30, 215, 96))
+                bar_grad.setColorAt(1.0, QColor(18, 105, 52))
+            elif zone < 0.28:
+                # Graves (Sub-bass / Kick)
+                bar_grad.setColorAt(0.0, QColor(38, 238, 118))
+                bar_grad.setColorAt(1.0, QColor(16, 98, 48))
+            elif zone < 0.68:
+                # Medios (Voces / Sintetizadores)
+                bar_grad.setColorAt(0.0, QColor(0, 228, 245))
+                bar_grad.setColorAt(0.55, QColor(29, 185, 84))
+                bar_grad.setColorAt(1.0, QColor(16, 92, 54))
+            else:
+                # Agudos (Hi-hats / Brillo)
+                bar_grad.setColorAt(0.0, QColor(120, 248, 255))
+                bar_grad.setColorAt(1.0, QColor(22, 132, 145))
 
             rect = QRectF(x, y, bar_w, bh)
             painter.setPen(Qt.PenStyle.NoPen)
@@ -193,98 +252,141 @@ class AudioVisualizerWidget(QWidget):
             # Reflejo tenue bajo la línea base
             refl_h = min(bh * 0.28, pad_bottom - 3.0)
             if refl_h > 1.0:
-                painter.setBrush(QColor(29, 185, 84, 38))
+                painter.setBrush(QColor(30, 215, 96, 42))
                 painter.drawRoundedRect(QRectF(x, h - pad_bottom + 2.0, bar_w, refl_h), 2.0, 2.0)
-                painter.setBrush(bar_grad)
 
             # Indicador de pico flotante
             pk = float(np.clip(self.peaks[i], 0.03, 1.0))
-            py = h - pad_bottom - pk * usable_h - 3.5
-            painter.setBrush(QColor(220, 255, 235, 210))
-            painter.drawRoundedRect(QRectF(x, max(pad_top - 4, py), bar_w, 2.5), 1.0, 1.0)
+            py = h - pad_bottom - pk * usable_h - 3.2
+            painter.setBrush(QColor(255, 120, 165, 230) if pk > 0.82 else QColor(210, 255, 235, 215))
+            painter.drawRoundedRect(QRectF(x, max(pad_top - 4, py), bar_w, 2.4), 1.0, 1.0)
 
-    def _draw_wave(self, painter: QPainter, w: float, h: float) -> None:
+    def _draw_wave(
+        self,
+        painter: QPainter,
+        w: float,
+        h: float,
+        beat_kick: float,
+        bass_e: float,
+        mid_e: float,
+        high_e: float,
+    ) -> None:
         pts = self.waveform
         n = len(pts)
         if n < 2:
             return
 
-        mid_y = h * 0.54
-        amp = h * 0.38
+        mid_y = h * 0.56
+        amp = h * (0.34 + 0.07 * beat_kick)
 
         path = QPainterPath()
+        mirror_path = QPainterPath()
         fill_path = QPainterPath()
         fill_path.moveTo(10.0, mid_y)
 
+        # Modulamos la onda estabilizada con la envolvente de las 32 barras para que su silueta refleje
+        # tanto la forma de onda real como el balance graves/medios/agudos de la canción
+        nb = len(self.bars)
         for i, v in enumerate(pts):
-            x = 10.0 + (i / (n - 1)) * (w - 20.0)
-            y = mid_y - float(v) * amp
+            u = i / (n - 1)
+            x = 10.0 + u * (w - 20.0)
+            b_idx = min(nb - 1, int(u * nb)) if nb > 0 else 0
+            band_env = 0.45 + 0.75 * float(self.bars[b_idx]) if nb > 0 else 1.0
+            val = float(v) * band_env
+            y = mid_y - val * amp
+            ym = mid_y + val * amp * 0.48
             if i == 0:
                 path.moveTo(x, y)
+                mirror_path.moveTo(x, ym)
             else:
                 path.lineTo(x, y)
+                mirror_path.lineTo(x, ym)
             fill_path.lineTo(x, y)
 
         fill_path.lineTo(w - 10.0, mid_y)
         fill_path.closeSubpath()
 
         grad = QLinearGradient(0, mid_y - amp, 0, mid_y + amp)
-        grad.setColorAt(0.0, QColor(29, 185, 84, 115))
-        grad.setColorAt(0.5, QColor(0, 242, 254, 35))
-        grad.setColorAt(1.0, QColor(29, 185, 84, 115))
+        grad.setColorAt(0.0, QColor(0, 242, 254, int(105 + 60 * beat_kick)))
+        grad.setColorAt(0.5, QColor(29, 185, 84, 40))
+        grad.setColorAt(1.0, QColor(162, 32, 68, int(85 + 50 * bass_e)))
         painter.fillPath(fill_path, grad)
 
+        # Onda espejo secundaria
+        painter.setPen(QPen(QColor(0, 210, 255, 85), 1.5))
+        painter.drawPath(mirror_path)
+
         # Línea de brillo exterior
-        glow_pen = QPen(QColor(29, 185, 84, 95), 5.0)
+        glow_pen = QPen(QColor(29, 185, 84, int(90 + 70 * beat_kick)), 5.0)
         painter.setPen(glow_pen)
         painter.drawPath(path)
 
         # Línea principal nítida
-        core_pen = QPen(QColor(130, 255, 195), 2.2)
+        core_pen = QPen(QColor(155, 255, 215), 2.2)
         painter.setPen(core_pen)
         painter.drawPath(path)
 
-    def _draw_radial(self, painter: QPainter, w: float, h: float) -> None:
-        cx, cy = w * 0.5, h * 0.54
-        base_r = min(w, h) * 0.23
-        max_len = min(w, h) * 0.22
+    def _draw_radial(
+        self,
+        painter: QPainter,
+        w: float,
+        h: float,
+        beat_kick: float,
+        bass_e: float,
+        mid_e: float,
+        high_e: float,
+    ) -> None:
+        cx, cy = w * 0.5, h * 0.56
+        base_r = min(w, h) * 0.21
+        max_len = min(w, h) * 0.24
 
         energy = float(np.mean(self.bars)) if len(self.bars) else 0.0
-        beat_kick = (1.0 - self.beat_frac) ** 3 if self._playing else 0.0
-        pulse_r = base_r * (1.0 + energy * 0.10 + beat_kick * 0.09 + self.beat_onset * 0.04)
+        pulse_r = base_r * (1.0 + bass_e * 0.16 + beat_kick * 0.14 + self.beat_onset * 0.06)
 
         # Halo radial reactivo
         halo = QRadialGradient(QPointF(cx, cy), pulse_r + max_len)
-        halo.setColorAt(0.0, QColor(29, 185, 84, 95))
-        halo.setColorAt(0.65, QColor(0, 210, 255, 40))
+        halo.setColorAt(0.0, QColor(30, 215, 96, int(85 + 75 * beat_kick)))
+        halo.setColorAt(0.60, QColor(0, 210, 255, int(35 + 45 * energy)))
         halo.setColorAt(1.0, QColor(0, 0, 0, 0))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(halo)
         painter.drawEllipse(QPointF(cx, cy), pulse_r + max_len, pulse_r + max_len)
 
-        # Rayos de espectro alrededor del círculo
+        # Rayos de espectro alrededor del círculo + puntos de pico flotantes
         n = len(self.bars)
         for i in range(n):
-            angle = (i / n) * 2.0 * math.pi + math.radians(self._angle * 0.35)
+            angle = (i / n) * 2.0 * math.pi + math.radians(self._angle * 0.45)
             val = float(self.bars[i])
-            r1 = pulse_r + 3.0
-            r2 = r1 + max(3.0, val * max_len)
+            pk = float(self.peaks[i])
+            r1 = pulse_r + 2.5
+            r2 = r1 + max(2.5, val * max_len)
+            r_pk = r1 + max(4.0, pk * max_len + 3.0)
 
             x1 = cx + math.cos(angle) * r1
             y1 = cy + math.sin(angle) * r1
             x2 = cx + math.cos(angle) * r2
             y2 = cy + math.sin(angle) * r2
 
-            color = QColor.fromHsvF((0.36 + (i / n) * 0.18) % 1.0, 0.82, 0.96)
-            painter.setPen(QPen(color, 3.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            hue = (0.36 + (i / n) * 0.22 + beat_kick * 0.04) % 1.0
+            color = QColor.fromHsvF(hue, 0.85, 0.98)
+            painter.setPen(QPen(color, 3.1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
 
-        # Disco central
-        painter.setPen(QPen(QColor(29, 185, 84, 220), 2.2))
-        painter.setBrush(QColor(18, 18, 22))
+            # Punto de pico exterior
+            px = cx + math.cos(angle) * r_pk
+            py = cy + math.sin(angle) * r_pk
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(220, 255, 245, 200))
+            painter.drawEllipse(QPointF(px, py), 1.6, 1.6)
+
+        # Disco central con anillo doble que late al compás
+        painter.setPen(QPen(QColor(30, 215, 96, int(180 + 70 * beat_kick)), 2.2))
+        painter.setBrush(QColor(16, 18, 22))
         painter.drawEllipse(QPointF(cx, cy), pulse_r, pulse_r)
-        painter.setBrush(QColor(29, 185, 84))
-        painter.drawEllipse(QPointF(cx, cy), 5.0, 5.0)
+        inner_r = max(3.5, (4.5 + 4.5 * beat_kick + 3.5 * bass_e))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 242, 254) if beat_kick > 0.55 else QColor(30, 215, 96))
+        painter.drawEllipse(QPointF(cx, cy), inner_r, inner_r)
 
 
 class EQCurvePreview(QWidget):

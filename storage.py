@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
 Almacenamiento persistente de la biblioteca musical, playlists, favoritos,
-historial de reproducción y configuración del ecualizador.
+cuentas de usuario multi-dispositivo, historial de reproducción y ecualizador.
 """
 
 import json
 import os
+import re
 import shutil
 import time
 import uuid
@@ -13,8 +14,19 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
-from metadata import TrackMetadata, SUPPORTED_EXTENSIONS, extract_metadata
-from gdrive_sync import GoogleDriveConfig
+from metadata import (
+    TrackMetadata,
+    SUPPORTED_EXTENSIONS,
+    extract_metadata,
+    generate_fallback_cover,
+    compute_dominant_color,
+)
+from gdrive_sync import (
+    GoogleDriveConfig,
+    DEFAULT_ROOT_DRIVE_FOLDER_ID,
+    normalize_track_key,
+    canonical_drive_track_id,
+)
 
 
 @dataclass
@@ -39,6 +51,21 @@ class Playlist:
         )
 
 
+def extract_gd_id_from_filename(filename: str) -> str:
+    """Si el archivo local proviene de Drive (gd_<fileId>_nombre.mp3), extrae su ID canónico gd_<fileId>."""
+    if not filename.startswith("gd_"):
+        return ""
+    # Formato nuevo: gd_<fileId>__<nombre> o formato clásico: gd_<10_chars>_<nombre>
+    if "__" in filename:
+        prefix = filename.split("__", 1)[0]
+        if len(prefix) > 5:
+            return prefix
+    m = re.match(r"^(gd_[A-Za-z0-9_-]{8,})_", filename)
+    if m:
+        return m.group(1)
+    return ""
+
+
 class LibraryStore:
     def __init__(self, base_dir: Path) -> None:
         self.base_dir = base_dir
@@ -47,6 +74,7 @@ class LibraryStore:
         self.gdrive_cache_dir = self.data_dir / "gdrive_cache"
         self.music_library_dir = base_dir / "music_library"
         self.db_path = self.data_dir / "library.json"
+        self.accounts_db_path = self.data_dir / "accounts_db.json"
 
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.covers_dir.mkdir(parents=True, exist_ok=True)
@@ -61,6 +89,8 @@ class LibraryStore:
         self.gdrive_config = GoogleDriveConfig()
         self.welcome_shown: bool = False
         self.google_user: dict = {}
+        # Cuenta SpotiLinux vinculada a Drive (username, email, password_hash)
+        self.user_account: dict = {}
 
         # Estado del reproductor y ecualizador
         self.volume: int = 80
@@ -96,8 +126,11 @@ class LibraryStore:
             if str(self.music_library_dir.resolve()) not in self.watched_folders:
                 self.watched_folders.append(str(self.music_library_dir.resolve()))
             self.gdrive_config = GoogleDriveConfig.from_dict(raw.get("gdrive_config", {}))
+            if not self.gdrive_config.folder_id:
+                self.gdrive_config.folder_id = DEFAULT_ROOT_DRIVE_FOLDER_ID
             self.welcome_shown = bool(raw.get("welcome_shown", False))
             self.google_user = dict(raw.get("google_user", {}))
+            self.user_account = dict(raw.get("user_account", {}))
             self.volume = int(raw.get("volume", 80))
             self.shuffle = bool(raw.get("shuffle", False))
             self.repeat_mode = str(raw.get("repeat_mode", "off"))
@@ -107,6 +140,7 @@ class LibraryStore:
             if len(gains) == 5:
                 self.eq_gains = [float(g) for g in gains]
             self.visualizer_mode = str(raw.get("visualizer_mode", "bars"))
+            self.deduplicate_library()
         except Exception:
             self._init_default_folders()
 
@@ -132,6 +166,7 @@ class LibraryStore:
             "gdrive_config": self.gdrive_config.to_dict(),
             "welcome_shown": self.welcome_shown,
             "google_user": self.google_user,
+            "user_account": self.user_account,
             "volume": self.volume,
             "shuffle": self.shuffle,
             "repeat_mode": self.repeat_mode,
@@ -141,6 +176,145 @@ class LibraryStore:
             "visualizer_mode": self.visualizer_mode,
         }
         self.db_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def deduplicate_library(self) -> int:
+        """
+        Fusiona pistas duplicadas (por ejemplo, una pista online gdrive://<id> y su
+        archivo descargado en music_library/) preservando las referencias en playlists y favoritos.
+        """
+        if not self.tracks:
+            return 0
+
+        by_norm_key: dict[str, str] = {}
+        remap: dict[str, str] = {}
+
+        # Primero priorizar pistas locales descargadas sobre stubs gdrive://
+        sorted_items = sorted(
+            self.tracks.items(),
+            key=lambda kv: (kv[1].filepath.startswith("gdrive://"), kv[0]),
+        )
+        for tid, track in sorted_items:
+            key = normalize_track_key(track.title) or normalize_track_key(Path(track.filepath).name)
+            if not key:
+                continue
+            if key in by_norm_key:
+                keep_id = by_norm_key[key]
+                if keep_id != tid:
+                    keep_track = self.tracks.get(keep_id)
+                    # Si uno de los dos tiene ID canónico gd_..., conservar ese ID si ambos son de Drive
+                    if tid.startswith("gd_") and keep_track and not keep_track.filepath.startswith("gdrive://"):
+                        keep_track.id = tid
+                        self.tracks[tid] = keep_track
+                        del self.tracks[keep_id]
+                        by_norm_key[key] = tid
+                        remap[keep_id] = tid
+                    else:
+                        remap[tid] = keep_id
+            else:
+                by_norm_key[key] = tid
+
+        if not remap:
+            return 0
+
+        for old_id, new_id in remap.items():
+            if old_id in self.tracks and old_id != new_id:
+                del self.tracks[old_id]
+
+        # Actualizar playlists y liked_ids
+        new_liked: list[str] = []
+        for lid in self.liked_ids:
+            mapped = remap.get(lid, lid)
+            if mapped in self.tracks and mapped not in new_liked:
+                new_liked.append(mapped)
+        self.liked_ids = new_liked
+
+        for pl in self.playlists.values():
+            updated_ids: list[str] = []
+            for tid in pl.track_ids:
+                mapped = remap.get(tid, tid)
+                if mapped in self.tracks and mapped not in updated_ids:
+                    updated_ids.append(mapped)
+            pl.track_ids = updated_ids
+
+        return len(remap)
+
+    def apply_account_record(self, acc_record: dict) -> tuple[int, int]:
+        """
+        Restaura las canciones de Drive y las playlists guardadas en una cuenta SpotiLinux
+        para que se puedan usar en varios dispositivos con la misma cuenta.
+        Devuelve (num_playlists_restauradas, num_canciones_drive_vinculadas).
+        """
+        if not acc_record:
+            return (0, 0)
+
+        drive_added = 0
+        for dt in acc_record.get("drive_tracks", []):
+            file_id = str(dt.get("file_id", "")).strip()
+            tid = str(dt.get("id", "")).strip() or (canonical_drive_track_id(file_id) if file_id else "")
+            if not tid:
+                continue
+            if tid not in self.tracks:
+                title = str(dt.get("title", "Canción de Drive"))
+                artist = str(dt.get("artist", "Google Drive Cloud"))
+                album = str(dt.get("album", "Google Drive (Online)"))
+                genre = str(dt.get("genre", "Cloud Music"))
+                duration = float(dt.get("duration", 180.0))
+                cover_path = self.covers_dir / f"cover_{tid[:16]}.png"
+                if not cover_path.exists():
+                    generate_fallback_cover(title, artist, cover_path, tid)
+                dom_rgb = compute_dominant_color(cover_path)
+                self.tracks[tid] = TrackMetadata(
+                    id=tid,
+                    filepath=f"gdrive://{file_id}" if file_id else str(dt.get("filepath", "")),
+                    title=title,
+                    artist=artist,
+                    album=album,
+                    genre=genre,
+                    year="Cloud",
+                    duration=duration,
+                    cover_path=str(cover_path),
+                    dominant_color=dom_rgb,
+                    added_at=time.time(),
+                )
+                drive_added += 1
+
+        for lid in acc_record.get("liked_ids", []):
+            if lid in self.tracks and lid not in self.liked_ids:
+                self.liked_ids.append(lid)
+
+        pl_restored = 0
+        cloud_playlists = acc_record.get("playlists", {})
+        if isinstance(cloud_playlists, dict):
+            iterable = cloud_playlists.items()
+        elif isinstance(cloud_playlists, list):
+            iterable = [(p.get("id", f"pl_{i}"), p) for i, p in enumerate(cloud_playlists) if isinstance(p, dict)]
+        else:
+            iterable = []
+
+        for pid, pdata in iterable:
+            if not isinstance(pdata, dict):
+                continue
+            valid_tids = [t for t in pdata.get("track_ids", []) if t in self.tracks]
+            if pid in self.playlists:
+                existing = self.playlists[pid]
+                existing.name = pdata.get("name", existing.name)
+                existing.description = pdata.get("description", existing.description)
+                for t in valid_tids:
+                    if t not in existing.track_ids:
+                        existing.track_ids.append(t)
+            else:
+                self.playlists[pid] = Playlist(
+                    id=pid,
+                    name=pdata.get("name", "Playlist Sincronizada"),
+                    description=pdata.get("description", "Sincronizada desde tu cuenta SpotiLinux"),
+                    track_ids=valid_tids,
+                    created_at=float(pdata.get("created_at", time.time())),
+                )
+            pl_restored += 1
+
+        self.deduplicate_library()
+        self.save()
+        return (pl_restored, drive_added)
 
     def scan_folder(
         self,
@@ -175,6 +349,7 @@ class LibraryStore:
             if count >= max_files:
                 break
 
+        self.deduplicate_library()
         self._ensure_starter_playlists()
         self.save()
         return added
@@ -198,6 +373,7 @@ class LibraryStore:
         filepath: Path,
         save_immediately: bool = True,
         copy_to_app_folder: bool = False,
+        forced_id: str = "",
     ) -> Optional[TrackMetadata]:
         filepath = filepath.resolve()
         if not filepath.exists() or filepath.suffix.lower() not in SUPPORTED_EXTENSIONS:
@@ -219,6 +395,18 @@ class LibraryStore:
                 return existing
 
         meta = extract_metadata(filepath, self.covers_dir)
+        gd_canonical = forced_id or extract_gd_id_from_filename(filepath.name)
+        if gd_canonical:
+            meta.id = gd_canonical
+
+        # Verificación de duplicados por título normalizado si ya existe como gdrive://
+        norm_title = normalize_track_key(meta.title)
+        for existing_id, existing_track in list(self.tracks.items()):
+            if existing_id != meta.id and normalize_track_key(existing_track.title) == norm_title and norm_title:
+                if existing_track.filepath.startswith("gdrive://"):
+                    meta.id = existing_id
+                    break
+
         self.tracks[meta.id] = meta
         if save_immediately:
             self.save()

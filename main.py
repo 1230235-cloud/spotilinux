@@ -15,6 +15,7 @@ import json
 import os
 import random
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -66,14 +67,22 @@ from PyQt6.QtWidgets import (
 
 from audio_engine import AudioEngine
 from gdrive_sync import (
+    CLOUD_DB_FILENAME,
+    DEFAULT_ROOT_DRIVE_FOLDER_ID,
     GDriveCloudPlaylistSyncWorker,
     GDriveOAuthLoopbackWorker,
     GDriveStreamDownloadWorker,
     GDriveSyncWorker,
+    GDriveUploadWorker,
     GoogleDriveConfig,
+    canonical_drive_track_id,
+    download_cloud_database,
     extract_drive_id_from_url,
     fetch_google_user_profile,
+    hash_password,
+    merge_account_records,
     sync_cloud_playlists_with_drive,
+    upload_cloud_database,
 )
 from generate_demos import ensure_demo_tracks
 from maomao_widget import MaomaoDancerWidget
@@ -602,12 +611,12 @@ class MultiTrackSelectorDialog(QDialog):
 
 
 class GoogleDriveDialog(QDialog):
-    """Modal para conectar Google Drive privado mediante OAuth2, Carpeta o enlaces directos."""
+    """Modal para conectar Google Drive (preconfigurado con la carpeta raíz y subcarpeta Musica)."""
 
     def __init__(self, parent: QWidget, config: GoogleDriveConfig) -> None:
         super().__init__(parent)
-        self.setWindowTitle("☁️ Conectar mi Google Drive Privado")
-        self.setFixedSize(560, 520)
+        self.setWindowTitle("☁️ Conectar Google Drive y Carpeta Musica")
+        self.setFixedSize(580, 560)
         self.config = config
         self._oauth_worker: Optional[GDriveOAuthLoopbackWorker] = None
 
@@ -635,13 +644,14 @@ class GoogleDriveDialog(QDialog):
         lay.setContentsMargins(20, 18, 20, 18)
         lay.setSpacing(10)
 
-        header = QLabel("☁️ Transmite tu música desde Google Drive como en Spotify")
+        header = QLabel("☁️ Google Drive — Base de Datos y Carpeta «Musica»")
         header.setStyleSheet("font-size: 16px; font-weight: 800; color: #1DB954;")
         lay.addWidget(header)
 
         sub = QLabel(
-            "Conecta tu cuenta con OAuth 2.0 (Token o credentials.json), o pega el enlace/ID de tu carpeta "
-            "privada o enlaces de tus archivos MP3/FLAC/WAV."
+            f"Carpeta raíz vinculada: {DEFAULT_ROOT_DRIVE_FOLDER_ID}\n"
+            f"• Guarda la base de datos de cuentas y playlists ({CLOUD_DB_FILENAME}).\n"
+            "• Dentro busca la subcarpeta «Musica» para escuchar en línea, descargar (con filtro de duplicados) o subir más canciones."
         )
         sub.setWordWrap(True)
         sub.setStyleSheet("color: #A8A8B3; font-size: 11px; font-weight: normal;")
@@ -664,10 +674,10 @@ class GoogleDriveDialog(QDialog):
         form.setSpacing(8)
 
         self.inp_token = QLineEdit(config.access_token)
-        self.inp_token.setPlaceholderText("ya29.a0AfH6SM... (Token OAuth2 de Google Drive)")
+        self.inp_token.setPlaceholderText("ya29.a0AfH6SM... (Token OAuth2 para subir archivos y guardar BD en Drive)")
 
-        self.inp_folder = QLineEdit(config.folder_id)
-        self.inp_folder.setPlaceholderText("Déjalo vacío para buscar automáticamente tu carpeta 'Música' / 'Music'")
+        self.inp_folder = QLineEdit(config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID)
+        self.inp_folder.setPlaceholderText(f"Por defecto: {DEFAULT_ROOT_DRIVE_FOLDER_ID} (contiene subcarpeta Musica)")
 
         self.inp_api_key = QLineEdit(config.api_key)
         self.inp_api_key.setPlaceholderText("Opcional: Google Drive API Key (AIzaSy...)")
@@ -680,13 +690,13 @@ class GoogleDriveDialog(QDialog):
         self.inp_client_secret.setPlaceholderText("Opcional para login OAuth: Client Secret")
 
         form.addRow("Token OAuth 2.0:", self.inp_token)
-        form.addRow("Carpeta (Opcional):", self.inp_folder)
+        form.addRow("Carpeta Raíz Drive:", self.inp_folder)
         form.addRow("API Key (Opcional):", self.inp_api_key)
         form.addRow("Client ID:", self.inp_client_id)
         form.addRow("Client Secret:", self.inp_client_secret)
         lay.addLayout(form)
 
-        lbl_links = QLabel("Enlaces directos a canciones de Drive (uno por línea, opcional):")
+        lbl_links = QLabel("Enlaces directos adicionales a canciones de Drive (uno por línea, opcional):")
         lay.addWidget(lbl_links)
 
         self.txt_direct_links = QPlainTextEdit()
@@ -694,7 +704,7 @@ class GoogleDriveDialog(QDialog):
             "https://drive.google.com/file/d/1A2B3C4D5E6F.../view?usp=sharing\n"
             "https://drive.google.com/file/d/..."
         )
-        self.txt_direct_links.setFixedHeight(78)
+        self.txt_direct_links.setFixedHeight(68)
         lay.addWidget(self.txt_direct_links)
 
         self.chk_preload = QCheckBox(
@@ -703,7 +713,14 @@ class GoogleDriveDialog(QDialog):
         self.chk_preload.setStyleSheet("color: #CFCFD8; font-size: 12px;")
         lay.addWidget(self.chk_preload)
 
-        self.lbl_status = QLabel("Listo para sincronizar.")
+        self.chk_dedup = QCheckBox(
+            "🛡️ Activar verificación de duplicados al descargar canciones de Google Drive"
+        )
+        self.chk_dedup.setChecked(bool(getattr(config, "verify_duplicates", True)))
+        self.chk_dedup.setStyleSheet("color: #1ED760; font-size: 12px; font-weight: 700;")
+        lay.addWidget(self.chk_dedup)
+
+        self.lbl_status = QLabel("Listo para sincronizar la carpeta Musica de Drive.")
         self.lbl_status.setStyleSheet("color: #1DB954; font-size: 11px;")
         lay.addWidget(self.lbl_status)
 
@@ -746,7 +763,7 @@ class GoogleDriveDialog(QDialog):
                 self,
                 "Falta Client ID / Secret",
                 "Primero carga tu archivo credentials.json o escribe tu Client ID y Client Secret de Google Cloud.\n\n"
-                "Alternativamente, pega directamente tu Token OAuth 2.0 o el enlace de tu carpeta.",
+                "Alternativamente, pega directamente tu Token OAuth 2.0 o sincroniza la carpeta compartida.",
             )
             return
 
@@ -769,7 +786,9 @@ class GoogleDriveDialog(QDialog):
             client_id=self.inp_client_id.text(),
             client_secret=self.inp_client_secret.text(),
             api_key=self.inp_api_key.text(),
-            folder_id=self.inp_folder.text(),
+            folder_id=self.inp_folder.text().strip() or DEFAULT_ROOT_DRIVE_FOLDER_ID,
+            musica_folder_id=self.config.musica_folder_id,
+            verify_duplicates=self.chk_dedup.isChecked(),
         )
         links = [
             line.strip()
@@ -777,6 +796,295 @@ class GoogleDriveDialog(QDialog):
             if line.strip()
         ]
         return cfg, links, self.chk_preload.isChecked()
+
+
+class AccountDialog(QDialog):
+    """
+    Modal para Crear Cuenta (Usuario, Correo, Contraseña) o Iniciar Sesión.
+    Guarda y sincroniza la base de datos de cuentas, playlists y canciones de Drive
+    en https://drive.google.com/drive/folders/1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT (spotilinux_database.json).
+    """
+
+    def __init__(self, parent: QWidget, store: LibraryStore) -> None:
+        super().__init__(parent)
+        self.store = store
+        self.setWindowTitle("👤 Cuenta SpotiLinux — Vincular Datos y Playlists en Google Drive")
+        self.setFixedSize(520, 480)
+        self.mode: str = "register"  # "register" | "login"
+        self.authenticated_account: Optional[dict] = None
+        self.logged_out: bool = False
+
+        self.setStyleSheet(
+            """
+            QDialog { background-color: #181820; color: #FFFFFF; }
+            QLabel { color: #E4E4EC; font-size: 12px; font-weight: 600; }
+            QLineEdit {
+                background-color: #262632; color: #FFFFFF;
+                border: 1px solid #424254; border-radius: 8px; padding: 8px 10px; font-size: 13px;
+            }
+            QLineEdit:focus { border-color: #1ED760; }
+            QPushButton {
+                background-color: #1DB954; color: #050505; border: none;
+                border-radius: 16px; padding: 8px 18px; font-weight: 800; font-size: 12px;
+            }
+            QPushButton:hover { background-color: #1ED760; }
+            QPushButton#TabBtn {
+                background-color: #262632; color: #CFCFD8; border: 1px solid #3E3E4E; border-radius: 14px;
+            }
+            QPushButton#TabBtn[active="true"] {
+                background-color: rgba(29, 185, 84, 0.22); color: #1ED760; border: 1px solid #1ED760;
+            }
+            QPushButton#DangerBtn {
+                background-color: rgba(235, 87, 87, 0.18); color: #FF7B7B; border: 1px solid rgba(235, 87, 87, 0.45);
+            }
+            """
+        )
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(22, 18, 22, 18)
+        lay.setSpacing(10)
+
+        title = QLabel("👤 Cuenta SpotiLinux Multi-Dispositivo")
+        title.setStyleSheet("font-size: 17px; font-weight: 900; color: #1ED760;")
+        lay.addWidget(title)
+
+        desc = QLabel(
+            f"Tus playlists y las canciones del Drive se guardan vinculadas a tu cuenta en:\n"
+            f"📁 Drive ID: {DEFAULT_ROOT_DRIVE_FOLDER_ID} ({CLOUD_DB_FILENAME} + carpeta «Musica»)"
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #A6A6B4; font-size: 11px; font-weight: normal;")
+        lay.addWidget(desc)
+
+        if self.store.user_account.get("username"):
+            curr_u = self.store.user_account.get("username")
+            curr_e = self.store.user_account.get("email")
+            active_box = QFrame()
+            active_box.setStyleSheet(
+                "background-color: rgba(29, 185, 84, 0.12); border: 1px solid rgba(29, 185, 84, 0.4); border-radius: 8px;"
+            )
+            ab_lay = QHBoxLayout(active_box)
+            ab_lay.setContentsMargins(10, 6, 10, 6)
+            lbl_curr = QLabel(f"✔ Sesión activa: <b>{curr_u}</b> ({curr_e})")
+            lbl_curr.setStyleSheet("color: #1ED760; font-size: 12px; border: none; background: transparent;")
+            btn_logout = QPushButton("Cerrar sesión")
+            btn_logout.setObjectName("DangerBtn")
+            btn_logout.clicked.connect(self._do_logout)
+            ab_lay.addWidget(lbl_curr, stretch=1)
+            ab_lay.addWidget(btn_logout)
+            lay.addWidget(active_box)
+
+        tab_row = QHBoxLayout()
+        self.btn_tab_register = QPushButton("✨ Crear Cuenta Nueva")
+        self.btn_tab_register.setObjectName("TabBtn")
+        self.btn_tab_register.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_tab_register.clicked.connect(lambda: self._set_mode("register"))
+
+        self.btn_tab_login = QPushButton("🔑 Iniciar Sesión")
+        self.btn_tab_login.setObjectName("TabBtn")
+        self.btn_tab_login.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_tab_login.clicked.connect(lambda: self._set_mode("login"))
+
+        tab_row.addWidget(self.btn_tab_register)
+        tab_row.addWidget(self.btn_tab_login)
+        lay.addLayout(tab_row)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+
+        self.lbl_user = QLabel("Usuario:")
+        self.inp_username = QLineEdit(self.store.user_account.get("username", ""))
+        self.inp_username.setPlaceholderText("Ej. jinsoon005")
+
+        self.lbl_email = QLabel("Correo electrónico:")
+        self.inp_email = QLineEdit(self.store.user_account.get("email", ""))
+        self.inp_email.setPlaceholderText("ejemplo@correo.com")
+
+        self.lbl_pass = QLabel("Contraseña:")
+        self.inp_password = QLineEdit()
+        self.inp_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.inp_password.setPlaceholderText("Contraseña de tu cuenta SpotiLinux")
+
+        self.inp_token = QLineEdit(self.store.gdrive_config.access_token)
+        self.inp_token.setPlaceholderText("Opcional: Token OAuth2 de Google Drive para escritura directa en la nube")
+
+        form.addRow(self.lbl_user, self.inp_username)
+        form.addRow(self.lbl_email, self.inp_email)
+        form.addRow(self.lbl_pass, self.inp_password)
+        form.addRow("Token Drive (Opcional):", self.inp_token)
+        lay.addLayout(form)
+
+        self.lbl_feedback = QLabel("Completa usuario, correo y contraseña para vincular tus datos.")
+        self.lbl_feedback.setWordWrap(True)
+        self.lbl_feedback.setStyleSheet("color: #1ED760; font-size: 11px;")
+        lay.addWidget(self.lbl_feedback)
+
+        lay.addStretch()
+
+        bottom_row = QHBoxLayout()
+        btn_cancel = QPushButton("Cancelar")
+        btn_cancel.setObjectName("TabBtn")
+        btn_cancel.clicked.connect(self.reject)
+
+        self.btn_submit = QPushButton("✨ Crear Cuenta y Vincular Datos")
+        self.btn_submit.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_submit.clicked.connect(self._on_submit)
+
+        bottom_row.addStretch()
+        bottom_row.addWidget(btn_cancel)
+        bottom_row.addWidget(self.btn_submit)
+        lay.addLayout(bottom_row)
+
+        self._set_mode("register")
+
+    def _set_mode(self, mode: str) -> None:
+        self.mode = mode
+        for btn, active in ((self.btn_tab_register, mode == "register"), (self.btn_tab_login, mode == "login")):
+            btn.setProperty("active", "true" if active else "false")
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+
+        if mode == "register":
+            self.lbl_user.setText("Usuario:")
+            self.inp_username.setPlaceholderText("Nombre de usuario (ej. maomao_fan)")
+            self.lbl_email.setVisible(True)
+            self.inp_email.setVisible(True)
+            self.btn_submit.setText("✨ Crear Cuenta y Guardar en Drive")
+            self.lbl_feedback.setText("Se creará la cuenta con tus playlists y canciones del Drive.")
+        else:
+            self.lbl_user.setText("Usuario o Correo:")
+            self.inp_username.setPlaceholderText("Escribe tu usuario o tu correo electrónico")
+            self.lbl_email.setVisible(False)
+            self.inp_email.setVisible(False)
+            self.btn_submit.setText("🔑 Iniciar Sesión y Recuperar Playlists")
+            self.lbl_feedback.setText("Ingresa tu usuario/correo y contraseña para cargar tus playlists y canciones.")
+
+    def _do_logout(self) -> None:
+        self.store.user_account = {}
+        self.store.save()
+        self.logged_out = True
+        self.accept()
+
+    def _collect_current_drive_tracks(self) -> list[dict]:
+        items: list[dict] = []
+        for t in self.store.tracks.values():
+            if t.filepath.startswith("gdrive://") or t.id.startswith("gd_"):
+                fid = t.filepath.replace("gdrive://", "") if t.filepath.startswith("gdrive://") else t.id[3:]
+                items.append(
+                    {
+                        "id": t.id,
+                        "file_id": fid,
+                        "title": t.title,
+                        "artist": t.artist,
+                        "album": t.album,
+                        "genre": t.genre,
+                        "duration": t.duration,
+                        "filepath": f"gdrive://{fid}" if fid else t.filepath,
+                    }
+                )
+        return items
+
+    def _on_submit(self) -> None:
+        tok = self.inp_token.text().strip()
+        if tok:
+            self.store.gdrive_config.access_token = tok
+            self.store.save()
+
+        username = self.inp_username.text().strip()
+        email = self.inp_email.text().strip().lower()
+        password = self.inp_password.text()
+
+        if self.mode == "register":
+            if not username or not email or not password:
+                QMessageBox.warning(
+                    self,
+                    "Campos requeridos",
+                    "Por favor ingresa tu Usuario, Correo electrónico y Contraseña para crear la cuenta.",
+                )
+                return
+            if "@" not in email:
+                QMessageBox.warning(self, "Correo inválido", "Por favor ingresa un correo electrónico válido.")
+                return
+        else:
+            if not username or not password:
+                QMessageBox.warning(
+                    self,
+                    "Campos requeridos",
+                    "Por favor ingresa tu Usuario (o Correo) y tu Contraseña para iniciar sesión.",
+                )
+                return
+
+        self.lbl_feedback.setText("☁️ Consultando base de datos en Google Drive...")
+        QApplication.processEvents()
+
+        db, existing_file_id = download_cloud_database(self.store.gdrive_config, self.store.accounts_db_path)
+        accounts = db.setdefault("accounts", {})
+        pw_hash = hash_password(password)
+
+        if self.mode == "register":
+            acc_key = email
+            existing = accounts.get(acc_key)
+            if existing and existing.get("password_hash") and existing.get("password_hash") != pw_hash:
+                QMessageBox.warning(
+                    self,
+                    "Cuenta ya registrada",
+                    "Ya existe una cuenta con ese correo y una contraseña distinta. Usa «Iniciar Sesión».",
+                )
+                return
+
+            new_record = {
+                "username": username,
+                "email": email,
+                "password_hash": pw_hash,
+                "updated_at": time.time(),
+                "playlists": {pid: pl.to_dict() for pid, pl in self.store.playlists.items()},
+                "liked_ids": list(self.store.liked_ids),
+                "drive_tracks": self._collect_current_drive_tracks(),
+            }
+            merged_record = merge_account_records(existing or {}, new_record)
+            accounts[acc_key] = merged_record
+            upload_cloud_database(self.store.gdrive_config, db, self.store.accounts_db_path, existing_file_id)
+            self.authenticated_account = merged_record
+            self.accept()
+        else:
+            ident_low = username.lower()
+            found_key = None
+            found_acc = None
+            for k, acc in accounts.items():
+                if not isinstance(acc, dict):
+                    continue
+                if k.lower() == ident_low or str(acc.get("email", "")).lower() == ident_low or str(acc.get("username", "")).lower() == ident_low:
+                    found_key = k
+                    found_acc = acc
+                    break
+
+            if not found_acc:
+                QMessageBox.warning(
+                    self,
+                    "Cuenta no encontrada",
+                    f"No se encontró ninguna cuenta para «{username}».\nPuedes crearla en la pestaña «Crear Cuenta Nueva».",
+                )
+                return
+
+            if found_acc.get("password_hash") != pw_hash:
+                QMessageBox.warning(self, "Contraseña incorrecta", "La contraseña ingresada no coincide con la cuenta.")
+                return
+
+            # Fusionar datos locales con los de la cuenta recuperada y guardar
+            current_record = {
+                "username": found_acc.get("username", username),
+                "email": found_acc.get("email", found_key),
+                "password_hash": pw_hash,
+                "updated_at": time.time(),
+                "playlists": {pid: pl.to_dict() for pid, pl in self.store.playlists.items()},
+                "liked_ids": list(self.store.liked_ids),
+                "drive_tracks": self._collect_current_drive_tracks(),
+            }
+            merged_record = merge_account_records(found_acc, current_record)
+            accounts[found_key] = merged_record
+            upload_cloud_database(self.store.gdrive_config, db, self.store.accounts_db_path, existing_file_id)
+            self.authenticated_account = merged_record
+            self.accept()
 
 
 class SpotiLinuxWindow(QMainWindow):
@@ -811,6 +1119,7 @@ class SpotiLinuxWindow(QMainWindow):
         self._gdrive_worker: Optional[GDriveSyncWorker] = None
         self._stream_worker: Optional[GDriveStreamDownloadWorker] = None
         self._cloud_sync_worker: Optional[GDriveCloudPlaylistSyncWorker] = None
+        self._upload_worker: Optional[GDriveUploadWorker] = None
 
         # Estado de navegación actual
         self.current_view: str = "home"  # "home" | "library" | "gdrive" | "liked" | "recent" | "playlist:<id>"
@@ -844,15 +1153,16 @@ class SpotiLinuxWindow(QMainWindow):
         QTimer.singleShot(450, self._check_first_run_welcome)
 
     def _check_first_run_welcome(self) -> None:
-        if self.store.gdrive_config.access_token or self.store.gdrive_config.api_key:
-            if self.store.gdrive_config.access_token and not self.store.google_user.get("name"):
-                u = fetch_google_user_profile(self.store.gdrive_config.access_token)
-                if u:
-                    self.store.google_user = u
-                    self.store.save()
+        # Sincronizar automáticamente la carpeta compartida 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT / Musica al iniciar
+        if self.store.gdrive_config.access_token and not self.store.google_user.get("name"):
+            u = fetch_google_user_profile(self.store.gdrive_config.access_token)
+            if u:
+                self.store.google_user = u
+                self.store.save()
+        if self.store.gdrive_config.access_token or self.store.user_account.get("email"):
             self._sync_playlists_to_cloud()
-            self.start_gdrive_sync()
-            return
+        self.start_gdrive_sync(silent_view_keep=True)
+
         if self.store.welcome_shown:
             return
         self.store.welcome_shown = True
@@ -861,15 +1171,18 @@ class SpotiLinuxWindow(QMainWindow):
         msg = QMessageBox(self)
         msg.setWindowTitle("☁️ Bienvenido a SpotiLinux")
         msg.setText(
-            "¿Deseas conectar tu cuenta de Google Drive desde el inicio (buscará automáticamente tu carpeta "
-            "«Música» / «Music» para escuchar en línea o descargar) o rastrear y guardar la música de tu PC?"
+            "¿Deseas crear/iniciar sesión en tu Cuenta SpotiLinux (vincula tus Playlists y las canciones de la "
+            f"carpeta «Musica» del Drive {DEFAULT_ROOT_DRIVE_FOLDER_ID}), configurar Google Drive o rastrear la música de tu PC?"
         )
-        btn_drive = msg.addButton("☁️ Conectar Google Drive", QMessageBox.ButtonRole.AcceptRole)
-        btn_scan = msg.addButton("🔍 Auto-Rastrear Música del PC", QMessageBox.ButtonRole.ActionRole)
+        btn_acc = msg.addButton("👤 Crear / Iniciar Cuenta", QMessageBox.ButtonRole.AcceptRole)
+        btn_drive = msg.addButton("☁️ Configurar Google Drive", QMessageBox.ButtonRole.ActionRole)
+        btn_scan = msg.addButton("🔍 Auto-Rastrear Música PC", QMessageBox.ButtonRole.ActionRole)
         msg.addButton("Más tarde", QMessageBox.ButtonRole.RejectRole)
         msg.exec()
 
-        if msg.clickedButton() == btn_drive:
+        if msg.clickedButton() == btn_acc:
+            self.open_account_dialog()
+        elif msg.clickedButton() == btn_drive:
             self.open_google_drive_dialog()
         elif msg.clickedButton() == btn_scan:
             self.auto_scan_pc_music()
@@ -978,10 +1291,20 @@ class SpotiLinuxWindow(QMainWindow):
         import_box = QVBoxLayout()
         import_box.setSpacing(6)
 
-        self.btn_connect_gdrive = QPushButton("☁️  Conectar Google Drive...")
+        self.btn_account_sidebar = QPushButton("👤  Crear / Iniciar Cuenta...")
+        self.btn_account_sidebar.setObjectName("ActionChipButton")
+        self.btn_account_sidebar.setProperty("active", "true")
+        self.btn_account_sidebar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_account_sidebar.setToolTip("Crea tu cuenta con Usuario, Correo y Contraseña o inicia sesión para vincular datos en Drive")
+
+        self.btn_connect_gdrive = QPushButton("☁️  Carpeta Drive (Musica)...")
         self.btn_connect_gdrive.setObjectName("ActionChipButton")
-        self.btn_connect_gdrive.setProperty("active", "true")
         self.btn_connect_gdrive.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.btn_upload_gdrive = QPushButton("⬆️  Subir a Drive (Musica)...")
+        self.btn_upload_gdrive.setObjectName("ActionChipButton")
+        self.btn_upload_gdrive.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_upload_gdrive.setToolTip("Sube canciones MP3/FLAC/WAV de tu PC a la carpeta Musica del Drive compartido")
 
         self.btn_auto_scan_pc = QPushButton("🔍  Auto-Rastrear Música PC")
         self.btn_auto_scan_pc.setObjectName("ActionChipButton")
@@ -996,7 +1319,9 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_import_files.setObjectName("ActionChipButton")
         self.btn_import_files.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        import_box.addWidget(self.btn_account_sidebar)
         import_box.addWidget(self.btn_connect_gdrive)
+        import_box.addWidget(self.btn_upload_gdrive)
         import_box.addWidget(self.btn_auto_scan_pc)
         import_box.addWidget(self.btn_import_folder)
         import_box.addWidget(self.btn_import_files)
@@ -1357,7 +1682,9 @@ class SpotiLinuxWindow(QMainWindow):
         self.playlist_list.itemClicked.connect(self._on_playlist_item_clicked)
         self.playlist_list.customContextMenuRequested.connect(self._on_playlist_context_menu)
 
+        self.btn_account_sidebar.clicked.connect(self.open_account_dialog)
         self.btn_connect_gdrive.clicked.connect(self.open_google_drive_dialog)
+        self.btn_upload_gdrive.clicked.connect(self.upload_files_to_drive_dialog)
         self.btn_quick_cloud.clicked.connect(self.open_google_drive_dialog)
         self.hero_banner.btn_cloud_sync_banner.clicked.connect(self.open_google_drive_dialog)
 
@@ -1434,6 +1761,79 @@ class SpotiLinuxWindow(QMainWindow):
     #                  GOOGLE DRIVE CLOUD STREAMING                      #
     # ================================================================== #
 
+    def open_account_dialog(self) -> None:
+        dlg = AccountDialog(self, self.store)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            if dlg.logged_out:
+                self.switch_view(self.current_view)
+                QMessageBox.information(self, "Sesión cerrada", "Se cerró la sesión de tu cuenta SpotiLinux.")
+                return
+            acc = dlg.authenticated_account
+            if acc:
+                self.store.user_account = {
+                    "username": acc.get("username", ""),
+                    "email": acc.get("email", ""),
+                    "password_hash": acc.get("password_hash", ""),
+                }
+                pl_count, drive_count = self.store.apply_account_record(acc)
+                self._sync_playlists_to_cloud(notify=False)
+                self._refresh_playlist_sidebar()
+                self.switch_view(self.current_view)
+                QMessageBox.information(
+                    self,
+                    "👤 Cuenta SpotiLinux Vinculada",
+                    f"✔ Cuenta activa: {self.store.user_account.get('username')} ({self.store.user_account.get('email')})\n\n"
+                    f"• Playlists vinculadas: {len(self.store.playlists)} ({pl_count} sincronizadas)\n"
+                    f"• Nuevas canciones de Drive restauradas: {drive_count}\n"
+                    f"• Base de datos en Drive: {DEFAULT_ROOT_DRIVE_FOLDER_ID} ({CLOUD_DB_FILENAME})",
+                )
+
+    def upload_files_to_drive_dialog(self) -> None:
+        """Permite seleccionar archivos de audio del PC y subirlos a la carpeta Musica del Drive."""
+        if not self.store.gdrive_config.access_token:
+            QMessageBox.information(
+                self,
+                "Se requiere Token OAuth 2.0",
+                "Para subir nuevas canciones a la carpeta «Musica» de Google Drive necesitas conectar tu Token OAuth 2.0.\n\n"
+                "Se abrirá la configuración de Google Drive para que lo ingreses.",
+            )
+            self.open_google_drive_dialog()
+            if not self.store.gdrive_config.access_token:
+                return
+
+        start_dir = str(Path.home() / "Music") if (Path.home() / "Music").exists() else str(Path.home())
+        exts = " ".join(f"*{e}" for e in sorted(SUPPORTED_EXTENSIONS))
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Seleccionar canciones para subir a la carpeta «Musica» de Google Drive",
+            start_dir,
+            f"Archivos de Audio ({exts})",
+        )
+        if not files:
+            return
+
+        file_paths = [Path(f) for f in files]
+        self.hero_banner.lbl_subtitle.setText("⬆️ Subiendo canciones a la carpeta «Musica» de Google Drive...")
+        self._upload_worker = GDriveUploadWorker(
+            config=self.store.gdrive_config,
+            file_paths=file_paths,
+            covers_dir=self.store.covers_dir,
+            verify_duplicates=self.store.gdrive_config.verify_duplicates,
+        )
+        self._upload_worker.upload_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(msg))
+        self._upload_worker.upload_finished.connect(self._on_upload_to_drive_finished)
+        self._upload_worker.start()
+
+    def _on_upload_to_drive_finished(self, uploaded_tracks: list[TrackMetadata], status_msg: str) -> None:
+        for t in uploaded_tracks:
+            self.store.tracks[t.id] = t
+        self.store.deduplicate_library()
+        self.store.save()
+        self._sync_playlists_to_cloud(notify=False)
+        self.switch_view("gdrive" if uploaded_tracks else self.current_view)
+        self.hero_banner.lbl_subtitle.setText(status_msg)
+        QMessageBox.information(self, "⬆️ Subida a Google Drive (Musica)", status_msg)
+
     def open_google_drive_dialog(self) -> None:
         dlg = GoogleDriveDialog(self, self.store.gdrive_config)
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -1451,8 +1851,10 @@ class SpotiLinuxWindow(QMainWindow):
         self,
         direct_links: Optional[list[str]] = None,
         download_immediately: bool = False,
+        silent_view_keep: bool = False,
     ) -> None:
-        self.hero_banner.lbl_subtitle.setText("☁️ Conectando con tu Google Drive privado...")
+        self._silent_gdrive_sync = silent_view_keep
+        self.hero_banner.lbl_subtitle.setText("☁️ Conectando con la carpeta «Musica» de Google Drive...")
         target_cache = self.store.music_library_dir if download_immediately else self.store.gdrive_cache_dir
         self._gdrive_worker = GDriveSyncWorker(
             config=self.store.gdrive_config,
@@ -1460,6 +1862,7 @@ class SpotiLinuxWindow(QMainWindow):
             covers_dir=self.store.covers_dir,
             direct_links=direct_links,
             download_immediately=download_immediately,
+            existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
         )
         self._gdrive_worker.sync_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(f"☁️ {msg}"))
         self._gdrive_worker.sync_finished.connect(self._on_gdrive_sync_finished)
@@ -1468,8 +1871,13 @@ class SpotiLinuxWindow(QMainWindow):
     def _on_gdrive_sync_finished(self, tracks: list[TrackMetadata], status_msg: str) -> None:
         for t in tracks:
             self.store.tracks[t.id] = t
+        self.store.deduplicate_library()
         self.store.save()
-        self.switch_view("gdrive" if tracks else self.current_view)
+        if self.store.user_account.get("email") or self.store.gdrive_config.access_token:
+            self._sync_playlists_to_cloud(notify=False)
+        target_view = self.current_view if getattr(self, "_silent_gdrive_sync", False) else ("gdrive" if tracks else self.current_view)
+        self._silent_gdrive_sync = False
+        self.switch_view(target_view)
         self.hero_banner.lbl_subtitle.setText(status_msg)
 
     def _play_track_or_stream_from_cloud(
@@ -1480,7 +1888,7 @@ class SpotiLinuxWindow(QMainWindow):
         """Si la pista es de Google Drive (gdrive://) y aún no está en caché local, la transmite al vuelo."""
         if track.filepath.startswith("gdrive://"):
             self.lbl_bar_title.setText(f"☁️ Cargando: {track.title}...")
-            self.lbl_bar_artist.setText("Transmitiendo desde tu Google Drive...")
+            self.lbl_bar_artist.setText("Transmitiendo desde la carpeta «Musica» de Google Drive...")
             if context_list is not None:
                 self.engine.context_tracks = list(context_list)
             self._stream_worker = GDriveStreamDownloadWorker(
@@ -1488,6 +1896,8 @@ class SpotiLinuxWindow(QMainWindow):
                 config=self.store.gdrive_config,
                 cache_dir=self.store.gdrive_cache_dir,
                 covers_dir=self.store.covers_dir,
+                existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
+                verify_duplicates=self.store.gdrive_config.verify_duplicates,
             )
             self._stream_worker.stream_ready.connect(self._on_cloud_stream_ready)
             self._stream_worker.stream_failed.connect(
@@ -1497,8 +1907,9 @@ class SpotiLinuxWindow(QMainWindow):
         else:
             self.engine.play_track(track, context_list)
 
-    def _on_cloud_stream_ready(self, old_id: str, updated_track: TrackMetadata) -> None:
+    def _on_cloud_stream_ready(self, old_id: str, updated_track: TrackMetadata, _was_duplicate: bool = False) -> None:
         self.store.tracks[old_id] = updated_track
+        self.store.deduplicate_library()
         self.store.save()
         # Actualizar referencias en la lista actual
         for i, t in enumerate(self.displayed_tracks):
@@ -1555,39 +1966,45 @@ class SpotiLinuxWindow(QMainWindow):
                     if sub.widget():
                         sub.widget().deleteLater()
 
-        # 1. Tarjeta de Estado de Cuenta de Google y Sincronización en la Nube
+        # 1. Tarjeta de Estado de Cuenta SpotiLinux y Base de Datos en Google Drive
         acc_frame = QFrame()
         acc_frame.setObjectName("AccountCard")
         acc_frame.setStyleSheet(
-            "QFrame#AccountCard { background-color: rgba(30, 215, 96, 0.07); "
-            "border: 1px solid rgba(30, 215, 96, 0.22); border-radius: 10px; }"
+            "QFrame#AccountCard { background-color: rgba(30, 215, 96, 0.08); "
+            "border: 1px solid rgba(30, 215, 96, 0.28); border-radius: 10px; }"
         )
         acc_lay = QHBoxLayout(acc_frame)
-        acc_lay.setContentsMargins(12, 6, 12, 6)
-        acc_lay.setSpacing(12)
+        acc_lay.setContentsMargins(12, 8, 12, 8)
+        acc_lay.setSpacing(10)
 
+        has_spoti_acc = bool(self.store.user_account.get("username") or self.store.user_account.get("email"))
         has_user = bool(self.store.google_user.get("name") or self.store.google_user.get("email"))
         has_token = bool(self.store.gdrive_config.access_token)
 
-        lbl_acc_icon = QLabel("👤" if has_user else "☁️")
+        lbl_acc_icon = QLabel("👤" if (has_spoti_acc or has_user) else "☁️")
         lbl_acc_icon.setStyleSheet("font-size: 22px; background: transparent; border: none;")
         acc_lay.addWidget(lbl_acc_icon)
 
         acc_text_col = QVBoxLayout()
         acc_text_col.setSpacing(2)
-        if has_user:
+        dedup_txt = "🛡️ Duplicados: ON" if self.store.gdrive_config.verify_duplicates else "Duplicados: OFF"
+        if has_spoti_acc:
+            s_user = self.store.user_account.get("username", "Usuario")
+            s_email = self.store.user_account.get("email", "")
+            lbl_title = QLabel(f"<b>Cuenta SpotiLinux: {s_user}</b> ({s_email})")
+            lbl_sub = QLabel(
+                f"Base de datos y carpeta «Musica» en Drive ({DEFAULT_ROOT_DRIVE_FOLDER_ID[:10]}…) • {dedup_txt}"
+            )
+        elif has_user:
             u_name = self.store.google_user.get("name", "Usuario de Google")
             u_email = self.store.google_user.get("email", "")
-            lbl_title = QLabel(f"<b>Cuenta vinculada: {u_name}</b> ({u_email})")
-            lbl_sub = QLabel("Playlists sincronizadas en tu Google Drive • Disponibles desde Android y PC")
-        elif has_token:
-            lbl_title = QLabel("<b>Cuenta de Google Drive Vinculada</b>")
-            lbl_sub = QLabel("Playlists sincronizadas en la nube • Compatibles con SpotiLinux Android y PC")
+            lbl_title = QLabel(f"<b>Cuenta Google: {u_name}</b> ({u_email})")
+            lbl_sub = QLabel(f"Playlists sincronizadas en Google Drive • Carpeta Musica • {dedup_txt}")
         else:
-            lbl_title = QLabel("<b>Vincular Cuenta de Google / Google Drive</b>")
+            lbl_title = QLabel("<b>Crear Cuenta o Iniciar Sesión (Vincular Playlists + Drive «Musica»)</b>")
             lbl_sub = QLabel(
-                "Inicia sesión para sincronizar tus Playlists en la nube y acceder a ellas desde cualquier "
-                "dispositivo como en Spotify"
+                f"Crea tu cuenta (Usuario, Correo, Contraseña) para guardar tus Playlists y canciones del Drive "
+                f"({DEFAULT_ROOT_DRIVE_FOLDER_ID[:10]}…/Musica) y usarlas en varios dispositivos • {dedup_txt}"
             )
 
         lbl_title.setStyleSheet("color: #FFFFFF; font-size: 13px; background: transparent; border: none;")
@@ -1598,9 +2015,24 @@ class SpotiLinuxWindow(QMainWindow):
         acc_text_col.addWidget(lbl_sub)
         acc_lay.addLayout(acc_text_col, stretch=1)
 
-        btn_sync = QPushButton("🔄 Sincronizar Nube" if (has_user or has_token) else "🔑 Conectar Google")
+        btn_acc = QPushButton("👤 Mi Cuenta" if has_spoti_acc else "👤 Crear / Login")
+        btn_acc.setObjectName("ActionChipButton")
+        btn_acc.setProperty("active", "false" if has_spoti_acc else "true")
+        btn_acc.setFixedHeight(32)
+        btn_acc.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_acc.clicked.connect(self.open_account_dialog)
+        acc_lay.addWidget(btn_acc)
+
+        btn_up = QPushButton("⬆️ Subir")
+        btn_up.setObjectName("ActionChipButton")
+        btn_up.setFixedHeight(32)
+        btn_up.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_up.setToolTip("Subir nuevas canciones a la carpeta Musica del Drive")
+        btn_up.clicked.connect(self.upload_files_to_drive_dialog)
+        acc_lay.addWidget(btn_up)
+
+        btn_sync = QPushButton("🔄 Drive" if (has_spoti_acc or has_user or has_token) else "☁️ Drive")
         btn_sync.setObjectName("ActionChipButton")
-        btn_sync.setProperty("active", "false" if (has_user or has_token) else "true")
         btn_sync.setFixedHeight(32)
         btn_sync.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_sync.clicked.connect(self._sync_or_connect_google)
@@ -2137,39 +2569,70 @@ class SpotiLinuxWindow(QMainWindow):
                 )
 
     def _sync_or_connect_google(self) -> None:
-        if self.store.gdrive_config.access_token:
-            self._sync_playlists_to_cloud(notify=True)
-        else:
-            self.open_google_drive_dialog()
+        self._sync_playlists_to_cloud(notify=True)
+        self.start_gdrive_sync(silent_view_keep=False)
+
+    def _collect_drive_tracks_for_account(self) -> list[dict]:
+        items: list[dict] = []
+        for t in self.store.tracks.values():
+            if t.filepath.startswith("gdrive://") or t.id.startswith("gd_"):
+                fid = t.filepath.replace("gdrive://", "") if t.filepath.startswith("gdrive://") else t.id[3:]
+                items.append(
+                    {
+                        "id": t.id,
+                        "file_id": fid,
+                        "title": t.title,
+                        "artist": t.artist,
+                        "album": t.album,
+                        "genre": t.genre,
+                        "duration": t.duration,
+                        "filepath": f"gdrive://{fid}" if fid else t.filepath,
+                    }
+                )
+        return items
 
     def _sync_playlists_to_cloud(self, notify: bool = False) -> None:
         token = self.store.gdrive_config.access_token
-        if not token:
-            if notify:
-                QMessageBox.information(
-                    self,
-                    "Cuenta de Google",
-                    "Primero conecta tu cuenta o ingresa tu Token de Google Drive.",
-                )
-            return
-
         payload = {
             "app": "SpotiLinux",
-            "version": "1.3.0",
+            "version": "1.6.0",
             "updatedAt": time.time(),
             "user": self.store.google_user,
+            "account": self.store.user_account,
             "playlists": [pl.to_dict() for pl in self.store.playlists.values()],
             "likedIds": list(self.store.liked_ids),
+            "drive_tracks": self._collect_drive_tracks_for_account(),
         }
-        self._cloud_sync_worker = GDriveCloudPlaylistSyncWorker(token, payload)
+        self._cloud_sync_worker = GDriveCloudPlaylistSyncWorker(
+            access_token=token,
+            local_payload=payload,
+            config=self.store.gdrive_config,
+            local_db_path=self.store.accounts_db_path,
+        )
         self._cloud_sync_worker.sync_completed.connect(lambda merged: self._on_cloud_sync_success(merged, notify=notify))
         self._cloud_sync_worker.sync_failed.connect(lambda err: self._on_cloud_sync_failed(err, notify=notify))
         self._cloud_sync_worker.start()
 
     def _on_cloud_sync_success(self, merged: dict, notify: bool = False) -> None:
         changed = False
+        # Restaurar canciones de Drive que vengan en la cuenta o en el archivo sincronizado
+        acc_block = merged.get("account") if isinstance(merged.get("account"), dict) else {}
+        if acc_block or merged.get("drive_tracks"):
+            fake_acc = {
+                "drive_tracks": merged.get("drive_tracks") or acc_block.get("drive_tracks", []),
+                "playlists": merged.get("playlists", []),
+                "liked_ids": merged.get("likedIds", []),
+            }
+            pl_r, drv_r = self.store.apply_account_record(fake_acc)
+            if pl_r or drv_r:
+                changed = True
+
         cloud_playlists = merged.get("playlists", [])
+        if isinstance(cloud_playlists, dict):
+            cloud_playlists = list(cloud_playlists.values())
         for cp in cloud_playlists:
+            if not isinstance(cp, dict):
+                continue
             pid = cp.get("id")
             pname = cp.get("name", "")
             local_pl = self.store.playlists.get(pid) or next(
@@ -2177,7 +2640,7 @@ class SpotiLinuxWindow(QMainWindow):
             )
             if local_pl:
                 for tid in cp.get("track_ids", cp.get("trackIds", [])):
-                    if tid not in local_pl.track_ids:
+                    if tid in self.store.tracks and tid not in local_pl.track_ids:
                         local_pl.track_ids.append(tid)
                         changed = True
             else:
@@ -2185,14 +2648,14 @@ class SpotiLinuxWindow(QMainWindow):
                     id=pid or str(uuid.uuid4())[:8],
                     name=pname or "Playlist Cloud",
                     description=cp.get("description", ""),
-                    track_ids=list(cp.get("track_ids", cp.get("trackIds", []))),
+                    track_ids=[t for t in cp.get("track_ids", cp.get("trackIds", [])) if t in self.store.tracks],
                     created_at=float(cp.get("created_at", time.time())),
                 )
                 self.store.playlists[new_pl.id] = new_pl
                 changed = True
 
         for lid in merged.get("likedIds", []):
-            if lid not in self.store.liked_ids:
+            if lid in self.store.tracks and lid not in self.store.liked_ids:
                 self.store.liked_ids.append(lid)
                 changed = True
 
@@ -2213,8 +2676,8 @@ class SpotiLinuxWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "☁️ Sincronización Exitosa",
-                "Tus playlists y canciones favoritas están sincronizadas en tu cuenta de Google Drive.\n"
-                "Puedes acceder a ellas desde la app móvil (Android) y en Linux con la misma cuenta.",
+                f"Tus playlists y las canciones del Drive ({DEFAULT_ROOT_DRIVE_FOLDER_ID} / Musica) están sincronizadas.\n"
+                "Puedes usarlas en varios dispositivos iniciando sesión con tu misma cuenta SpotiLinux.",
             )
 
     def _on_cloud_sync_failed(self, err: str, notify: bool = False) -> None:
@@ -2226,13 +2689,17 @@ class SpotiLinuxWindow(QMainWindow):
             )
 
     def _download_cloud_track_to_app_folder(self, track: TrackMetadata) -> None:
-        """Descarga explícitamente una pista de Google Drive a la carpeta persistente music_library/ de la app."""
-        self.hero_banner.lbl_subtitle.setText(f"⬇️ Descargando «{track.title}» a music_library/...")
+        """Descarga explícitamente una pista de Google Drive a music_library/ verificando duplicados primero."""
+        self.hero_banner.lbl_subtitle.setText(
+            f"⬇️ Verificando duplicados y descargando «{track.title}» a music_library/..."
+        )
         self._stream_worker = GDriveStreamDownloadWorker(
             track=track,
             config=self.store.gdrive_config,
             cache_dir=self.store.music_library_dir,
             covers_dir=self.store.covers_dir,
+            existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
+            verify_duplicates=self.store.gdrive_config.verify_duplicates,
         )
         self._stream_worker.stream_ready.connect(self._on_cloud_download_saved)
         self._stream_worker.stream_failed.connect(
@@ -2240,13 +2707,24 @@ class SpotiLinuxWindow(QMainWindow):
         )
         self._stream_worker.start()
 
-    def _on_cloud_download_saved(self, old_id: str, updated_track: TrackMetadata) -> None:
+    def _on_cloud_download_saved(self, old_id: str, updated_track: TrackMetadata, was_duplicate: bool = False) -> None:
         self.store.tracks[old_id] = updated_track
+        self.store.deduplicate_library()
         self.store.save()
         self._refresh_track_table()
-        self.hero_banner.lbl_subtitle.setText(
-            f"✔ Guardada en carpeta de la app (music_library/): {updated_track.title}"
-        )
+        if was_duplicate:
+            msg = f"🛡️ Duplicado evitado: «{updated_track.title}» ya estaba descargada en music_library/"
+            self.hero_banner.lbl_subtitle.setText(msg)
+            QMessageBox.information(
+                self,
+                "🛡️ Verificación de Duplicados",
+                f"La canción «{updated_track.title}» ya existía localmente en:\n{updated_track.filepath}\n\n"
+                "Se vinculó el archivo existente sin volver a descargarlo ni duplicarlo.",
+            )
+        else:
+            self.hero_banner.lbl_subtitle.setText(
+                f"✔ Guardada en carpeta de la app (music_library/): {updated_track.title}"
+            )
 
     def play_current_view(self) -> None:
         if self.current_view == "home":

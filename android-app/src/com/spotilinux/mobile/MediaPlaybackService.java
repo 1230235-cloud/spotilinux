@@ -206,6 +206,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                     int maxBin = fft.length / 2 - 1;
                     double fMin = 45.0, fMax = Math.min(9000.0, sr * 0.45);
                     StringBuilder sb = new StringBuilder("[");
+                    int maxPeak = 0;
                     for (int b = 0; b < bars; b++) {
                         double lo = fMin * Math.pow(fMax / fMin, b / (double) bars);
                         double hi = fMin * Math.pow(fMax / fMin, (b + 1) / (double) bars);
@@ -218,11 +219,15 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                             double m = Math.sqrt(re * re + im * im);
                             if (m > peak) peak = m;
                         }
+                        int pInt = (int) Math.round(peak);
+                        if (pInt > maxPeak) maxPeak = pInt;
                         if (b > 0) sb.append(',');
-                        sb.append((int) Math.round(peak));
+                        sb.append(pInt);
                     }
                     sb.append(']');
-                    MainActivity.dispatchJs("if(window.onNativeSpectrum){window.onNativeSpectrum(" + sb + ");}");
+                    if (maxPeak > 2) {
+                        MainActivity.dispatchJs("if(window.onNativeSpectrum){window.onNativeSpectrum(" + sb + ");}");
+                    }
                 }
             }, rate, false, true);
             audioVisualizer.setEnabled(true);

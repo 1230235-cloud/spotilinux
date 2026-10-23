@@ -509,57 +509,94 @@
       <!-- PESTAÑA 3: GOOGLE DRIVE PRIVADO Y CUENTA -->
       <div id="tab-drive" class="tab-pane">
         <div class="cloud-box">
-          <h3>☁️ Mi Cuenta y Google Drive</h3>
-          <p>Vincula tu cuenta de Google para sincronizar tus Playlists en la nube y acceder a ellas desde cualquier dispositivo (PC y Celular) como en Spotify.</p>
+          <h3>👤 Cuenta SpotiLinux y Base de Datos en Google Drive</h3>
+          <p>Crea una cuenta (Usuario, Correo y Contraseña) o inicia sesión para guardar tus Playlists junto con las canciones del Drive (carpeta <b>Musica</b> en <code>1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT</code>) y usarlas en varios dispositivos.</p>
 
           <!-- Perfil de cuenta vinculada -->
           <div id="driveAccountStatus" class="account-badge-card" style="margin-bottom:10px;">
             <div class="account-avatar" id="driveAvatar">👤</div>
             <div class="account-info">
               <div class="account-name" id="driveAccountName">Sin cuenta vinculada</div>
-              <div class="account-sub" id="driveAccountSub">Inicia sesión con Google para sincronizar tus Playlists</div>
+              <div class="account-sub" id="driveAccountSub">Crea tu cuenta o inicia sesión abajo para vincular tus datos</div>
             </div>
+            <button class="btn-chip" id="btnLogoutAccount" style="display:none; font-size:10px; padding:5px 8px;" onclick="logoutSpotiAccount()">Salir</button>
+          </div>
+
+          <!-- Formulario de Creación / Inicio de Sesión de Cuenta SpotiLinux -->
+          <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px; margin-bottom:12px;">
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+              <button class="btn-chip active" id="tabAccRegisterBtn" style="flex:1;" onclick="setAccountFormMode('register')">✨ Crear Cuenta</button>
+              <button class="btn-chip" id="tabAccLoginBtn" style="flex:1;" onclick="setAccountFormMode('login')">🔑 Iniciar Sesión</button>
+            </div>
+            <div class="field-group">
+              <label id="lblAccUsername">Nombre de Usuario:</label>
+              <input type="text" id="accUsername" placeholder="Ej. jinsoon005" />
+            </div>
+            <div class="field-group" id="accEmailGroup">
+              <label>Correo electrónico:</label>
+              <input type="email" id="accEmail" placeholder="ejemplo@correo.com" />
+            </div>
+            <div class="field-group">
+              <label>Contraseña:</label>
+              <input type="password" id="accPassword" placeholder="Contraseña de tu cuenta SpotiLinux" />
+            </div>
+            <button class="btn-chip active" id="btnSubmitAccount" style="width:100%; padding:9px; margin-top:4px;" onclick="submitSpotiAccountForm()">
+              ✨ Crear Cuenta y Guardar en Drive
+            </button>
+            <div id="accFormStatus" style="margin-top:6px; font-size:11px; color:var(--green-bright);"></div>
           </div>
 
           <div style="display:flex; gap:6px; margin-bottom:10px;">
-            <button class="btn-chip active" style="flex:1; padding:9px;" onclick="openGoogleSignInPopup()">
-              🔑 Iniciar sesión con cuenta de Google
+            <button class="btn-chip" style="flex:1; padding:9px;" onclick="openGoogleSignInPopup()">
+              🔑 Token OAuth Google
             </button>
-            <button class="btn-chip" style="padding:9px;" onclick="syncCloudPlaylists()">
-              ☁️ Sincronizar Playlists
+            <button class="btn-chip active" style="flex:1; padding:9px;" onclick="syncCloudPlaylists()">
+              ☁️ Sincronizar Cuenta y Drive
             </button>
           </div>
 
           <div class="field-group">
-            <label>Modo predeterminado al importar desde tu Drive:</label>
+            <label>Modo al importar desde la carpeta «Musica» del Drive:</label>
             <div style="display:flex; gap:6px; margin-top:4px;">
               <button class="btn-chip active" id="modeStreamBtn" style="flex:1;" onclick="setDriveImportMode('stream')">🎧 Escuchar en Línea</button>
               <button class="btn-chip" id="modeDownloadBtn" style="flex:1;" onclick="setDriveImportMode('download')">⬇️ Descargar a la App</button>
             </div>
           </div>
 
+          <div class="field-group" style="display:flex; align-items:center; gap:8px; margin:8px 0;">
+            <input type="checkbox" id="chkVerifyDuplicates" checked onchange="savePersistentState()" style="width:18px; height:18px; accent-color:#1ed760;" />
+            <label for="chkVerifyDuplicates" style="margin:0; color:#1ed760; font-weight:700; font-size:11px;">
+              🛡️ Activar verificación de duplicados al descargar canciones del Drive
+            </label>
+          </div>
+
           <div class="field-group">
-            <label>Token de Acceso de Google (se autocompleta al iniciar sesión o pégalo aquí):</label>
+            <label>Carpeta Raíz de Google Drive (contiene la BD y la subcarpeta «Musica»):</label>
+            <input type="text" id="gdFolder" value="1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT" placeholder="1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT" />
+          </div>
+          <div class="field-group">
+            <label>Token de Acceso OAuth 2.0 (para subir canciones y guardar BD en Drive):</label>
             <input type="text" id="gdToken" placeholder="ya29.a0AfH6SM..." oninput="handleTokenManualInput()" />
           </div>
           <div class="field-group">
-            <label>Client ID OAuth de Google Cloud (opcional para flujo automático):</label>
+            <label>Client ID OAuth de Google Cloud (opcional):</label>
             <input type="text" id="gdClientId" placeholder="123456789-abc.apps.googleusercontent.com" />
-          </div>
-          <div class="field-group">
-            <label>Carpeta de Música en Drive (se detecta sola o pega enlace/ID):</label>
-            <input type="text" id="gdFolder" placeholder="Automático (busca 'Music' / 'Música' en tu Drive)" />
           </div>
           <div class="field-group">
             <label>API Key o Enlaces directos (opcional):</label>
             <input type="text" id="gdApiKey" placeholder="API Key (AIzaSy...) o enlace https://drive.google.com/..." />
           </div>
 
-          <div style="display:flex; gap:6px;">
-            <button class="btn-chip active" style="flex:1; padding:9px; font-size:12px;" onclick="autoDiscoverDriveMusic()">
-              🔍 Auto-Escanear Música de Drive
+          <input type="file" id="driveUploadPicker" multiple accept="audio/*,.mp3,.flac,.wav,.m4a,.ogg,.opus" style="display:none" onchange="uploadSelectedFilesToDrive(event)" />
+
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn-chip active" style="flex:1; padding:9px; font-size:11px;" onclick="autoDiscoverDriveMusic()">
+              🔍 Escanear «Musica»
             </button>
-            <button class="btn-chip" style="padding:9px; font-size:12px;" onclick="downloadAllCloudTracks()">
+            <button class="btn-chip" style="flex:1; padding:9px; font-size:11px;" onclick="triggerDriveUploadPicker()">
+              ⬆️ Subir a «Musica»
+            </button>
+            <button class="btn-chip" style="padding:9px; font-size:11px;" onclick="downloadAllCloudTracks()">
               ⬇️ Descargar Todas
             </button>
           </div>
@@ -774,21 +811,55 @@ let visMode = 0;
 let nativeDurationMs = 28000;
 let currentEqValues = [0, 0, 0, 0, 0];
 
+const DEFAULT_DRIVE_ROOT_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+const CLOUD_DB_FILENAME = "spotilinux_database.json";
+let userAccount = null; // { username, email, passwordHash }
+let accountsDb = {}; // Mapa de cuentas sincronizado con spotilinux_database.json en Drive
+let accountFormMode = "register"; // "register" | "login"
+let googleUserProfile = null;
+let cachedMusicaFolderId = "";
+
 const audio = document.getElementById("audioPlayer");
+
+function normalizeTrackKey(str) {
+  return String(str || "")
+    .replace(/\.[^/.]+$/, "")
+    .replace(/^gd_[A-Za-z0-9_-]+__/, "")
+    .replace(/^gd_/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function simplePasswordHash(pw) {
+  let s = "spotilinux_salt_v1:" + String(pw || "");
+  let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length;
+  for (let i = 0, ch; i < s.length; i++) {
+    ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
 
 /* ---------------- PERSISTENCIA DE ESTADO Y PLAYLISTS ---------------- */
 function savePersistentState() {
   const cloudTracksOnly = tracks.filter(t => t.cloud && !t.downloaded);
   const likedIds = tracks.filter(t => t.liked).map(t => t.id);
+  const chkDedup = document.getElementById("chkVerifyDuplicates");
   const stateObj = {
     playlists,
     likedIds,
     cloudTracksOnly,
+    userAccount,
+    accountsDb,
     gdToken: document.getElementById("gdToken").value.trim(),
     gdClientId: document.getElementById("gdClientId").value.trim(),
-    gdFolder: document.getElementById("gdFolder").value.trim(),
+    gdFolder: document.getElementById("gdFolder").value.trim() || DEFAULT_DRIVE_ROOT_FOLDER_ID,
     gdApiKey: document.getElementById("gdApiKey").value.trim(),
     driveImportMode,
+    verifyDuplicates: chkDedup ? chkDedup.checked : true,
     welcomeDone: localStorage.getItem("welcome_done") === "1"
   };
   const raw = JSON.stringify(stateObj);
@@ -810,17 +881,23 @@ function loadPersistentState() {
       if (Array.isArray(st.playlists) && st.playlists.length > 0) playlists = st.playlists;
       if (Array.isArray(st.cloudTracksOnly)) {
         st.cloudTracksOnly.forEach(ct => {
-          if (!tracks.some(x => x.id === ct.id)) tracks.unshift(ct);
+          if (!tracks.some(x => x.id === ct.id || (normalizeTrackKey(x.title) && normalizeTrackKey(x.title) === normalizeTrackKey(ct.title)))) {
+            tracks.unshift(ct);
+          }
         });
       }
       if (Array.isArray(st.likedIds)) {
         tracks.forEach(t => { if (st.likedIds.includes(t.id)) t.liked = true; });
       }
+      if (st.userAccount) userAccount = st.userAccount;
+      if (st.accountsDb && typeof st.accountsDb === "object") accountsDb = st.accountsDb;
       if (st.gdToken) document.getElementById("gdToken").value = st.gdToken;
       if (st.gdClientId) document.getElementById("gdClientId").value = st.gdClientId;
-      if (st.gdFolder) document.getElementById("gdFolder").value = st.gdFolder;
+      document.getElementById("gdFolder").value = st.gdFolder || DEFAULT_DRIVE_ROOT_FOLDER_ID;
       if (st.gdApiKey) document.getElementById("gdApiKey").value = st.gdApiKey;
       if (st.driveImportMode) setDriveImportMode(st.driveImportMode);
+      const chkDedup = document.getElementById("chkVerifyDuplicates");
+      if (chkDedup && typeof st.verifyDuplicates === "boolean") chkDedup.checked = st.verifyDuplicates;
       if (st.welcomeDone) localStorage.setItem("welcome_done", "1");
     } catch (_e) {}
   }
@@ -839,10 +916,22 @@ function mergeScannedDeviceTracks(savedList) {
   if (!Array.isArray(savedList)) return;
   let newCount = 0;
   savedList.forEach(item => {
-    const exists = tracks.some(t => t.src === item.src || t.id === item.id);
-    if (!exists) {
+    const normTitle = normalizeTrackKey(item.title);
+    const existingIdx = tracks.findIndex(t =>
+      t.src === item.src ||
+      t.id === item.id ||
+      (item.driveId && t.driveId === item.driveId) ||
+      (normTitle && normalizeTrackKey(t.title) === normTitle)
+    );
+    if (existingIdx >= 0) {
+      // Si ya existía como pista online de Drive, actualizarla al archivo local descargado sin duplicar
+      tracks[existingIdx].src = item.src;
+      tracks[existingIdx].downloaded = true;
+      if (item.driveId) tracks[existingIdx].driveId = item.driveId;
+    } else {
       tracks.unshift({
         id: item.id,
+        driveId: item.driveId || "",
         title: item.title || "Canción del dispositivo",
         artist: item.artist || "Carpeta SpotiLinux 📱",
         album: item.album || "Biblioteca Guardada",
@@ -1777,11 +1866,184 @@ function deleteSelectedPlaylist() {
   showToast(`🗑 Playlist «${name}» eliminada`);
 }
 
-/* ---------------- GOOGLE DRIVE: ACCESO DESDE EL INICIO + AUTO-BÚSQUEDA DE CARPETA MÚSICA + ONLINE/OFFLINE ---------------- */
+/* ---------------- SISTEMA DE CUENTAS (USUARIO, CORREO, CONTRASEÑA) + GOOGLE DRIVE «MUSICA» ---------------- */
 function setDriveImportMode(mode) {
   driveImportMode = mode;
   document.getElementById("modeStreamBtn").classList.toggle("active", mode === "stream");
   document.getElementById("modeDownloadBtn").classList.toggle("active", mode === "download");
+}
+
+function setAccountFormMode(mode) {
+  accountFormMode = mode;
+  const regBtn = document.getElementById("tabAccRegisterBtn");
+  const logBtn = document.getElementById("tabAccLoginBtn");
+  const emailGrp = document.getElementById("accEmailGroup");
+  const lblUser = document.getElementById("lblAccUsername");
+  const submitBtn = document.getElementById("btnSubmitAccount");
+  if (regBtn) regBtn.classList.toggle("active", mode === "register");
+  if (logBtn) logBtn.classList.toggle("active", mode === "login");
+  if (mode === "register") {
+    if (emailGrp) emailGrp.style.display = "block";
+    if (lblUser) lblUser.textContent = "Nombre de Usuario:";
+    if (submitBtn) submitBtn.textContent = "✨ Crear Cuenta y Guardar en Drive";
+  } else {
+    if (emailGrp) emailGrp.style.display = "none";
+    if (lblUser) lblUser.textContent = "Usuario o Correo electrónico:";
+    if (submitBtn) submitBtn.textContent = "🔑 Iniciar Sesión y Recuperar Playlists";
+  }
+}
+
+function collectCurrentDriveTracksForAccount() {
+  return tracks.filter(t => t.cloud || t.driveId || String(t.id).startsWith("gd_")).map(t => ({
+    id: t.id,
+    file_id: t.driveId || String(t.id).replace(/^gd_/, ""),
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    genre: t.genre || "Cloud",
+    src: t.src
+  }));
+}
+
+function applyAccountRecordToState(acc) {
+  if (!acc) return;
+  if (Array.isArray(acc.drive_tracks)) {
+    acc.drive_tracks.forEach(dt => {
+      const fid = dt.file_id || String(dt.id || "").replace(/^gd_/, "");
+      if (!fid) return;
+      const cid = "gd_" + fid;
+      const normKey = normalizeTrackKey(dt.title);
+      const exists = tracks.some(x => x.id === cid || x.driveId === fid || (normKey && normalizeTrackKey(x.title) === normKey));
+      if (!exists) {
+        tracks.unshift({
+          id: cid,
+          driveId: fid,
+          title: dt.title || ("Canción Drive " + fid.substring(0, 6)),
+          artist: dt.artist || "Google Drive Cloud ☁️",
+          album: dt.album || "Google Drive (Musica)",
+          genre: dt.genre || "Cloud",
+          src: `https://drive.google.com/uc?export=download&id=${fid}`,
+          liked: false,
+          cloud: true,
+          downloaded: false,
+          color: "#00d2ff"
+        });
+      }
+    });
+  }
+  const cloudPls = Array.isArray(acc.playlists)
+    ? acc.playlists
+    : (acc.playlists && typeof acc.playlists === "object" ? Object.values(acc.playlists) : []);
+  cloudPls.forEach(cPl => {
+    if (!cPl) return;
+    const tIds = cPl.trackIds || cPl.track_ids || [];
+    const localPl = playlists.find(p => p.id === cPl.id || (p.name && cPl.name && p.name.toLowerCase() === cPl.name.toLowerCase()));
+    if (localPl) {
+      localPl.trackIds = Array.from(new Set([...localPl.trackIds, ...tIds]));
+    } else {
+      playlists.push({
+        id: cPl.id || ("pl_" + Date.now()),
+        name: cPl.name || "Playlist Sincronizada",
+        desc: cPl.desc || cPl.description || "Sincronizada desde tu cuenta SpotiLinux",
+        trackIds: tIds
+      });
+    }
+  });
+  const likedArr = acc.likedIds || acc.liked_ids || [];
+  if (Array.isArray(likedArr)) {
+    tracks.forEach(t => { if (likedArr.includes(t.id)) t.liked = true; });
+  }
+}
+
+async function submitSpotiAccountForm() {
+  const userInp = (document.getElementById("accUsername").value || "").trim();
+  const emailInp = (document.getElementById("accEmail").value || "").trim().toLowerCase();
+  const passInp = document.getElementById("accPassword").value || "";
+  const stEl = document.getElementById("accFormStatus");
+
+  if (accountFormMode === "register") {
+    if (!userInp || !emailInp || !passInp) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa Usuario, Correo electrónico y Contraseña.";
+      return;
+    }
+    if (!emailInp.includes("@")) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa un correo electrónico válido.";
+      return;
+    }
+  } else {
+    if (!userInp || !passInp) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa tu Usuario (o Correo) y tu Contraseña.";
+      return;
+    }
+  }
+
+  if (stEl) stEl.textContent = "☁️ Sincronizando base de datos con Google Drive...";
+  await pullCloudDatabaseFromDrive();
+
+  const pwHash = simplePasswordHash(passInp);
+  if (accountFormMode === "register") {
+    const existing = accountsDb[emailInp];
+    if (existing && existing.passwordHash && existing.passwordHash !== pwHash) {
+      if (stEl) stEl.textContent = "⚠️ Ese correo ya está registrado con otra contraseña. Usa «Iniciar Sesión».";
+      return;
+    }
+    const rec = {
+      username: userInp,
+      email: emailInp,
+      passwordHash: pwHash,
+      updatedAt: Date.now(),
+      playlists: playlists,
+      likedIds: tracks.filter(t => t.liked).map(t => t.id),
+      drive_tracks: collectCurrentDriveTracksForAccount()
+    };
+    if (existing) applyAccountRecordToState(existing);
+    accountsDb[emailInp] = rec;
+    userAccount = { username: userInp, email: emailInp, passwordHash: pwHash };
+    savePersistentState();
+    updateAccountUI();
+    await uploadPlaylistsToDrive();
+    if (stEl) stEl.textContent = `✔ Cuenta «${userInp}» (${emailInp}) creada y vinculada al Drive.`;
+    showToast(`👤 Cuenta ${userInp} creada y vinculada`);
+  } else {
+    const qLow = userInp.toLowerCase();
+    let foundKey = null;
+    let foundAcc = null;
+    for (const [k, acc] of Object.entries(accountsDb)) {
+      if (!acc) continue;
+      if (k.toLowerCase() === qLow || String(acc.email || "").toLowerCase() === qLow || String(acc.username || "").toLowerCase() === qLow) {
+        foundKey = k;
+        foundAcc = acc;
+        break;
+      }
+    }
+    if (!foundAcc) {
+      if (stEl) stEl.textContent = "⚠️ No se encontró esa cuenta. Créala en «Crear Cuenta».";
+      return;
+    }
+    if (foundAcc.passwordHash && foundAcc.passwordHash !== pwHash) {
+      if (stEl) stEl.textContent = "⚠️ Contraseña incorrecta.";
+      return;
+    }
+    applyAccountRecordToState(foundAcc);
+    userAccount = { username: foundAcc.username, email: foundAcc.email || foundKey, passwordHash: pwHash };
+    foundAcc.playlists = playlists;
+    foundAcc.likedIds = tracks.filter(t => t.liked).map(t => t.id);
+    foundAcc.drive_tracks = collectCurrentDriveTracksForAccount();
+    savePersistentState();
+    renderHomePlaylists();
+    renderTracks();
+    updateAccountUI();
+    await uploadPlaylistsToDrive();
+    if (stEl) stEl.textContent = `✔ Sesión iniciada: ${userAccount.username} (${userAccount.email}). Playlists y canciones restauradas.`;
+    showToast(`🔑 Bienvenido, ${userAccount.username}`);
+  }
+}
+
+function logoutSpotiAccount() {
+  userAccount = null;
+  savePersistentState();
+  updateAccountUI();
+  showToast("Sesión cerrada");
 }
 
 function openGoogleSignInPopup() {
@@ -1839,6 +2101,19 @@ function updateAccountUI() {
   const dNameEl = document.getElementById("driveAccountName");
   const dSubEl = document.getElementById("driveAccountSub");
   const dAvatarEl = document.getElementById("driveAvatar");
+  const logoutBtn = document.getElementById("btnLogoutAccount");
+
+  if (userAccount && userAccount.username) {
+    const nameStr = `👤 ${userAccount.username}`;
+    const subStr = `${userAccount.email} • Drive (${DEFAULT_DRIVE_ROOT_FOLDER_ID.substring(0, 8)}…/Musica) 🛡️`;
+    if (nameEl) nameEl.textContent = nameStr;
+    if (subEl) subEl.textContent = subStr;
+    if (dNameEl) dNameEl.textContent = nameStr;
+    if (dSubEl) dSubEl.textContent = subStr;
+    if (logoutBtn) logoutBtn.style.display = "inline-block";
+    return;
+  }
+  if (logoutBtn) logoutBtn.style.display = "none";
 
   if (googleUserProfile && googleUserProfile.email) {
     const nameStr = googleUserProfile.displayName || "Usuario de Google";
@@ -1855,16 +2130,16 @@ function updateAccountUI() {
   } else {
     const token = document.getElementById("gdToken").value.trim();
     if (token) {
-      const msg = "Playlists sincronizadas con Google Drive ☁️";
+      const msg = "Playlists y carpeta «Musica» sincronizadas con Google Drive ☁️";
       if (nameEl) nameEl.textContent = "Cuenta de Google Conectada";
       if (subEl) subEl.textContent = msg;
       if (dNameEl) dNameEl.textContent = "Cuenta de Google Conectada";
       if (dSubEl) dSubEl.textContent = msg;
     } else {
-      if (nameEl) nameEl.textContent = "Cuenta de Google / SpotiLinux";
-      if (subEl) subEl.textContent = "Toca para conectar Google Drive y sincronizar en la nube";
+      if (nameEl) nameEl.textContent = "Crear Cuenta / Google Drive (Musica)";
+      if (subEl) subEl.textContent = "Toca para crear tu cuenta (Usuario, Correo, Contraseña) y vincular Drive";
       if (dNameEl) dNameEl.textContent = "Sin cuenta vinculada";
-      if (dSubEl) dSubEl.textContent = "Inicia sesión con Google para sincronizar tus Playlists";
+      if (dSubEl) dSubEl.textContent = "Crea tu cuenta con Usuario, Correo y Contraseña abajo";
     }
   }
 }
@@ -1878,85 +2153,108 @@ function handleTokenManualInput() {
   }
 }
 
-async function syncCloudPlaylists() {
+async function pullCloudDatabaseFromDrive() {
   const token = document.getElementById("gdToken").value.trim();
-  const statusEl = document.getElementById("cloudSyncStatus");
-  if (!token) {
-    if (statusEl) statusEl.textContent = "⚠️ Primero inicia sesión o pega tu Token de Google.";
-    return;
-  }
-  if (statusEl) statusEl.textContent = "☁️ Sincronizando playlists con tu cuenta de Google...";
+  const apiKey = document.getElementById("gdApiKey").value.trim();
+  const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+  if (!token && !apiKey) return null;
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
 
   try {
-    await fetchGoogleUserProfile();
-
-    // 1. Buscar si ya existe 'spotilinux_cloud_playlists.json' en Drive
-    const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D%27spotilinux_cloud_playlists.json%27+and+trashed%3Dfalse&fields=files(id%2Cname)", {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
+    let q = `'${rootId}' in parents and (name = '${CLOUD_DB_FILENAME}' or name = 'spotilinux_cloud_playlists.json') and trashed = false`;
+    let sUrl = `https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name)&q=${encodeURIComponent(q)}`;
+    if (apiKey && !token) sUrl += `&key=${encodeURIComponent(apiKey)}`;
+    const sRes = await fetch(sUrl, { headers });
     let fileId = null;
-    if (searchRes.ok) {
-      const data = await searchRes.json();
-      if (data.files && data.files.length > 0) {
-        fileId = data.files[0].id;
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      if (sData.files && sData.files.length > 0) fileId = sData.files[0].id;
+    }
+    if (!fileId && token) {
+      const fallbackRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`name = '${CLOUD_DB_FILENAME}' and trashed = false`)}&fields=files(id,name)`, { headers });
+      if (fallbackRes.ok) {
+        const fbData = await fallbackRes.json();
+        if (fbData.files && fbData.files.length > 0) fileId = fbData.files[0].id;
       }
     }
-
-    // 2. Si existe, descargar y combinar
     if (fileId) {
-      const dlRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      let dlUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      if (apiKey && !token) dlUrl += `&key=${encodeURIComponent(apiKey)}`;
+      const dlRes = await fetch(dlUrl, { headers });
       if (dlRes.ok) {
         const cloudData = await dlRes.json();
-        if (Array.isArray(cloudData.playlists)) {
-          cloudData.playlists.forEach(cPl => {
-            const localPl = playlists.find(p => p.id === cPl.id || p.name.toLowerCase() === cPl.name.toLowerCase());
-            if (localPl) {
-              localPl.trackIds = Array.from(new Set([...localPl.trackIds, ...(cPl.trackIds || [])]));
-            } else {
-              playlists.push(cPl);
-            }
-          });
+        if (cloudData.accounts && typeof cloudData.accounts === "object") {
+          Object.assign(accountsDb, cloudData.accounts);
         }
-        if (Array.isArray(cloudData.likedIds)) {
-          tracks.forEach(t => {
-            if (cloudData.likedIds.includes(t.id)) t.liked = true;
-          });
+        applyAccountRecordToState(cloudData);
+        if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+          applyAccountRecordToState(accountsDb[userAccount.email]);
         }
         savePersistentState();
         renderHomePlaylists();
         renderTracks();
+        return fileId;
       }
     }
+  } catch (_e) {}
+  return null;
+}
 
-    // 3. Subir el estado actual a Google Drive (Crear o Actualizar)
+async function syncCloudPlaylists() {
+  const token = document.getElementById("gdToken").value.trim();
+  const statusEl = document.getElementById("cloudSyncStatus");
+  if (statusEl) statusEl.textContent = "☁️ Sincronizando cuenta, playlists y canciones de Drive...";
+
+  try {
+    if (token) await fetchGoogleUserProfile();
+    const fileId = await pullCloudDatabaseFromDrive();
     await uploadPlaylistsToDrive(fileId);
-    if (statusEl) statusEl.textContent = "✔ Playlists sincronizadas en tu cuenta de Google (disponibles en cualquier dispositivo).";
-    showToast("☁️ Playlists sincronizadas en la nube");
+    await autoDiscoverDriveMusic();
+    if (statusEl) statusEl.textContent = `✔ Base de datos (${CLOUD_DB_FILENAME}) y carpeta «Musica» sincronizadas en Drive.`;
+    showToast("☁️ Cuenta y Playlists sincronizadas con Drive");
   } catch (err) {
     if (statusEl) statusEl.textContent = "Aviso sincronización: " + err.message;
   }
 }
 
 async function uploadPlaylistsToDrive(existingFileId) {
+  const driveTracksList = collectCurrentDriveTracksForAccount();
+  if (userAccount && userAccount.email) {
+    accountsDb[userAccount.email] = {
+      username: userAccount.username,
+      email: userAccount.email,
+      passwordHash: userAccount.passwordHash,
+      updatedAt: Date.now(),
+      playlists: playlists,
+      likedIds: tracks.filter(t => t.liked).map(t => t.id),
+      drive_tracks: driveTracksList
+    };
+  }
+  savePersistentState();
+
   const token = document.getElementById("gdToken").value.trim();
   if (!token) return;
+  const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
 
   const payload = {
     app: "SpotiLinux",
-    version: "1.3.0",
+    version: "1.6.0",
     updatedAt: Date.now(),
+    rootFolderId: rootId,
     user: googleUserProfile,
+    account: userAccount,
+    accounts: accountsDb,
     playlists: playlists,
-    likedIds: tracks.filter(t => t.liked).map(t => t.id)
+    likedIds: tracks.filter(t => t.liked).map(t => t.id),
+    drive_tracks: driveTracksList
   };
   const jsonStr = JSON.stringify(payload, null, 2);
 
   try {
     let fileId = existingFileId;
     if (!fileId) {
-      const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D%27spotilinux_cloud_playlists.json%27+and+trashed%3Dfalse&fields=files(id%2Cname)", {
+      const q = `'${rootId}' in parents and name = '${CLOUD_DB_FILENAME}' and trashed = false`;
+      const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (searchRes.ok) {
@@ -1980,9 +2278,10 @@ async function uploadPlaylistsToDrive(existingFileId) {
       const closeDelim = "\r\n--" + boundary + "--";
 
       const metadata = {
-        name: "spotilinux_cloud_playlists.json",
+        name: CLOUD_DB_FILENAME,
         mimeType: "application/json",
-        description: "SpotiLinux Playlists & Cloud Sync across devices"
+        parents: [rootId],
+        description: "SpotiLinux Account, Playlists & Drive Musica Database"
       };
 
       const multipartRequestBody =
@@ -2004,7 +2303,7 @@ async function uploadPlaylistsToDrive(existingFileId) {
       });
     }
   } catch (e) {
-    console.error("Error subiendo playlists a Drive:", e);
+    console.error("Error subiendo BD a Drive:", e);
   }
 }
 
@@ -2019,49 +2318,203 @@ function extractDriveId(str) {
   return str;
 }
 
-async function autoDiscoverDriveMusic() {
-  const token = document.getElementById("gdToken").value.trim();
-  let folderInput = document.getElementById("gdFolder").value.trim();
-  const apiKey = document.getElementById("gdApiKey").value.trim();
-  const st = document.getElementById("gdStatus");
-
-  savePersistentState();
-
-  if (!token && !apiKey && !folderInput) {
-    st.textContent = "⚠️ Inicia sesión con tu cuenta de Google o ingresa tu Token / enlace de carpeta.";
-    return;
-  }
-
+async function resolveMusicaSubfolderId(rootFolderId, token, apiKey) {
   const headers = token ? { "Authorization": `Bearer ${token}` } : {};
-  let targetFolderId = extractDriveId(folderInput);
-
-  // 1. Si no se especificó carpeta, buscar automáticamente la carpeta "Music" / "Música" / "Musica" en el Drive del usuario
-  if (!targetFolderId && (token || apiKey)) {
-    st.textContent = "🔍 Buscando automáticamente tu carpeta de Música en Google Drive...";
+  if (token || apiKey) {
     try {
-      const folderQuery = "mimeType = 'application/vnd.google-apps.folder' and trashed = false and (name contains 'Music' or name contains 'Musica' or name contains 'Música' or name contains 'SpotiLinux')";
-      let fUrl = `https://www.googleapis.com/drive/v3/files?pageSize=10&fields=files(id,name)&q=${encodeURIComponent(folderQuery)}`;
-      if (apiKey && !token) fUrl += `&key=${encodeURIComponent(apiKey)}`;
-      const fResp = await fetch(fUrl, { headers });
-      if (fResp.ok) {
-        const fData = await fResp.json();
-        if (fData.files && fData.files.length > 0) {
-          targetFolderId = fData.files[0].id;
-          document.getElementById("gdFolder").value = targetFolderId;
-          st.textContent = `📂 Carpeta encontrada automáticamente: «${fData.files[0].name}». Importando canciones...`;
+      const q = `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      let url = `https://www.googleapis.com/drive/v3/files?pageSize=25&fields=files(id,name)&q=${encodeURIComponent(q)}`;
+      if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const sub = (data.files || []).find(f => {
+          const low = (f.name || "").trim().toLowerCase();
+          return low === "musica" || low === "música" || low === "music" || low.includes("musica");
+        });
+        if (sub) {
+          cachedMusicaFolderId = sub.id;
+          return sub.id;
+        }
+        // Si no existe y hay token con permisos de editor, crear la carpeta Musica
+        if (token) {
+          const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json; charset=UTF-8"
+            },
+            body: JSON.stringify({
+              name: "Musica",
+              mimeType: "application/vnd.google-apps.folder",
+              parents: [rootFolderId]
+            })
+          });
+          if (createRes.ok) {
+            const created = await createRes.json();
+            if (created.id) {
+              cachedMusicaFolderId = created.id;
+              return created.id;
+            }
+          }
         }
       }
     } catch (_e) {}
   }
+  return rootFolderId;
+}
 
-  // 2. Listar archivos de audio (dentro de la carpeta encontrada o en todo el Drive)
+function triggerDriveUploadPicker() {
+  const token = document.getElementById("gdToken").value.trim();
+  if (!token) {
+    showToast("🔑 Ingresa tu Token OAuth 2.0 para subir canciones a «Musica»");
+    document.getElementById("gdStatus").textContent = "⚠️ Para subir nuevas canciones a la carpeta «Musica» del Drive ingresa primero tu Token OAuth 2.0.";
+    return;
+  }
+  document.getElementById("driveUploadPicker").click();
+}
+
+async function uploadSelectedFilesToDrive(ev) {
+  const files = Array.from(ev.target.files || []);
+  if (!files.length) return;
+  const token = document.getElementById("gdToken").value.trim();
+  const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+  const st = document.getElementById("gdStatus");
+  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
+
+  st.textContent = "📂 Localizando carpeta «Musica» en el Drive...";
+  const musicaId = await resolveMusicaSubfolderId(rootId, token, "");
+  let uploadedCount = 0;
+  let skippedDupCount = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const normNew = normalizeTrackKey(f.name);
+    if (verifyDedup && tracks.some(t => t.cloud && normalizeTrackKey(t.title) === normNew)) {
+      skippedDupCount++;
+      continue;
+    }
+    st.textContent = `⬆️ Subiendo (${i + 1}/${files.length}): ${f.name} a «Musica»...`;
+    try {
+      const metaRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json; charset=UTF-8",
+          "X-Upload-Content-Type": f.type || "audio/mpeg",
+          "X-Upload-Content-Length": String(f.size)
+        },
+        body: JSON.stringify({
+          name: f.name,
+          parents: [musicaId]
+        })
+      });
+      const uploadUrl = metaRes.headers.get("Location");
+      if (uploadUrl) {
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": f.type || "audio/mpeg" },
+          body: f
+        });
+        if (putRes.ok) {
+          uploadedCount++;
+        }
+      }
+    } catch (_e) {}
+  }
+  ev.target.value = "";
+  st.textContent = `✔ ${uploadedCount} canciones subidas a «Musica» (${skippedDupCount} duplicadas omitidas).`;
+  showToast(`⬆️ ${uploadedCount} canciones subidas a Drive`);
+  await autoDiscoverDriveMusic();
+  await uploadPlaylistsToDrive();
+}
+
+window.onPublicDriveFolderFetched = function(filesList) {
+  const st = document.getElementById("gdStatus");
+  if (!Array.isArray(filesList)) return;
+  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
   let added = 0;
+  let skipped = 0;
+
+  filesList.forEach(f => {
+    if (!f || !f.id) return;
+    const fname = f.name || "";
+    if (fname === CLOUD_DB_FILENAME || fname.endsWith(".json")) return;
+    if (!/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(fname) && fname.includes(".")) return;
+
+    const cleanTitle = fname.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    const normTitle = normalizeTrackKey(cleanTitle);
+    const cid = "gd_" + f.id;
+    const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id || (verifyDedup && normTitle && normalizeTrackKey(x.title) === normTitle));
+
+    const trackObj = {
+      id: cid,
+      driveId: f.id,
+      title: cleanTitle,
+      artist: "Google Drive (Musica) ☁️",
+      album: "Google Drive • Musica",
+      genre: "Cloud",
+      src: `https://drive.google.com/uc?export=download&id=${f.id}`,
+      liked: existingIdx >= 0 ? tracks[existingIdx].liked : false,
+      cloud: true,
+      downloaded: existingIdx >= 0 ? tracks[existingIdx].downloaded : false,
+      color: "#00d2ff"
+    };
+
+    if (existingIdx >= 0) {
+      if (tracks[existingIdx].downloaded) {
+        skipped++;
+      } else {
+        tracks[existingIdx] = trackObj;
+      }
+    } else {
+      tracks.unshift(trackObj);
+      added++;
+    }
+
+    if (driveImportMode === "download" && !trackObj.downloaded) {
+      downloadSingleDriveTrack(trackObj, null);
+    }
+  });
+
+  savePersistentState();
+  renderTracks();
+  renderHomePlaylists();
+  if (st) {
+    st.textContent = `✔ Carpeta «Musica» sincronizada: ${added} nuevas, ${skipped} ya existentes (${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
+  }
+};
+
+async function autoDiscoverDriveMusic() {
+  const token = document.getElementById("gdToken").value.trim();
+  let folderInput = document.getElementById("gdFolder").value.trim() || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+  const apiKey = document.getElementById("gdApiKey").value.trim();
+  const st = document.getElementById("gdStatus");
+  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
+
+  document.getElementById("gdFolder").value = folderInput;
+  savePersistentState();
+
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+  let rootFolderId = extractDriveId(folderInput) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+
+  // Si no hay Token ni API Key, usar el extractor nativo de carpeta pública compartida (1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT -> Musica)
+  if (!token && !apiKey) {
+    if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
+      st.textContent = `🔍 Escaneando carpeta «Musica» en Drive (${rootFolderId.substring(0, 10)}…)...`;
+      window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
+      return;
+    }
+  }
+
+  st.textContent = "🔍 Localizando subcarpeta «Musica» dentro del Drive...";
+  const targetFolderId = await resolveMusicaSubfolderId(rootFolderId, token, apiKey);
+
+  let added = 0;
+  let skippedDup = 0;
   if (token || apiKey) {
     try {
-      let q = "trashed = false and (mimeType contains 'audio/' or name contains '.mp3' or name contains '.flac' or name contains '.wav' or name contains '.m4a' or name contains '.ogg')";
-      if (targetFolderId) {
-        q = `'${targetFolderId}' in parents and trashed = false`;
-      }
+      const q = `'${targetFolderId}' in parents and trashed = false`;
       let url = `https://www.googleapis.com/drive/v3/files?pageSize=100&fields=files(id,name,mimeType)&q=${encodeURIComponent(q)}`;
       if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
 
@@ -2078,22 +2531,30 @@ async function autoDiscoverDriveMusic() {
           if (apiKey && !token) streamUrl += `&key=${encodeURIComponent(apiKey)}`;
 
           const cleanTitle = (f.name || f.id).replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+          const normTitle = normalizeTrackKey(cleanTitle);
+          const cid = "gd_" + f.id;
+          const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id || (verifyDedup && normTitle && normalizeTrackKey(x.title) === normTitle));
+
+          if (existingIdx >= 0 && tracks[existingIdx].downloaded && verifyDedup) {
+            skippedDup++;
+            continue;
+          }
+
           const trackObj = {
-            id: "gd_" + f.id,
+            id: cid,
             driveId: f.id,
             title: cleanTitle,
-            artist: "Google Drive Cloud ☁️",
-            album: "Mi Google Drive",
+            artist: "Google Drive (Musica) ☁️",
+            album: "Google Drive • Musica",
             genre: "Cloud",
             src: streamUrl,
             authToken: token,
-            liked: false,
+            liked: existingIdx >= 0 ? tracks[existingIdx].liked : false,
             cloud: true,
             downloaded: false,
             color: "#00d2ff"
           };
 
-          const existingIdx = tracks.findIndex(x => x.id === trackObj.id);
           if (existingIdx >= 0) tracks[existingIdx] = trackObj;
           else tracks.unshift(trackObj);
           added++;
@@ -2102,43 +2563,42 @@ async function autoDiscoverDriveMusic() {
             downloadSingleDriveTrack(trackObj, null);
           }
         }
-      } else {
-        st.textContent = `Aviso de Google Drive (${resp.status}): Verifica tu sesión o permisos.`;
+      } else if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
+        window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
         return;
       }
-    } catch (err) {
-      st.textContent = "Error al conectar con Google Drive: " + err.message;
-      return;
+    } catch (_err) {
+      if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
+        window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
+        return;
+      }
     }
-  } else if (targetFolderId) {
-    // Si pegó un enlace directo de archivo
-    const streamUrl = `https://drive.google.com/uc?export=download&id=${targetFolderId}`;
-    const trackObj = {
-      id: "gd_" + targetFolderId,
-      driveId: targetFolderId,
-      title: "Canción de Drive " + targetFolderId.substring(0, 6),
-      artist: "Google Drive Cloud ☁️",
-      album: "Mi Google Drive",
-      genre: "Cloud",
-      src: streamUrl,
-      liked: false,
-      cloud: true,
-      downloaded: false,
-      color: "#00d2ff"
-    };
-    tracks.unshift(trackObj);
-    if (driveImportMode === "download") downloadSingleDriveTrack(trackObj, null);
-    added++;
   }
 
   savePersistentState();
   renderTracks();
-  st.textContent = `✔ ${added} canciones de Google Drive listas (${driveImportMode === 'download' ? 'Descargando a la app...' : 'Modo En Línea'}).`;
-  if (added > 0) switchTab("home");
+  renderHomePlaylists();
+  await uploadPlaylistsToDrive();
+  st.textContent = `✔ Carpeta «Musica» lista: ${added} canciones (${skippedDup} duplicados evitados • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
 }
 
 function downloadSingleDriveTrack(trackObj, btnEl) {
   if (!trackObj || !trackObj.driveId) return;
+  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
+  if (verifyDedup) {
+    const normT = normalizeTrackKey(trackObj.title);
+    const localDup = tracks.find(x => x.downloaded && (x.driveId === trackObj.driveId || x.id === "gd_" + trackObj.driveId || (normT && normalizeTrackKey(x.title) === normT)));
+    if (localDup && localDup.src && !localDup.src.startsWith("http")) {
+      trackObj.src = localDup.src;
+      trackObj.downloaded = true;
+      trackObj.artist = "Google Drive (Descargada) ✔";
+      savePersistentState();
+      renderTracks();
+      showToast(`🛡️ Duplicado evitado: «${trackObj.title}» ya está descargada`);
+      return;
+    }
+  }
+
   if (btnEl) btnEl.textContent = "⏳";
   const token = document.getElementById("gdToken").value.trim();
   const apiKey = document.getElementById("gdApiKey").value.trim();
@@ -2151,20 +2611,26 @@ function downloadSingleDriveTrack(trackObj, btnEl) {
 function downloadAllCloudTracks() {
   const cloudPending = tracks.filter(t => t.cloud && !t.downloaded && t.driveId);
   if (!cloudPending.length) {
-    document.getElementById("gdStatus").textContent = "Todas las pistas de Drive ya están descargadas o no hay pistas pendientes.";
+    document.getElementById("gdStatus").textContent = "🛡️ Todas las pistas de «Musica» ya están descargadas (sin duplicados pendientes).";
+    showToast("🛡️ Todas las canciones ya están descargadas");
     return;
   }
-  document.getElementById("gdStatus").textContent = `⬇️ Descargando ${cloudPending.length} canciones a la carpeta SpotiLinuxMusic...`;
+  document.getElementById("gdStatus").textContent = `⬇️ Verificando duplicados y descargando ${cloudPending.length} canciones a SpotiLinuxMusic...`;
   cloudPending.forEach(t => downloadSingleDriveTrack(t, null));
 }
 
-window.onDriveTrackDownloaded = function(fileId, savedPath, ok) {
+window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped) {
   if (!ok || !savedPath) return;
   const t = tracks.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
   if (t) {
     t.src = savedPath;
     t.downloaded = true;
     t.artist = "Google Drive (Descargada) ✔";
+    if (duplicateSkipped) {
+      showToast(`🛡️ Duplicado evitado: «${t.title}» ya existía`);
+    } else {
+      showToast(`⬇️ Descargada: «${t.title}»`);
+    }
   }
   savePersistentState();
   renderTracks();
@@ -2245,6 +2711,7 @@ const NUM_SPEC_BARS = 28;
 let specBars = new Array(NUM_SPEC_BARS).fill(0);
 let specPeaks = new Array(NUM_SPEC_BARS).fill(0);
 let prevRawMag = new Array(NUM_SPEC_BARS).fill(0);
+let specFloor = new Array(NUM_SPEC_BARS).fill(0.12);
 let agcCeiling = 0.65;
 let lastNativeSpecAt = 0;
 
@@ -2267,6 +2734,8 @@ function onTrackChangedForRhythm(trackObj) {
   clockBasePosSec = 0;
   clockBaseWallSec = performance.now() / 1000;
   onsetTimestamps = [];
+  specFloor.fill(0.12);
+  prevRawMag.fill(0);
   if (trackObj && trackObj.bpm && trackObj.bpm > 40) {
     trackKnownBpm = trackObj.bpm;
     currentBpm = trackObj.bpm;
@@ -2307,8 +2776,8 @@ function getSmoothPlaybackSec() {
 
 /**
  * Recibe las 28 bandas FFT reales enviadas desde MediaPlaybackService.java (Android Visualizer).
- * Aplica escala dB, inclinación espectral (+3.5 dB/octava) y control automático de ganancia (AGC)
- * más detección de onsets de graves para estimar el BPM en pistas externas.
+ * Aplica resta de piso adaptativo por banda (specFloor) + refuerzo de flujo espectral (transientes)
+ * para que las barras y ondas cambien con gran contraste en cada golpe, voz y sección de la canción.
  */
 window.onNativeSpectrum = function(rawBins) {
   if (!Array.isArray(rawBins) || rawBins.length === 0) return;
@@ -2323,47 +2792,52 @@ window.onNativeSpectrum = function(rawBins) {
 
   for (let i = 0; i < NUM_SPEC_BARS; i++) {
     const m = Math.max(0, Number(rawBins[i] || 0));
-    // Conversión a dB con compensación de agudos (+3.5 dB/octava aprox.)
     const db = 20 * Math.log10(m / 90 + 1e-4) + (i / NUM_SPEC_BARS) * 18;
-    let norm = Math.max(0, Math.min(1.4, (db + 26) / 36));
+    let norm = Math.max(0, Math.min(1.45, (db + 26) / 36));
     const eqGain = i < 8 ? eqBoostBass : (i < 18 ? eqBoostMid : eqBoostHigh);
     norm *= eqGain;
-    rawValues[i] = norm;
 
-    if (i < 9) {
-      const diff = norm - prevRawMag[i];
-      if (diff > 0) bassFlux += diff;
+    // Piso adaptativo por banda + transiente (spectral flux)
+    if (norm < specFloor[i]) {
+      specFloor[i] = 0.80 * specFloor[i] + 0.20 * norm;
+    } else {
+      specFloor[i] = 0.965 * specFloor[i] + 0.035 * norm;
     }
+    const diff = Math.max(0, norm - prevRawMag[i]);
+    if (i < 9) bassFlux += diff;
     prevRawMag[i] = norm;
+
+    const dynVal = Math.max(0, norm - specFloor[i] * 0.78) + diff * 1.45;
+    rawValues[i] = dynVal;
   }
 
-  // AGC suave
-  const framePeak = Math.max(...rawValues, 0.05);
+  // AGC dinámico
+  const framePeak = Math.max(...rawValues, 0.08);
   if (framePeak > agcCeiling) {
-    agcCeiling = 0.78 * agcCeiling + 0.22 * framePeak;
+    agcCeiling = 0.70 * agcCeiling + 0.30 * framePeak;
   } else {
-    agcCeiling = Math.max(0.38, 0.992 * agcCeiling + 0.008 * framePeak);
+    agcCeiling = Math.max(0.32, 0.985 * agcCeiling + 0.015 * framePeak);
   }
 
   for (let i = 0; i < NUM_SPEC_BARS; i++) {
-    const scaled = Math.pow(Math.min(1, rawValues[i] / (agcCeiling * 0.92)), 1.32);
+    const scaled = Math.pow(Math.min(1, rawValues[i] / (agcCeiling * 0.88)), 1.38);
     if (scaled >= specBars[i]) {
-      specBars[i] = 0.48 * specBars[i] + 0.52 * scaled;
+      specBars[i] = 0.28 * specBars[i] + 0.72 * scaled;
     } else {
-      specBars[i] = 0.80 * specBars[i] + 0.20 * scaled;
+      specBars[i] = 0.74 * specBars[i] + 0.26 * scaled;
     }
     if (specBars[i] >= specPeaks[i]) {
       specPeaks[i] = specBars[i];
     } else {
-      specPeaks[i] = Math.max(0, specPeaks[i] - 0.014);
+      specPeaks[i] = Math.max(0, specPeaks[i] - 0.018);
     }
   }
 
   // Detección de golpe (onset) y estimación de BPM para pistas sin BPM predefinido
   fluxAvg = 0.88 * fluxAvg + 0.12 * bassFlux;
   const nowSec = performance.now() / 1000;
-  if (bassFlux > fluxAvg * 1.45 && bassFlux > 0.22 && (nowSec - lastOnsetWallSec) > 0.26) {
-    onsetImpulse = Math.min(1, 0.55 + bassFlux * 0.25);
+  if (bassFlux > fluxAvg * 1.40 && bassFlux > 0.18 && (nowSec - lastOnsetWallSec) > 0.25) {
+    onsetImpulse = Math.min(1, 0.58 + bassFlux * 0.28);
     lastOnsetWallSec = nowSec;
     if (!trackKnownBpm) {
       onsetTimestamps.push(nowSec);
@@ -2502,13 +2976,16 @@ function animateLoop(nowMs) {
   onsetImpulse = Math.max(0, onsetImpulse - dt * 5.2);
 
   // Si el visualizador nativo de Android no envió trama en los últimos 220 ms (p.ej. sin permiso RECORD_AUDIO o en navegador),
-  // generamos un espectro armónico suave bloqueado exactamente a la fase del beat (sin vibración caótica)
+  // generamos un espectro musical con progresión de secciones (Intro/Verso/Build-up/Drop) y formantes móviles bloqueados al beat
   const nativeActive = isPlaying && (nowMs - lastNativeSpecAt < 220);
   if (!nativeActive) {
     const frac = ((beatPos % 1) + 1) % 1;
-    const kickEnv = Math.pow(Math.max(0, Math.cos((frac - 0.05) * Math.PI)), 3.0);
-    const snareEnv = Math.floor(beatPos) % 2 === 1 ? kickEnv * 0.85 : kickEnv * 0.25;
-    const hatEnv = Math.pow(Math.abs(Math.sin(beatPos * Math.PI)), 2.2) * 0.55;
+    const phrase16 = ((beatPos % 16) + 16) % 16;
+    const sectionEnergy = phrase16 < 4 ? 0.55 : (phrase16 < 12 ? 0.82 : (phrase16 < 14 ? 0.92 : 1.05));
+    const kickEnv = Math.pow(Math.max(0, Math.cos((frac - 0.05) * Math.PI)), 3.8) * sectionEnergy;
+    const snareEnv = (Math.floor(beatPos) % 2 === 1 ? Math.pow(Math.max(0, Math.cos((frac - 0.04) * Math.PI)), 3.2) * 0.92 : kickEnv * 0.18) * sectionEnergy;
+    const hatEnv = Math.pow(Math.abs(Math.sin(beatPos * Math.PI * 2)), 2.8) * 0.62 * sectionEnergy;
+    const melodyCenter = 0.44 + 0.18 * Math.sin(beatPos * Math.PI * 0.25);
 
     const eqBoostBass = Math.max(0.55, 1 + currentEqValues[0] / 18);
     const eqBoostMid  = Math.max(0.55, 1 + currentEqValues[2] / 18);
@@ -2518,20 +2995,20 @@ function animateLoop(nowMs) {
       let target = 0;
       if (isPlaying) {
         const x = i / (NUM_SPEC_BARS - 1);
-        const sub = Math.exp(-Math.pow(x / 0.22, 2)) * (0.28 + 0.62 * kickEnv) * eqBoostBass;
-        const mid = Math.exp(-Math.pow((x - 0.46) / 0.25, 2)) * (0.22 + 0.42 * snareEnv + 0.14 * Math.sin(beatPos * Math.PI * 0.5 + i * 0.35)) * eqBoostMid;
-        const air = Math.exp(-Math.pow((x - 0.82) / 0.22, 2)) * (0.16 + 0.38 * hatEnv) * eqBoostHigh;
-        target = Math.min(0.95, Math.max(0.05, sub + mid + air));
+        const sub = Math.exp(-Math.pow(x / 0.20, 2)) * (0.08 + 0.84 * kickEnv) * eqBoostBass;
+        const mid = Math.exp(-Math.pow((x - melodyCenter) / 0.20, 2)) * (0.10 + 0.55 * snareEnv + 0.24 * Math.max(0, Math.sin(beatPos * Math.PI * 0.5 + i * 0.42))) * eqBoostMid;
+        const air = Math.exp(-Math.pow((x - 0.84) / 0.18, 2)) * (0.06 + 0.52 * hatEnv) * eqBoostHigh;
+        target = Math.min(0.98, Math.max(0.03, sub + mid + air));
       }
       if (target >= specBars[i]) {
-        specBars[i] = 0.45 * specBars[i] + 0.55 * target;
+        specBars[i] = 0.28 * specBars[i] + 0.72 * target;
       } else {
-        specBars[i] = 0.82 * specBars[i] + 0.18 * target;
+        specBars[i] = 0.75 * specBars[i] + 0.25 * target;
       }
       if (specBars[i] >= specPeaks[i]) specPeaks[i] = specBars[i];
-      else specPeaks[i] = Math.max(0, specPeaks[i] - 0.012);
+      else specPeaks[i] = Math.max(0, specPeaks[i] - 0.016);
     }
-    if (isPlaying && kickEnv > 0.88) onsetImpulse = Math.max(onsetImpulse, 0.55);
+    if (isPlaying && kickEnv > 0.78) onsetImpulse = Math.max(onsetImpulse, 0.65);
   }
 
   let bass = 0, mid = 0, high = 0;
@@ -2771,6 +3248,21 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high) {
     vCtx.stroke();
   });
 
+  // Indicador de verificación rítmica en vivo en el analizador (♩ BPM + 4 pulsos del compás)
+  if (isPlaying && currentBpm > 0) {
+    vCtx.font = "bold 9px sans-serif";
+    vCtx.fillStyle = "rgba(210, 240, 225, 0.78)";
+    vCtx.fillText(`♩ ${Math.round(currentBpm)} BPM`, 8, 10);
+    const beatInBar = ((Math.floor(beatPos) % 4) + 4) % 4;
+    for (let b = 0; b < 4; b++) {
+      const active = b === beatInBar;
+      vCtx.fillStyle = active ? (b === 0 ? "#1ed760" : "#00d2ff") : "rgba(255,255,255,0.20)";
+      vCtx.beginPath();
+      vCtx.arc(58 + b * 7, 7, active ? 2.4 : 1.6, 0, Math.PI * 2);
+      vCtx.fill();
+    }
+  }
+
   if (visMode === 1) {
     // Modo Onda Neón sincronizada con el espectro real y el pulso del beat
     const midY = h * 0.52;
@@ -2836,13 +3328,17 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high) {
   vCtx.stroke();
 
   for (let i = 0; i < n; i++) {
-    const val = isPlaying ? Math.max(0.05, specBars[i]) : Math.max(0.03, specBars[i]);
+    const val = isPlaying ? Math.max(0.04, specBars[i]) : Math.max(0.025, specBars[i]);
     const bh = Math.max(2, val * maxBarH);
     const x = 8 + i * (barW + gap);
     const y = baseLine - bh;
 
     const barGrad = vCtx.createLinearGradient(0, y, 0, baseLine);
-    if (i % 2 === 0) {
+    if (val > 0.72) {
+      barGrad.addColorStop(0, "#ffffff");
+      barGrad.addColorStop(0.28, "#25e86c");
+      barGrad.addColorStop(1, "#00d2ff");
+    } else if (i % 2 === 0) {
       barGrad.addColorStop(0, "#25e86c");
       barGrad.addColorStop(1, "#15883e");
     } else {
@@ -2857,7 +3353,7 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high) {
     // Cabezal de pico flotante
     const pkH = Math.max(bh, specPeaks[i] * maxBarH);
     const pkY = Math.max(2, baseLine - pkH - 2.5);
-    vCtx.fillStyle = i % 2 === 0 ? "#80ffaa" : "#88ecff";
+    vCtx.fillStyle = val > 0.72 ? "#ffffff" : (i % 2 === 0 ? "#80ffaa" : "#88ecff");
     vCtx.fillRect(x, pkY, barW, 1.8);
 
     // Sutil reflejo inferior
@@ -2888,18 +3384,21 @@ window.addEventListener("DOMContentLoaded", () => {
   syncCanvasDimensions();
   animateLoop();
 
-  // Mostrar modal de inicio de sesión con Google Drive si aún no se ha configurado
-  const hasToken = Boolean(document.getElementById("gdToken").value.trim());
-  const welcomeDone = localStorage.getItem("welcome_done") === "1";
-  if (!hasToken && !welcomeDone) {
-    document.getElementById("welcomeModal").classList.add("open");
-  } else if (hasToken) {
-    // Si ya tenía cuenta conectada, sincronizar perfil y playlists en la nube
-    setTimeout(() => {
+  // Escanear automáticamente la carpeta «Musica» del Drive compartido 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT
+  setTimeout(() => {
+    const hasToken = Boolean(document.getElementById("gdToken").value.trim());
+    if (hasToken) {
       fetchGoogleUserProfile();
       syncCloudPlaylists();
+    } else {
       autoDiscoverDriveMusic();
-    }, 600);
+    }
+  }, 550);
+
+  const hasToken = Boolean(document.getElementById("gdToken").value.trim());
+  const welcomeDone = localStorage.getItem("welcome_done") === "1";
+  if (!hasToken && !userAccount && !welcomeDone) {
+    document.getElementById("welcomeModal").classList.add("open");
   }
 });
 </script>

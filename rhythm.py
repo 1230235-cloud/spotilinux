@@ -163,7 +163,14 @@ def beat_position(beat_times: np.ndarray, bpm: float, t: float) -> float:
 # --------------------------------------------------------------------------- #
 
 class SpectrumAnalyzer:
-    """FFT de 2048 puntos -> N barras logarítmicas (45 Hz - 9 kHz) en escala dB con AGC."""
+    """
+    FFT de 2048 puntos -> N barras logarítmicas (45 Hz - 9 kHz) en escala dB con:
+      - Inclinación espectral (+3.5 dB/octava)
+      - Suelo adaptativo por banda (elimina el colchón constante de canciones masterizadas fuertes)
+      - Impulso de transitorios por banda (spectral flux) para que bombos, cajas, voces y acordes
+        hagan cambiar claramente las barras al ritmo real de la música
+      - Onda de 128 puntos anclada en cruce por cero (zero-crossing trigger) para evitar parpadeo
+    """
 
     def __init__(self, n_bars: int = 32, win: int = 2048, fmin: float = 45.0, fmax: float = 9000.0) -> None:
         self.n_bars = n_bars
@@ -171,11 +178,18 @@ class SpectrumAnalyzer:
         self.fmin = fmin
         self.fmax = fmax
         self.hann = np.hanning(win).astype(np.float32)
-        self._ref = 0.6          # nivel de referencia (AGC lento)
+        self._ref = 0.65         # techo AGC
         self._wave_ref = 0.2
         self._cache_sr = 0
         self._lo = self._hi = None
         self._tilt = None
+        self._band_floor = np.full(n_bars, -48.0, dtype=np.float32)
+        self._prev_db = np.full(n_bars, -60.0, dtype=np.float32)
+
+    def reset(self) -> None:
+        self._band_floor.fill(-48.0)
+        self._prev_db.fill(-60.0)
+        self._ref = 0.65
 
     def _prepare(self, sr: int) -> None:
         if self._cache_sr == sr:
@@ -198,7 +212,6 @@ class SpectrumAnalyzer:
         seg = chunk[:n].astype(np.float32)
         mag = np.abs(np.fft.rfft(seg * self.hann)) / (n / 4.0)  # ≈ amplitud pico
 
-        cum = np.concatenate([[0.0], np.cumsum(mag)])
         lo, hi = self._lo, self._hi
         idx = np.arange(len(mag), dtype=np.float64)
         vals = np.empty(self.n_bars, dtype=np.float32)
@@ -206,24 +219,56 @@ class SpectrumAnalyzer:
             a, b = lo[i], max(hi[i], lo[i] + 1.0)
             ia, ib = int(a), int(b)
             if ib - ia >= 1:
-                vals[i] = float(np.max(mag[ia:ib + 1]) * 0.55 + np.mean(mag[ia:ib + 1]) * 0.45)
+                vals[i] = float(np.max(mag[ia:ib + 1]) * 0.62 + np.mean(mag[ia:ib + 1]) * 0.38)
             else:
                 vals[i] = float(np.interp((a + b) * 0.5, idx, mag))
 
-        db = 20.0 * np.log10(vals + 1e-6) + self._tilt
-        level = np.clip((db + 74.0) / 62.0, 0.0, 1.2)  # -74 dB..-12 dB -> 0..1
+        db = (20.0 * np.log10(vals + 1e-6) + self._tilt).astype(np.float32)
 
-        # Control de ganancia automático lento: llena la altura sin saturar
+        # 1) Suelo adaptativo por banda: sigue el fondo sostenido lento para que los golpes y cambios
+        #    musicales destaquen con alto contraste incluso en pistas muy comprimidas.
+        rising = db > self._band_floor
+        self._band_floor = np.where(
+            rising,
+            self._band_floor * 0.985 + db * 0.015,
+            self._band_floor * 0.92 + db * 0.08,
+        ).astype(np.float32)
+        self._band_floor = np.clip(self._band_floor, -58.0, -20.0)
+
+        # 2) Impulso de transitorio por banda (ataque de bombo, bajo, voz, hi-hat)
+        flux_db = np.maximum(0.0, db - self._prev_db)
+        self._prev_db = db * 0.65 + self._prev_db * 0.35
+
+        # Combinación de nivel absoluto (-50..-8 dB) + contraste dinámico sobre el suelo + transitorio
+        abs_level = np.clip((db + 50.0) / 42.0, 0.0, 1.15)
+        dyn_level = np.clip((db - (self._band_floor - 3.5)) / 24.0, 0.0, 1.2)
+        transient = np.clip(flux_db / 11.0, 0.0, 0.45)
+
+        level = abs_level * 0.42 + dyn_level * 0.58 + transient
+
+        # Control de ganancia automático lento
         peak = float(np.percentile(level, 92))
-        self._ref = max(peak, self._ref * 0.9988)
-        scale = 0.90 / max(self._ref, 0.50)
+        self._ref = max(peak, self._ref * 0.996)
+        scale = 0.92 / max(self._ref, 0.48)
         bars = np.clip(level * scale, 0.0, 1.0)
-        # Curva suave: separa mejor picos de fondo (evita que "todo suba junto")
-        bars = bars ** 1.35
+        # Curva de contraste musical: las pausas entre golpes bajan limpiamente y los pulsos suben con fuerza
+        bars = bars ** 1.55
         return bars.astype(np.float32), self._wave(seg)
 
     def _wave(self, seg: np.ndarray) -> np.ndarray:
-        pts = np.interp(np.linspace(0, len(seg) - 1, 128), np.arange(len(seg)), seg).astype(np.float32)
+        # Anclar en cruce por cero ascendente para que la onda sea estable y baile al ritmo sin temblar
+        search_len = min(len(seg) // 2, 768)
+        trig = 0
+        for i in range(4, search_len - 4):
+            if seg[i - 1] <= 0.0 < seg[i] and (seg[i + 2] - seg[i - 2]) > 0.0:
+                trig = i
+                break
+        win_len = min(len(seg) - trig, 1024)
+        sub = seg[trig:trig + win_len]
+        pts = np.interp(np.linspace(0, len(sub) - 1, 128), np.arange(len(sub)), sub).astype(np.float32)
+        # Envolvente suave en los bordes para una onda estética
+        edge = np.maximum(0.0, np.sin(np.linspace(0.0, np.pi, 128, dtype=np.float32))) ** 0.65
+        pts = pts * edge
         p = float(np.max(np.abs(pts)))
-        self._wave_ref = max(p, self._wave_ref * 0.997)
-        return np.clip(pts / max(self._wave_ref, 0.12) * 0.85, -1.0, 1.0)
+        self._wave_ref = max(p, self._wave_ref * 0.994)
+        return np.clip(pts / max(self._wave_ref, 0.10) * 0.90, -1.0, 1.0)

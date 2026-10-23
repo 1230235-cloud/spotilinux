@@ -192,6 +192,7 @@ class AudioEngine(QObject):
         self.current_track = track
         self._pcm_samples = None
         self._rhythm = None
+        self._analyzer.reset()
         self._last_raw_pos = -1
         self._pending_seek_ms = -1
 
@@ -428,16 +429,40 @@ class AudioEngine(QObject):
             raw_bars = np.zeros(num_bars, dtype=np.float32)
             wave_pts = np.zeros(128, dtype=np.float32)
 
-        # Reflejar ganancias del ecualizador de 5 bandas en el espectro visual
+        # Ritmo: posición en beats según la rejilla de tempo detectada
+        r = self._rhythm
+        bpm = 0.0
+        bpos = 0.0
+        conf = 0.0
+        beat_kick = 0.0
+        if r and r.get("bpm", 0.0) > 0 and len(r.get("beat_times", [])) > 1:
+            bpm = float(r["bpm"])
+            bpos = beat_position(r["beat_times"], bpm, pos_sec)
+            conf = float(r.get("confidence", 0.0))
+            env = r["env"]
+            fi = int(pos_sec * r["fps"])
+            onset_raw = float(env[fi]) / 3.2 if 0 <= fi < len(env) else 0.0
+            self._onset_smooth = max(min(1.0, onset_raw), self._onset_smooth * 0.78)
+            frac = bpos - int(bpos)
+            beat_kick = max(0.0, 1.0 - frac * 2.8) ** 2
+        else:
+            self._onset_smooth *= 0.80
+
+        # Reflejar ganancias del ecualizador de 5 bandas y acento rítmico del beat en el espectro visual
         if self.eq_enabled:
             band_centers = np.linspace(0, num_bars - 1, 5)
             eq_curve = np.interp(np.arange(num_bars), band_centers, self.eq_gains)
-            eq_mult = 10.0 ** (eq_curve / 30.0)
+            eq_mult = 10.0 ** (eq_curve / 36.0)
             raw_bars = np.clip(raw_bars * eq_mult, 0.0, 1.0)
 
-        # Suavizado temporal: ataque rápido, caída lenta (se ve fluido y natural, no nervioso)
-        attack = 0.62
-        release = 0.13
+        if bpm > 0:
+            # Acentuar graves y brillo rítmico justo en el golpe del beat para máxima respuesta musical
+            bass_weights = np.exp(-np.arange(num_bars) / 7.5).astype(np.float32)
+            raw_bars = np.clip(raw_bars + bass_weights * (beat_kick * 0.14 + self._onset_smooth * 0.12), 0.0, 1.0)
+
+        # Suavizado temporal con respuesta ágil: ataque rápido y caída dinámica entre pulsos
+        attack = 0.72
+        release = 0.25
         up = raw_bars > self._smooth_bars
         self._smooth_bars = np.where(
             up,
@@ -446,19 +471,7 @@ class AudioEngine(QObject):
         ).astype(np.float32)
 
         self.spectrum_updated.emit(self._smooth_bars.copy(), wave_pts)
-
-        # Ritmo: posición en beats según la rejilla de tempo detectada
-        r = self._rhythm
-        if r and r.get("bpm", 0.0) > 0 and len(r.get("beat_times", [])) > 1:
-            bpm = float(r["bpm"])
-            bpos = beat_position(r["beat_times"], bpm, pos_sec)
-            env = r["env"]
-            fi = int(pos_sec * r["fps"])
-            onset_raw = float(env[fi]) / 3.5 if 0 <= fi < len(env) else 0.0
-            self._onset_smooth = max(min(1.0, onset_raw), self._onset_smooth * 0.80)
-            self.beat_info.emit(bpm, bpos, float(r.get("confidence", 0.0)), self._onset_smooth)
-        else:
-            self.beat_info.emit(0.0, 0.0, 0.0, 0.0)
+        self.beat_info.emit(bpm, bpos, conf, self._onset_smooth)
 
     # -------------------- Callbacks internos de QtMultimedia -------------------- #
 

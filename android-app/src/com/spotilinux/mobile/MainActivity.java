@@ -36,6 +36,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static MainActivity instance;
@@ -180,6 +182,17 @@ public class MainActivity extends Activity {
         return clean;
     }
 
+    private String normalizeTrackKey(String name) {
+        if (name == null) return "";
+        String clean = name.replaceFirst("\\.[^.]+$", "");
+        if (clean.startsWith("gd_") && clean.contains("__")) {
+            clean = clean.substring(clean.indexOf("__") + 2);
+        } else if (clean.startsWith("gd_")) {
+            clean = clean.substring(3);
+        }
+        return clean.toLowerCase().replaceAll("[^a-z0-9]+", "");
+    }
+
     private String buildSavedTracksJson() {
         JSONArray arr = new JSONArray();
         File folder = getAppMusicFolder();
@@ -193,11 +206,19 @@ public class MainActivity extends Activity {
                             || lower.endsWith(".m4a") || lower.endsWith(".ogg") || lower.endsWith(".opus") || lower.endsWith(".aac")) {
                         try {
                             JSONObject obj = new JSONObject();
-                            String stem = fname.replaceFirst("\\.[^.]+$", "").replace("_", " ");
+                            String stem = fname.replaceFirst("\\.[^.]+$", "");
                             boolean fromDrive = fname.startsWith("gd_");
-                            if (fromDrive && stem.startsWith("gd ")) {
-                                stem = stem.substring(3).trim();
+                            String canonicalId = "saved_" + Math.abs(f.getAbsolutePath().hashCode());
+                            String driveId = "";
+                            if (fromDrive && stem.contains("__")) {
+                                int sep = stem.indexOf("__");
+                                canonicalId = stem.substring(0, sep);
+                                driveId = canonicalId.startsWith("gd_") ? canonicalId.substring(3) : "";
+                                stem = stem.substring(sep + 2);
+                            } else if (fromDrive && stem.startsWith("gd_")) {
+                                stem = stem.substring(3);
                             }
+                            stem = stem.replace("_", " ").trim();
                             String artist = fromDrive ? "Google Drive (Descargada) ✔" : "Carpeta SpotiLinux 📱";
                             String title = stem;
                             if (stem.contains(" - ")) {
@@ -205,7 +226,10 @@ public class MainActivity extends Activity {
                                 artist = parts[0].trim();
                                 title = parts[1].trim();
                             }
-                            obj.put("id", "saved_" + Math.abs(f.getAbsolutePath().hashCode()));
+                            obj.put("id", canonicalId);
+                            if (!driveId.isEmpty()) {
+                                obj.put("driveId", driveId);
+                            }
                             obj.put("title", title);
                             obj.put("artist", artist);
                             obj.put("album", fromDrive ? "Google Drive Offline" : "Biblioteca Guardada");
@@ -383,7 +407,25 @@ public class MainActivity extends Activity {
                 public void run() {
                     try {
                         File folder = getAppMusicFolder();
-                        String safeName = sanitizeFilename("gd_" + title + ".mp3");
+                        String targetNorm = normalizeTrackKey(title);
+                        File[] existingFiles = folder.listFiles();
+                        if (existingFiles != null) {
+                            for (File ef : existingFiles) {
+                                if (ef.isFile() && ef.length() > 1024) {
+                                    String fn = ef.getName();
+                                    boolean sameId = fn.startsWith("gd_" + fileId + "__") || fn.startsWith("gd_" + fileId + "_");
+                                    boolean sameTitle = !targetNorm.isEmpty() && normalizeTrackKey(fn).equals(targetNorm);
+                                    if (sameId || sameTitle) {
+                                        String escPath = ef.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+                                        String escId = fileId.replace("'", "\\'");
+                                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, true);");
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+
+                        String safeName = sanitizeFilename("gd_" + fileId + "__" + title + ".mp3");
                         File outFile = new File(folder, safeName);
 
                         String urlStr = "https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media";
@@ -416,14 +458,85 @@ public class MainActivity extends Activity {
                         if (outFile.exists() && outFile.length() > 1024) {
                             String escPath = outFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
                             String escId = fileId.replace("'", "\\'");
-                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true);");
+                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, false);");
                         } else {
                             outFile.delete();
-                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false);");
+                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false, false);");
                         }
                     } catch (Exception e) {
-                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false);");
+                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false, false);");
                     }
+                }
+            }).start();
+        }
+
+        private String fetchUrlText(String urlStr) {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                conn.setConnectTimeout(12000);
+                conn.setReadTimeout(15000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36");
+                try (InputStream in = conn.getInputStream();
+                     ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[16384];
+                    int r;
+                    while ((r = in.read(buf)) > 0) {
+                        bos.write(buf, 0, r);
+                    }
+                    return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                }
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        private void parseEmbeddedFolderHtml(String html, JSONArray outFiles, List<String> musicaSubfolders) {
+            if (html == null || html.isEmpty()) return;
+            try {
+                Pattern folderPat = Pattern.compile("href=\"https://drive\\.google\\.com/drive/(?:u/\\d+/)?folders/([A-Za-z0-9_-]{15,})\"[^>]*>([\\s\\S]*?)</a>");
+                Matcher fm = folderPat.matcher(html);
+                while (fm.find()) {
+                    String fid = fm.group(1);
+                    String inner = fm.group(2);
+                    Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<").matcher(inner);
+                    String name = tm.find() ? tm.group(1).trim() : "Carpeta";
+                    String low = name.toLowerCase();
+                    if (low.equals("musica") || low.equals("música") || low.equals("music") || low.contains("musica")) {
+                        if (!musicaSubfolders.contains(fid)) musicaSubfolders.add(fid);
+                    }
+                }
+
+                Pattern filePat = Pattern.compile("href=\"https://drive\\.google\\.com/file/d/([A-Za-z0-9_-]{15,})/[^\"]*\"[^>]*>([\\s\\S]*?)</a>");
+                Matcher fileM = filePat.matcher(html);
+                while (fileM.find()) {
+                    String fid = fileM.group(1);
+                    String inner = fileM.group(2);
+                    Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<").matcher(inner);
+                    String name = tm.find() ? tm.group(1).trim() : ("Drive_Track_" + fid.substring(0, 6) + ".mp3");
+                    JSONObject obj = new JSONObject();
+                    obj.put("id", fid);
+                    obj.put("name", name);
+                    outFiles.put(obj);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        @JavascriptInterface
+        public void fetchPublicDriveFolder(final String folderId) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    JSONArray filesArr = new JSONArray();
+                    List<String> musicaFolders = new ArrayList<>();
+                    String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + folderId + "#list");
+                    parseEmbeddedFolderHtml(htmlRoot, filesArr, musicaFolders);
+                    for (String subId : musicaFolders) {
+                        String htmlSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + subId + "#list");
+                        parseEmbeddedFolderHtml(htmlSub, filesArr, new ArrayList<String>());
+                    }
+                    String json = filesArr.toString();
+                    dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + json + ");");
                 }
             }).start();
         }
