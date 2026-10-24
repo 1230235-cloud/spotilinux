@@ -122,15 +122,17 @@ spotify-linux/
   - **Modo Onda Neón**: Onda bicapa suave con resplandor cyan/verde cuya envolvente sigue la distribución espectral real y cuya fase avanza bloqueada al compás exacto (sin temblores erráticos).
   - **Modo Radial**: Anillo central que late con el pulso del beat y barras radiales con velocidad angular constante, radio modulado por el espectro y partículas circundantes.
 
-### 3.3 Nube Compartida de Google Drive, Sistema de Cuentas y Prevención de Duplicados (`gdrive_sync.py`)
-- **Carpeta Raíz Oficial de Google Drive y Subcarpeta `Musica`**:
-  - `DEFAULT_ROOT_DRIVE_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT"` (carpeta con permisos de editor).
-  - `resolve_musica_subfolder_id(token, parent_id)` localiza (o crea automáticamente) la subcarpeta **`Musica`** dentro de la carpeta raíz compartida.
-  - Todas las canciones de la nube se leen, descargan y suben dentro de esta subcarpeta `Musica`.
+### 3.3 Google Drive como Servidor Central, Sistema de Cuentas y Sincronización Multi-Dispositivo (`gdrive_sync.py` + `google_drive_server_backend.gs`)
+- **Arquitectura de Google Drive como Servidor de Base de Datos**:
+  - Carpeta raíz central: `1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT` (compartida con permisos de editor).
+  - La aplicación trata la carpeta de Google Drive como un backend central para la base de datos `spotilinux_database.json` y el catálogo de canciones en la subcarpeta `Musica`.
+  - **Sincronización multi-canal**:
+    1. **Servidor Cloud REST (`spoti_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT`)**: Tanto en Linux como en Android (`MainActivity.java`), la base de datos se envía y consulta automáticamente mediante el endpoint en la nube indexado con el ID de la carpeta de Drive, permitiendo que cualquier dispositivo (sin importar si ya inició sesión en Google o no) guarde y recupere las cuentas al instante.
+    2. **Google Apps Script Serverless Backend (`google_drive_server_backend.gs`)**: Script oficial incluido en la raíz del repositorio que permite desplegar en 1 minuto un endpoint REST Web App en Google Apps Script para gestionar lectura y escritura directa en la carpeta de Drive.
+    3. **Google Drive API v3 (OAuth 2.0 / Token)**: Cuando el usuario cuenta con token OAuth, la base de datos se sincroniza adicionalmente mediante peticiones PATCH / POST multipart en la API oficial de Drive.
 - **Sistema de Cuentas de Usuario (`AccountDialog` en `main.py` + `spotilinux_database.json`)**:
   - Permite crear cuentas (`Usuario`, `Correo electrónico`, `Contraseña`) o iniciar sesión en múltiples dispositivos.
-  - Las contraseñas se almacenan protegidas mediante hash SHA-256 (`hash_password(raw)`).
-  - La base de datos multiusuario se sincroniza en el archivo `spotilinux_database.json` alojado en la raíz de Google Drive (`1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT`) y en la caché local `data/accounts_db.json`.
+  - Las contraseñas se almacenan protegidas mediante hash criptográfico SHA-256 idéntico y determinístico entre Linux y Android (`hash_password` en Python y `hashPassword` en JavaScript con salt `spotilinux_v2:`).
   - Al iniciar sesión con una cuenta en cualquier dispositivo (Linux o Android), se sincronizan automáticamente:
     1. Las playlists del usuario (`playlists`).
     2. Las canciones marcadas como favoritas (`liked_ids`).

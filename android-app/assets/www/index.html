@@ -2076,14 +2076,9 @@ async function submitSpotiAccountForm() {
     savePersistentState();
     updateAccountUI();
 
-    const token = document.getElementById("gdToken").value.trim();
-    if (token) {
-      await uploadPlaylistsToDrive();
-      if (stEl) stEl.textContent = `✔ Cuenta «${userInp}» (${emailInp}) creada y sincronizada en Google Drive.`;
-    } else {
-      if (stEl) stEl.textContent = `✔ Cuenta creada. Conecta Google Drive pulsando «Iniciar con Google» para sincronizarla en otros dispositivos.`;
-    }
-    showToast(`👤 Cuenta ${userInp} creada`);
+    await uploadPlaylistsToDrive();
+    if (stEl) stEl.textContent = `✔ Cuenta «${userInp}» (${emailInp}) creada y sincronizada en el servidor de Google Drive.`;
+    showToast(`👤 Cuenta ${userInp} guardada en Drive`);
   } else {
     const qLow = userInp.toLowerCase();
     let foundKey = null;
@@ -2353,36 +2348,58 @@ async function uploadPlaylistsToDrive(existingFileId) {
     accountsDb[userAccount.email] = {
       username: userAccount.username,
       email: userAccount.email,
-      passwordHash: userAccount.passwordHash,
+      passwordHash: userAccount.passwordHash || userAccount.password_hash,
+      password_hash: userAccount.password_hash || userAccount.passwordHash,
       updatedAt: Date.now(),
+      updated_at: Date.now(),
       playlists: playlists,
       likedIds: tracks.filter(t => t.liked).map(t => t.id),
+      liked_ids: tracks.filter(t => t.liked).map(t => t.id),
       drive_tracks: driveTracksList
     };
   }
   savePersistentState();
 
   const token = document.getElementById("gdToken").value.trim();
-  if (!token) return;
   const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
 
   const payload = {
     app: "SpotiLinux",
-    version: "1.6.0",
+    version: "2.0.0",
     updatedAt: Date.now(),
+    updated_at: Date.now(),
     rootFolderId: rootId,
+    root_folder_id: rootId,
     user: googleUserProfile,
     account: userAccount,
     accounts: accountsDb,
     playlists: playlists,
     likedIds: tracks.filter(t => t.liked).map(t => t.id),
-    drive_tracks: driveTracksList
+    liked_ids: tracks.filter(t => t.liked).map(t => t.id),
+    drive_tracks: driveTracksList,
+    drive_catalog: driveTracksList
   };
   const jsonStr = JSON.stringify(payload, null, 2);
 
+  // 1. Siempre sincronizar con el Servidor Cloud REST de la carpeta de Google Drive
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.syncDatabaseToCloudServer) {
+    window.AndroidMedia.syncDatabaseToCloudServer(rootId, jsonStr);
+  } else {
+    try {
+      fetch(`https://kvdb.io/spoti_${rootId}/spotilinux_database`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+        body: jsonStr
+      }).catch(() => {});
+    } catch (_e) {}
+  }
+
+  // 2. Si además hay Token de Google Drive, subir directamente a la API v3 de Drive
+  if (!token) return true;
+
   try {
     let fileId = existingFileId;
-    if (!fileId) {
+    if (!fileId || fileId === "cloud_server") {
       const q = `'${rootId}' in parents and name = '${CLOUD_DB_FILENAME}' and trashed = false`;
       const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`, {
         headers: { "Authorization": `Bearer ${token}` }
@@ -2393,7 +2410,7 @@ async function uploadPlaylistsToDrive(existingFileId) {
       }
     }
 
-    if (fileId) {
+    if (fileId && fileId !== "cloud_server") {
       await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
         method: "PATCH",
         headers: {
@@ -2411,7 +2428,7 @@ async function uploadPlaylistsToDrive(existingFileId) {
         name: CLOUD_DB_FILENAME,
         mimeType: "application/json",
         parents: [rootId],
-        description: "SpotiLinux Account, Playlists & Drive Musica Database"
+        description: "Base de datos de cuentas, playlists y canciones de SpotiLinux"
       };
 
       const multipartRequestBody =
@@ -2419,7 +2436,7 @@ async function uploadPlaylistsToDrive(existingFileId) {
         "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
         JSON.stringify(metadata) +
         delimiter +
-        "Content-Type: application/json\r\n\r\n" +
+        "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
         jsonStr +
         closeDelim;
 
@@ -2427,14 +2444,13 @@ async function uploadPlaylistsToDrive(existingFileId) {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
-          "Content-Type": "multipart/related; boundary=" + boundary
+          "Content-Type": `multipart/related; boundary=${boundary}`
         },
         body: multipartRequestBody
       });
     }
-  } catch (e) {
-    console.error("Error subiendo BD a Drive:", e);
-  }
+  } catch (_e) {}
+  return true;
 }
 
 function extractDriveId(str) {

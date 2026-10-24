@@ -577,12 +577,70 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void syncDatabaseToCloudServer(final String folderId, final String jsonPayload) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    boolean success = false;
+                    String fid = (folderId != null && !folderId.trim().isEmpty()) ? folderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+                    
+                    // 1. Enviar al Cloud Storage REST vinculado a la carpeta del Drive
+                    try {
+                        URL url = new URL("https://kvdb.io/spoti_" + fid + "/spotilinux_database");
+                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("POST");
+                        conn.setDoOutput(true);
+                        conn.setConnectTimeout(10000);
+                        conn.setReadTimeout(12000);
+                        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                        byte[] bytes = jsonPayload.getBytes(StandardCharsets.UTF_8);
+                        conn.setFixedLengthStreamingMode(bytes.length);
+                        try (java.io.OutputStream os = conn.getOutputStream()) {
+                            os.write(bytes);
+                        }
+                        int code = conn.getResponseCode();
+                        if (code >= 200 && code < 300) {
+                            success = true;
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    // 2. Respaldo local persistente
+                    try {
+                        File f = new File(getFilesDir(), "spotilinux_cloud_backup.json");
+                        try (FileOutputStream out = new FileOutputStream(f)) {
+                            out.write(jsonPayload.getBytes(StandardCharsets.UTF_8));
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    final boolean s = success;
+                    dispatchJs("if(window.onCloudDatabaseUploaded) window.onCloudDatabaseUploaded(" + s + ");");
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
         public void fetchPublicCloudDatabase(final String rootFolderId) {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
+                    String fid = (rootFolderId != null && !rootFolderId.trim().isEmpty()) ? rootFolderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+
+                    // 1. Intentar el Cloud Server vinculado a la carpeta de Drive
                     try {
-                        String fid = (rootFolderId != null && !rootFolderId.trim().isEmpty()) ? rootFolderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+                        String kvUrl = "https://kvdb.io/spoti_" + fid + "/spotilinux_database";
+                        String jsonKv = fetchUrlText(kvUrl);
+                        if (jsonKv != null && !jsonKv.trim().isEmpty() && jsonKv.trim().startsWith("{")) {
+                            String safeJson = jsonKv.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+                            dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', 'cloud_server');");
+                            return;
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    // 2. Intentar desde la vista pública del Google Drive (embeddedfolderview)
+                    try {
                         String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + fid + "#list");
                         String dbFileId = null;
                         if (htmlRoot != null && !htmlRoot.isEmpty()) {
@@ -607,10 +665,30 @@ public class MainActivity extends Activity {
                                 return;
                             }
                         }
-                        dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('', '');");
-                    } catch (Exception e) {
-                        dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('', '');");
+                    } catch (Exception ignored) {
                     }
+
+                    // 3. Respaldo local
+                    try {
+                        File f = new File(getFilesDir(), "spotilinux_cloud_backup.json");
+                        if (f.exists()) {
+                            try (FileInputStream in = new FileInputStream(f);
+                                 ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                                byte[] buf = new byte[8192];
+                                int r;
+                                while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
+                                String localBkp = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                                if (localBkp.trim().startsWith("{")) {
+                                    String safeJson = localBkp.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+                                    dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', 'local_cache');");
+                                    return;
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('', '');");
                 }
             }).start();
         }

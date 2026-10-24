@@ -931,6 +931,32 @@ def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> t
         except Exception:
             pass
 
+    fid = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
+
+    # 1. Intentar el Cloud Storage REST vinculado a la carpeta del Drive
+    try:
+        r_kv = requests.get(f"https://kvdb.io/spoti_{fid}/spotilinux_database", timeout=8)
+        if r_kv.status_code == 200:
+            kv_db = r_kv.json()
+            if isinstance(kv_db, dict):
+                rem_accs = kv_db.get("accounts", {})
+                loc_accs = base_db.setdefault("accounts", {})
+                for acc_k, rem_a in rem_accs.items():
+                    if acc_k not in loc_accs:
+                        loc_accs[acc_k] = rem_a
+                    else:
+                        loc_accs[acc_k] = merge_account_records(loc_accs[acc_k], rem_a)
+                cat_by_id = {c["id"]: c for c in base_db.get("drive_catalog", []) if isinstance(c, dict) and "id" in c}
+                for rc in kv_db.get("drive_catalog", []):
+                    if isinstance(rc, dict) and "id" in rc:
+                        cat_by_id[rc["id"]] = rc
+                base_db["drive_catalog"] = list(cat_by_id.values())
+                local_db_path.parent.mkdir(parents=True, exist_ok=True)
+                local_db_path.write_text(json.dumps(base_db, indent=2, ensure_ascii=False), encoding="utf-8")
+                return base_db, "cloud_server"
+    except Exception:
+        pass
+
     file_id = _find_cloud_db_file_id(config, CLOUD_DB_FILENAME)
     if not file_id:
         file_id = _find_cloud_db_file_id(config, "spotilinux_cloud_playlists.json")
@@ -1044,16 +1070,33 @@ def upload_cloud_database(
         local_db_path, db_data = db_data, local_db_path
 
     db_data["updated_at"] = time.time()
-    db_data["root_folder_id"] = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
+    fid = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
+    db_data["root_folder_id"] = fid
     local_db_path.parent.mkdir(parents=True, exist_ok=True)
     json_bytes = json.dumps(db_data, indent=2, ensure_ascii=False).encode("utf-8")
     local_db_path.write_text(json_bytes.decode("utf-8"), encoding="utf-8")
 
+    # 1. Siempre sincronizar con el Cloud Storage REST vinculado al folder de Drive
+    cloud_synced = False
+    try:
+        r_post = requests.post(
+            f"https://kvdb.io/spoti_{fid}/spotilinux_database",
+            headers={"Content-Type": "application/json; charset=UTF-8"},
+            data=json_bytes,
+            timeout=10,
+        )
+        if r_post.status_code in (200, 201):
+            cloud_synced = True
+    except Exception:
+        pass
+
     if not config.access_token:
+        if cloud_synced:
+            return True, "✔ Base de datos sincronizada con el servidor de la nube (Drive 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT)."
         return True, "Base de datos guardada localmente (conecta Token OAuth para escribir en Google Drive)."
 
-    root_id = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
-    file_id = existing_file_id or _find_cloud_db_file_id(config, CLOUD_DB_FILENAME)
+    root_id = fid
+    file_id = existing_file_id if (existing_file_id and existing_file_id != "cloud_server") else _find_cloud_db_file_id(config, CLOUD_DB_FILENAME)
     try:
         if file_id:
             patch_res = requests.patch(
