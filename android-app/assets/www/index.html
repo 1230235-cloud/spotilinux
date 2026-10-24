@@ -6,13 +6,15 @@
 <title>SpotiLinux Mobile — Maomao, Playlists &amp; Google Drive</title>
 <style>
   :root {
-    --bg: #000000;
-    --card: #121212;
-    --card-elev: #1e1e24;
+    --bg: #09090b;
+    --card: #121215;
+    --card-elev: #18181f;
+    --card-border: rgba(255, 255, 255, 0.08);
     --green: #1DB954;
     --green-bright: #1ed760;
+    --green-glow: rgba(30, 215, 96, 0.35);
     --text: #ffffff;
-    --muted: #b3b3b3;
+    --muted: #a0a0ab;
     --crimson: #a22044;
     --jade: #2a7666;
   }
@@ -20,7 +22,7 @@
   html, body {
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     width: 100%;
     height: 100%;
     overflow: hidden;
@@ -31,17 +33,19 @@
   .top-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 10px 14px 8px;
-    background: linear-gradient(180deg, #1b3b2b 0%, #090c0a 100%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(10, 10, 13, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--card-border);
     flex-shrink: 0;
   }
   .logo-box { display: flex; align-items: center; gap: 8px; }
-  .logo-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .logo-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--green-bright); box-shadow: 0 0 10px var(--green-bright); }
   .logo-title { font-size: 17px; font-weight: 900; letter-spacing: 0.4px; }
   .maomao-pill {
-    background: linear-gradient(180deg, #214637 0%, #163026 100%); color: var(--green-bright);
-    font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 14px;
-    border: 1px solid rgba(30, 215, 96, 0.45); cursor: pointer;
+    background: rgba(30, 215, 96, 0.12); color: var(--green-bright);
+    font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 9999px;
+    border: 1px solid rgba(30, 215, 96, 0.40); cursor: pointer;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
     transition: transform 0.14s ease, border-color 0.18s ease;
   }
@@ -59,25 +63,25 @@
   /* Buscador y acciones rápidas */
   .search-row { padding: 0 0 8px 0; display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
   .search-input {
-    flex: 1; background: #1e1e24; border: 1px solid rgba(255, 255, 255, 0.12); color: #fff;
-    padding: 8px 13px; border-radius: 20px; font-size: 12px; outline: none; min-width: 0;
-    user-select: text; transition: border-color 0.2s ease, background 0.2s ease;
+    flex: 1; background: #16161c; border: 1px solid rgba(255, 255, 255, 0.09); color: #fff;
+    padding: 8px 14px; border-radius: 9999px; font-size: 12px; outline: none; min-width: 0;
+    user-select: text; transition: all 0.2s ease;
   }
-  .search-input:focus { border-color: var(--green-bright); background: #25252d; }
+  .search-input:focus { border-color: var(--green-bright); background: #1f1f26; box-shadow: 0 0 10px rgba(30, 215, 96, 0.25); }
   .btn-chip {
-    background: linear-gradient(180deg, #282830 0%, #1d1d24 100%); color: #f0f0f5;
-    border: 1px solid rgba(255, 255, 255, 0.13);
-    border-radius: 18px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer;
+    background: #18181f; color: #e5e5ec;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 9999px; padding: 6px 13px; font-size: 11px; font-weight: 700; cursor: pointer;
     white-space: nowrap; flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
-    transition: transform 0.12s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    transition: all 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  .btn-chip:hover { border-color: rgba(30, 215, 96, 0.5); background: linear-gradient(180deg, #30303a 0%, #23232c 100%); }
+  .btn-chip:hover { border-color: rgba(30, 215, 96, 0.5); background: #24242d; color: #fff; }
   .btn-chip:active { transform: scale(0.95); }
   .btn-chip.active {
-    background: linear-gradient(135deg, #24e068 0%, #1DB954 100%);
-    color: #041208; border-color: #5ef092; font-weight: 800;
-    box-shadow: 0 3px 12px rgba(29, 185, 84, 0.38);
+    background: var(--green-bright);
+    color: #000000; border-color: var(--green-bright); font-weight: 800;
+    box-shadow: 0 0 14px rgba(30, 215, 96, 0.45);
   }
 
   .tab-pane { display: none; }
@@ -85,20 +89,21 @@
 
   /* Escenario de Maomao + Espectro */
   .stage-card {
-    background: linear-gradient(180deg, #15251f 0%, #0f1114 100%);
-    border: 1px solid rgba(42, 118, 102, 0.55); border-radius: 15px; padding: 9px;
+    background: linear-gradient(180deg, #101614 0%, #0d0f12 100%);
+    border: 1px solid rgba(42, 118, 102, 0.45); border-radius: 16px; padding: 10px;
     display: flex; flex-direction: column;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.48);
+    cursor: pointer;
   }
   .stage-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
   .stage-label { font-size: 11px; font-weight: 800; color: var(--green-bright); letter-spacing: 0.6px; }
   canvas#maomaoCanvas {
-    width: 100%; height: 175px; display: block; border-radius: 11px;
+    width: 100%; height: 175px; display: block; border-radius: 12px;
     background: radial-gradient(circle at 50% 60%, rgba(29,185,84,0.18), rgba(10,12,15,0.96));
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
   canvas#visCanvas {
-    width: 100%; height: 56px; display: block; margin-top: 6px; border-radius: 9px;
+    width: 100%; height: 56px; display: block; margin-top: 6px; border-radius: 10px;
     background: #0b0c0f;
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
@@ -107,12 +112,13 @@
   .section-title { font-size: 14px; font-weight: 800; margin: 8px 0 7px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .track-list { display: flex; flex-direction: column; gap: 6px; }
   .track-item {
-    display: flex; align-items: center; gap: 9px;
-    background: linear-gradient(180deg, #17171c 0%, #121216 100%);
-    padding: 8px 10px; border-radius: 11px;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 8px 11px; border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;
+    transition: all 0.16s ease;
   }
+  .track-item:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.10); }
   .track-item:active { transform: scale(0.99); }
   .track-item.playing {
     border-color: rgba(30, 215, 96, 0.65);
@@ -120,21 +126,21 @@
     box-shadow: 0 2px 12px rgba(29, 185, 84, 0.18);
   }
   .track-thumb {
-    width: 42px; height: 42px; border-radius: 9px; background: #282830;
+    width: 42px; height: 42px; border-radius: 10px; background: #22222a;
     display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   }
   .track-meta { flex: 1; overflow: hidden; min-width: 0; }
-  .track-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
   .track-item.playing .track-title { color: var(--green-bright); }
   .track-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .icon-action-btn {
-    background: linear-gradient(180deg, #272732 0%, #1c1c24 100%);
-    border: 1px solid rgba(255, 255, 255, 0.12); color: #e8e8f0;
-    font-size: 13px; font-weight: 700; border-radius: 9px; padding: 5px 9px; cursor: pointer; flex-shrink: 0;
-    transition: transform 0.12s ease, border-color 0.15s ease;
+    background: #1c1c24;
+    border: 1px solid rgba(255, 255, 255, 0.10); color: #e8e8f0;
+    font-size: 12px; font-weight: 700; border-radius: 9999px; padding: 5px 11px; cursor: pointer; flex-shrink: 0;
+    transition: all 0.14s ease;
   }
-  .icon-action-btn:hover { border-color: var(--green-bright); color: var(--green-bright); }
+  .icon-action-btn:hover { border-color: var(--green-bright); color: var(--green-bright); background: #24242e; }
   .icon-action-btn:active { transform: scale(0.92); }
   .like-btn {
     background: none; border: none; color: var(--muted); font-size: 18px; padding: 4px 5px; cursor: pointer; flex-shrink: 0;
@@ -241,40 +247,45 @@
   .eq-val { font-size: 10px; color: var(--green-bright); font-weight: 700; }
   .eq-freq { font-size: 10px; color: var(--muted); }
 
-  /* Barra reproductora inferior */
+  /* Barra reproductora inferior estilo Spotify Floating Dock */
   .player-dock {
     position: fixed; bottom: 52px; left: 8px; right: 8px;
-    background: linear-gradient(180deg, rgba(28, 30, 38, 0.98) 0%, rgba(18, 19, 24, 0.99) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.11); border-radius: 14px;
-    padding: 8px 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.82); z-index: 20;
+    background: rgba(18, 18, 22, 0.94);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 14px;
+    padding: 8px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.85); z-index: 20;
+    cursor: pointer;
+    transition: transform 0.16s ease, background 0.16s ease;
   }
+  .player-dock:active { background: rgba(25, 25, 32, 0.98); }
   .dock-top { display: flex; align-items: center; gap: 10px; }
   .dock-title-box { flex: 1; overflow: hidden; min-width: 0; }
-  .dock-title { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dock-title { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
   .dock-artist { font-size: 11px; color: var(--green-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dock-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .ctrl-btn { 
     position: relative;
-    background: rgba(255, 255, 255, 0.04); 
-    border: 1px solid rgba(255, 255, 255, 0.08); 
+    background: rgba(255, 255, 255, 0.05); 
+    border: 1px solid rgba(255, 255, 255, 0.09); 
     color: #e4e4ec; 
-    font-size: 15px; 
+    font-size: 14px; 
     width: 32px;
     height: 32px;
     cursor: pointer; 
-    border-radius: 16px;
+    border-radius: 50%;
     display: inline-flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     transition: all 0.16s ease;
   }
-  .ctrl-btn:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.22); }
-  .ctrl-btn:active { transform: scale(0.91); }
+  .ctrl-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.22); }
+  .ctrl-btn:active { transform: scale(0.90); }
   .ctrl-btn.active { 
     color: var(--green-bright); 
-    background: rgba(29, 185, 84, 0.22);
-    box-shadow: 0 0 12px rgba(29, 185, 84, 0.42);
+    background: rgba(29, 185, 84, 0.20);
+    box-shadow: 0 0 12px rgba(29, 185, 84, 0.40);
     border: 1px solid rgba(30, 215, 96, 0.65);
   }
   .ctrl-btn .active-dot {
@@ -310,31 +321,32 @@
   }
   .play-circle {
     width: 38px; height: 38px; border-radius: 50%;
-    background: linear-gradient(135deg, #25e069 0%, #1DB954 100%); color: #041208;
-    border: 1px solid #63f296; font-size: 15px; font-weight: 900;
+    background: var(--green-bright); color: #000000;
+    border: none; font-size: 16px; font-weight: 900;
     display: flex; align-items: center; justify-content: center; cursor: pointer;
-    box-shadow: 0 3px 12px rgba(29, 185, 84, 0.45);
+    box-shadow: 0 3px 14px rgba(30, 215, 96, 0.45);
     transition: transform 0.14s ease, box-shadow 0.16s ease;
   }
-  .play-circle:active { transform: scale(0.92); }
+  .play-circle:active { transform: scale(0.91); }
   .seek-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
   .seek-row span { font-size: 10px; color: var(--muted); min-width: 28px; font-variant-numeric: tabular-nums; }
-  .seek-row input[type=range] { flex: 1; accent-color: var(--green); height: 4px; }
+  .seek-row input[type=range] { flex: 1; accent-color: var(--green-bright); height: 4px; }
 
   /* Navegación inferior */
   .bottom-nav {
     position: fixed; bottom: 0; left: 0; right: 0; height: 50px;
-    background: linear-gradient(180deg, #0d0e12 0%, #07080a 100%);
+    background: rgba(12, 13, 17, 0.96);
+    backdrop-filter: blur(20px);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     display: flex; justify-content: space-around; align-items: center; z-index: 25;
   }
   .nav-item {
     background: none; border: none; color: var(--muted); font-size: 10px; font-weight: 700;
     display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
-    padding: 4px 12px; border-radius: 10px; transition: color 0.16s ease, background 0.16s ease;
+    padding: 4px 12px; border-radius: 9999px; transition: color 0.16s ease, background 0.16s ease;
   }
   .nav-item .ico { font-size: 15px; }
-  .nav-item.active { color: var(--green-bright); background: rgba(29, 185, 84, 0.1); }
+  .nav-item.active { color: var(--green-bright); background: rgba(29, 185, 84, 0.12); }
 
   /* Modales flotantes (Inicio de sesión Google Drive / Crear Playlist / Agregar a Playlist) */
   .modal-backdrop {
@@ -343,15 +355,372 @@
   }
   .modal-backdrop.open { display: flex; }
   .modal-card {
-    background: #1b1b22; border: 1px solid #343444; border-radius: 16px;
+    background: #181820; border: 1px solid #303040; border-radius: 20px;
     width: 100%; max-width: 400px; padding: 18px; box-shadow: 0 12px 36px rgba(0,0,0,0.85);
     max-height: 90vh; overflow-y: auto;
   }
   .modal-card h3 { color: var(--green-bright); font-size: 16px; margin-bottom: 6px; }
   .modal-card p { color: var(--muted); font-size: 12px; margin-bottom: 12px; line-height: 1.4; }
 
+  /* ========================================================================= */
+  /* REPRODUCTOR DE PANTALLA COMPLETA ESTILO SPOTIFY (FULL-SCREEN NOW PLAYING) */
+  /* ========================================================================= */
+  .full-player-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(180deg, #13241b 0%, #0d0f13 45%, #07080a 100%);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 16px 14px;
+    transform: translateY(100%);
+    transition: transform 0.32s cubic-bezier(0.18, 0.9, 0.22, 1);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.95);
+    overflow: hidden;
+  }
+  .full-player-overlay.open {
+    transform: translateY(0);
+  }
+  .fp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .fp-icon-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #f0f0f5;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; cursor: pointer;
+    transition: all 0.16s ease;
+  }
+  .fp-icon-btn:active { transform: scale(0.91); background: rgba(255, 255, 255, 0.14); }
+  .fp-header-title-box {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    overflow: hidden; min-width: 0; flex: 1; padding: 0 10px;
+  }
+  .fp-header-sub {
+    font-size: 9px; font-weight: 800; letter-spacing: 1px; color: var(--muted);
+    text-transform: uppercase;
+  }
+  .fp-header-title {
+    font-size: 13px; font-weight: 800; color: #ffffff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;
+  }
+
+  /* Conmutador de vistas tipo cápsula segmentada */
+  .fp-segmented-tabs {
+    display: flex;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    padding: 3px;
+    margin: 8px auto 10px;
+    max-width: 320px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+  .fp-tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-align: center;
+  }
+  .fp-tab-btn.active {
+    background: #ffffff;
+    color: #000000;
+    font-weight: 800;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  }
+
+  .fp-content-pane {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .fp-content-pane.active {
+    display: flex;
+  }
+
+  /* Escenario y Visualizador de Maomao en Grande */
+  .fp-stage-card {
+    background: radial-gradient(circle at 50% 40%, rgba(26, 44, 34, 0.85) 0%, rgba(13, 15, 19, 0.95) 100%);
+    border: 1px solid rgba(42, 118, 102, 0.4);
+    border-radius: 20px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.65);
+    flex-shrink: 0;
+    margin-bottom: 10px;
+  }
+  .fp-stage-top {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+  }
+  .fp-pill-badge {
+    background: rgba(30, 215, 96, 0.14);
+    color: var(--green-bright);
+    font-size: 10px; font-weight: 800; padding: 4px 11px;
+    border-radius: 9999px; border: 1px solid rgba(30, 215, 96, 0.3);
+    cursor: pointer;
+  }
+  .fp-chip-btn {
+    background: #1c1c24;
+    color: #e5e5ed;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    padding: 4px 11px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .fp-chip-btn:hover { background: #252530; border-color: var(--green-bright); }
+  .fp-chip-btn:active { transform: scale(0.93); }
+  .fp-chip-btn.active {
+    background: var(--green-bright);
+    color: #000;
+    border-color: var(--green-bright);
+    font-weight: 800;
+  }
+  canvas#fullMaomaoCanvas {
+    width: 100%;
+    height: 220px;
+    max-height: 250px;
+    border-radius: 14px;
+    background: radial-gradient(circle at 50% 65%, rgba(29, 185, 84, 0.22), rgba(8, 10, 14, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    display: block;
+    cursor: pointer;
+  }
+  canvas#fullVisCanvas {
+    width: 100%;
+    height: 56px;
+    border-radius: 10px;
+    background: #07080b;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 6px;
+    display: block;
+    cursor: pointer;
+  }
+
+  /* Metadatos de la canción en grande */
+  .fp-meta-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 4px 0 10px;
+    flex-shrink: 0;
+  }
+  .fp-meta-left {
+    flex: 1; overflow: hidden; min-width: 0;
+  }
+  .fp-title {
+    font-size: 20px; font-weight: 900; color: #ffffff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: -0.3px; line-height: 1.25;
+  }
+  .fp-artist {
+    font-size: 14px; font-weight: 600; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-top: 3px;
+  }
+  .fp-like-btn {
+    background: none; border: none; font-size: 24px; cursor: pointer;
+    color: var(--muted); padding: 6px; flex-shrink: 0;
+    transition: transform 0.16s ease, color 0.16s ease;
+  }
+  .fp-like-btn:active { transform: scale(1.3); }
+  .fp-like-btn.liked { color: var(--green-bright); text-shadow: 0 0 12px var(--green-glow); }
+
+  /* Barra de Seek grande */
+  .fp-seek-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .fp-seek-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 5px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.18);
+    outline: none;
+    accent-color: var(--green-bright);
+    cursor: pointer;
+    transition: height 0.14s ease;
+  }
+  .fp-seek-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    cursor: pointer;
+    transition: transform 0.14s ease;
+  }
+  .fp-seek-slider:active::-webkit-slider-thumb {
+    transform: scale(1.3);
+    background: var(--green-bright);
+  }
+  .fp-time-row {
+    display: flex; justify-content: space-between; font-size: 11px;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+
+  /* Controles de Reproducción Estilo Spotify */
+  .fp-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+  }
+  .fp-ctrl-btn {
+    background: none; border: none; color: #d0d0dc; font-size: 20px;
+    cursor: pointer; padding: 10px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.16s ease;
+  }
+  .fp-ctrl-btn:hover { color: #ffffff; }
+  .fp-ctrl-btn:active { transform: scale(0.9); }
+  .fp-ctrl-btn.active { color: var(--green-bright); text-shadow: 0 0 8px var(--green-glow); }
+  .fp-play-btn {
+    width: 58px; height: 58px; border-radius: 50%;
+    background: #ffffff; color: #000000;
+    border: none; font-size: 22px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.15s ease;
+  }
+  .fp-play-btn:hover { transform: scale(1.05); background: var(--green-bright); }
+  .fp-play-btn:active { transform: scale(0.94); }
+
+  /* Botón inferior para abrir la playlist */
+  .fp-pill-action-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 12px; font-weight: 700;
+    padding: 9px 18px;
+    border-radius: 9999px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: all 0.18s ease;
+  }
+  .fp-pill-action-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.25); }
+  .fp-pill-action-btn:active { transform: scale(0.96); }
+
+  /* ========================================================================= */
+  /* VISTA DE PLAYLIST EN PANTALLA COMPLETA                                     */
+  /* ========================================================================= */
+  .fp-pl-header-box {
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(135deg, rgba(29, 185, 84, 0.15) 0%, rgba(20, 20, 26, 0.95) 100%);
+    border: 1px solid rgba(29, 185, 84, 0.35);
+    border-radius: 16px; padding: 12px 14px;
+    margin-bottom: 12px; flex-shrink: 0;
+  }
+  .fp-pl-cover-art {
+    width: 56px; height: 56px; border-radius: 12px;
+    background: linear-gradient(135deg, #1ed760 0%, #15883e 100%);
+    color: #000; font-size: 26px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45); flex-shrink: 0;
+  }
+  .fp-pl-info { flex: 1; min-width: 0; }
+  .fp-pl-title {
+    font-size: 16px; font-weight: 800; color: #ffffff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin: 3px 0 2px;
+  }
+  .fp-pl-sub { font-size: 11px; color: var(--muted); }
+  .fp-pl-actions-row {
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px;
+    flex-shrink: 0;
+  }
+  .fp-pl-tracks-scroll {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    display: flex; flex-direction: column; gap: 6px;
+    padding-bottom: 24px;
+  }
+  .fp-track-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px; padding: 9px 12px;
+    cursor: pointer; transition: all 0.16s ease;
+  }
+  .fp-track-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  .fp-track-row:active { transform: scale(0.98); }
+  .fp-track-row.playing {
+    background: linear-gradient(90deg, rgba(30, 215, 96, 0.18) 0%, rgba(18, 22, 19, 0.8) 100%);
+    border-color: rgba(30, 215, 96, 0.55);
+  }
+  .fp-track-num {
+    font-size: 12px; font-weight: 700; color: var(--muted);
+    min-width: 20px; text-align: center;
+  }
+  .fp-track-row.playing .fp-track-num {
+    color: var(--green-bright);
+  }
+  .fp-track-info { flex: 1; min-width: 0; }
+  .fp-track-title {
+    font-size: 13px; font-weight: 700; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .fp-track-row.playing .fp-track-title {
+    color: var(--green-bright);
+  }
+  .fp-track-artist {
+    font-size: 11px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .fp-track-dur {
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+
+  /* Indicador animado de barras verdes para la pista activa */
+  .eq-anim-icon {
+    display: inline-flex; align-items: flex-end; gap: 2px;
+    width: 14px; height: 14px;
+  }
+  .eq-anim-icon span {
+    width: 2.5px; background: var(--green-bright); border-radius: 2px;
+    animation: eqBounce 0.8s ease infinite alternate;
+  }
+  .eq-anim-icon span:nth-child(1) { height: 12px; animation-delay: 0.1s; }
+  .eq-anim-icon span:nth-child(2) { height: 6px;  animation-delay: 0.3s; }
+  .eq-anim-icon span:nth-child(3) { height: 10px; animation-delay: 0.2s; }
+  @keyframes eqBounce {
+    0% { height: 3px; }
+    100% { height: 14px; }
+  }
+
   /* Modo Horizontal (Landscape) en Celulares */
-  @media (orientation: landscape), (max-height: 500px) and (min-width: 540px) {
+  @media (orientation: landscape), (max-height: 520px) and (min-width: 540px) {
     .top-header { padding: 5px 14px; }
     .logo-title { font-size: 15px; }
     .maomao-pill { padding: 3px 9px; font-size: 10px; }
@@ -375,6 +744,15 @@
     .nav-item { flex-direction: row; gap: 6px; font-size: 11px; }
     .nav-item .ico { font-size: 14px; }
     .eq-col input[type=range] { height: 75px; }
+
+    /* Layout horizontal del reproductor full-screen */
+    .full-player-overlay { padding: 8px 16px; }
+    .fp-segmented-tabs { margin: 4px auto 6px; }
+    #fpVisualizerPane { flex-direction: row; gap: 16px; align-items: center; }
+    .fp-stage-card { width: 48%; margin-bottom: 0; padding: 8px; }
+    canvas#fullMaomaoCanvas { height: 160px; }
+    canvas#fullVisCanvas { height: 44px; }
+    .fp-visualizer-right { flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
   }
 </style>
 </head>
@@ -397,16 +775,17 @@
 
     <!-- Escenario de Maomao + Espectro -->
     <div class="stage-pane">
-      <div class="stage-card">
-        <div class="stage-top">
+      <div class="stage-card" onclick="openFullPlayer()" title="Toca para ver a Maomao en grande a pantalla completa">
+        <div class="stage-top" onclick="event.stopPropagation()">
           <span class="stage-label">🌿 MAOMAO BAILANDO AL COMPÁS</span>
-          <div style="display:flex; gap:5px;">
+          <div style="display:flex; gap:5px; align-items:center;">
             <button class="btn-chip" style="padding:3px 8px; font-size:10px;" onclick="cycleMaomaoStyle()">Paso 🐾</button>
             <button class="btn-chip" style="padding:3px 8px; font-size:10px;" onclick="cycleVisMode()">FFT 📊</button>
+            <button class="btn-chip active" style="padding:3px 8px; font-size:10px;" onclick="openFullPlayer()">⛶ Grande</button>
           </div>
         </div>
-        <canvas id="maomaoCanvas" width="360" height="175" onclick="cycleMaomaoStyle()"></canvas>
-        <canvas id="visCanvas" width="360" height="56" onclick="cycleVisMode()"></canvas>
+        <canvas id="maomaoCanvas" width="360" height="175" onclick="event.stopPropagation(); cycleMaomaoStyle()"></canvas>
+        <canvas id="visCanvas" width="360" height="56" onclick="event.stopPropagation(); cycleVisMode()"></canvas>
       </div>
     </div>
 
@@ -734,24 +1113,127 @@
   </div>
 
   <!-- Barra de Reproducción Flotante -->
-  <div class="player-dock">
+  <div class="player-dock" onclick="openFullPlayer()">
     <div class="dock-top">
       <div class="dock-title-box">
         <div class="dock-title" id="nowTitle">Midnight Horizon</div>
         <div class="dock-artist" id="nowArtist">Neon Pulse • Synthwave</div>
       </div>
-      <div class="dock-controls">
+      <div class="dock-controls" onclick="event.stopPropagation()">
         <button class="ctrl-btn" id="btnShuffle" onclick="toggleShuffle()">🔀</button>
         <button class="ctrl-btn" onclick="prevTrack()">⏮</button>
         <button class="play-circle" id="btnPlay" onclick="togglePlay()">▶</button>
         <button class="ctrl-btn" onclick="nextTrack()">⏭</button>
         <button class="ctrl-btn" id="btnRepeat" onclick="toggleRepeat()">🔁</button>
+        <button class="ctrl-btn" onclick="openFullPlayer()" title="Expandir reproductor">⛶</button>
       </div>
     </div>
-    <div class="seek-row">
+    <div class="seek-row" onclick="event.stopPropagation()">
       <span id="lblCurTime">0:00</span>
       <input type="range" id="seekBar" min="0" max="1000" value="0" oninput="seekAudio(this.value)" />
       <span id="lblDurTime">0:28</span>
+    </div>
+  </div>
+
+  <!-- REPRODUCTOR DE PANTALLA COMPLETA ESTILO SPOTIFY (CON MAOMAO EN GRANDE Y PLAYLIST DESPLEGABLE) -->
+  <div id="fullPlayerView" class="full-player-overlay">
+    <!-- Barra superior de cabecera -->
+    <div class="fp-header">
+      <button class="fp-icon-btn" onclick="closeFullPlayer()" title="Minimizar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+      <div class="fp-header-title-box">
+        <span class="fp-header-sub">REPRODUCIENDO DESDE</span>
+        <span class="fp-header-title" id="fpHeaderPlaylist">Biblioteca</span>
+      </div>
+      <button class="fp-icon-btn" id="fpBtnQueueToggle" onclick="toggleFullPlayerViewMode()" title="Alternar Playlist / Maomao">
+        <span id="fpQueueIcon">📜</span>
+      </button>
+    </div>
+
+    <!-- Selector de vista tipo pill: [ 🌿 Visualizador Maomao ]  [ 📜 Playlist Completa ] -->
+    <div class="fp-segmented-tabs">
+      <button class="fp-tab-btn active" id="fpTabVisualizer" onclick="setFullPlayerTab('visualizer')">🌿 Visualizador Maomao</button>
+      <button class="fp-tab-btn" id="fpTabPlaylist" onclick="setFullPlayerTab('playlist')">📜 Playlist Completa</button>
+    </div>
+
+    <!-- SECCIÓN 1: VISTA DE MAOMAO Y ESPECTRO EN GRANDE -->
+    <div id="fpVisualizerPane" class="fp-content-pane active">
+      <div class="fp-stage-card">
+        <div class="fp-stage-top">
+          <div class="fp-pill-badge" onclick="cycleMaomaoStyle()" id="fpMaomaoStyleBadge">🌿 <span id="fpLblDanceStyle">Imperial</span></div>
+          <div style="display:flex; gap:6px;">
+            <button class="fp-chip-btn" onclick="cycleVisMode()">Modo FFT 📊</button>
+            <span class="fp-pill-badge" id="fpBpmBadge">♩ 112 BPM</span>
+          </div>
+        </div>
+        <!-- Canvas de Maomao en grande -->
+        <canvas id="fullMaomaoCanvas" width="400" height="250" onclick="cycleMaomaoStyle()"></canvas>
+        <!-- Canvas de Ondas reactivas debajo de Maomao -->
+        <canvas id="fullVisCanvas" width="400" height="65" onclick="cycleVisMode()"></canvas>
+      </div>
+
+      <div class="fp-visualizer-right">
+        <!-- Datos de la canción: Título grande, Artista y Corazón -->
+        <div class="fp-meta-card">
+          <div class="fp-meta-left">
+            <div class="fp-title" id="fpTitle">Midnight Horizon</div>
+            <div class="fp-artist" id="fpArtist">Neon Pulse • Synthwave</div>
+          </div>
+          <button class="fp-like-btn" id="fpLikeBtn" onclick="toggleCurrentTrackLike()" title="Me gusta">💚</button>
+        </div>
+
+        <!-- Barra de progreso / seekbar -->
+        <div class="fp-seek-container">
+          <input type="range" id="fpSeekBar" class="fp-seek-slider" min="0" max="1000" value="0" oninput="seekAudio(this.value)" />
+          <div class="fp-time-row">
+            <span id="fpCurTime">0:00</span>
+            <span id="fpDurTime">0:28</span>
+          </div>
+        </div>
+
+        <!-- Controles de Reproducción Estilo Spotify -->
+        <div class="fp-controls-row">
+          <button class="fp-ctrl-btn" id="fpBtnShuffle" onclick="toggleShuffle()" title="Aleatorio">🔀</button>
+          <button class="fp-ctrl-btn" onclick="prevTrack()" title="Anterior">⏮</button>
+          <button class="fp-play-btn" id="fpBtnPlay" onclick="togglePlay()" title="Reproducir / Pausar">▶</button>
+          <button class="fp-ctrl-btn" onclick="nextTrack()" title="Siguiente">⏭</button>
+          <button class="fp-ctrl-btn" id="fpBtnRepeat" onclick="toggleRepeat()" title="Repetir">🔁</button>
+        </div>
+
+        <!-- Botón para desplegar la playlist -->
+        <div style="display:flex; justify-content:center; margin-top:6px;">
+          <button class="fp-pill-action-btn" onclick="setFullPlayerTab('playlist')">
+            <span>📜 Desplegar Playlist en Pantalla Completa</span>
+            <span id="fpPlaylistCountBadge" style="opacity:0.75; font-size:11px;">(6 canciones)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 2: VISTA DE LA PLAYLIST DESPLEGADA EN TODA LA PANTALLA -->
+    <div id="fpPlaylistPane" class="fp-content-pane">
+      <div class="fp-pl-header-box">
+        <div class="fp-pl-cover-art" id="fpPlCoverArt">🎵</div>
+        <div class="fp-pl-info">
+          <span class="fp-pill-badge" id="fpPlBadge">PLAYLIST</span>
+          <h2 class="fp-pl-title" id="fpPlName">Night Drive &amp; Synthwave</h2>
+          <p class="fp-pl-sub" id="fpPlDetails">6 canciones • Sintetizadores retro</p>
+        </div>
+      </div>
+
+      <!-- Acciones de la Playlist -->
+      <div class="fp-pl-actions-row">
+        <button class="fp-chip-btn active" onclick="playCurrentFullPlaylistShuffle()">🔀 Aleatorio</button>
+        <button class="fp-chip-btn" id="fpBtnDownloadPl" onclick="downloadCurrentPlaylistTracks()">⬇️ Descargar Playlist</button>
+        <button class="fp-chip-btn" onclick="openAddSelectedToPlaylistModal()">＋ Añadir Canción</button>
+        <button class="fp-chip-btn" onclick="setFullPlayerTab('visualizer')">🌿 Ver Maomao</button>
+      </div>
+
+      <!-- Lista completa de canciones con indicador de reproducción -->
+      <div class="fp-pl-tracks-scroll" id="fpPlTracksList">
+        <!-- Generado dinámicamente -->
+      </div>
     </div>
   </div>
 
@@ -1248,10 +1730,23 @@ window.onNativeProgress = function(posMs, durMs, playingState) {
   isPlaying = Boolean(playingState);
   nativeDurationMs = durMs > 0 ? durMs : 28000;
   syncSmoothClockFromNative(posMs, isPlaying);
-  document.getElementById("lblCurTime").textContent = fmtTime(posMs / 1000);
-  document.getElementById("lblDurTime").textContent = fmtTime(nativeDurationMs / 1000);
-  document.getElementById("seekBar").value = Math.min(1000, Math.floor((posMs / nativeDurationMs) * 1000));
+  const curFmt = fmtTime(posMs / 1000);
+  const durFmt = fmtTime(nativeDurationMs / 1000);
+  const progressRatio = Math.min(1000, Math.floor((posMs / nativeDurationMs) * 1000));
+
+  document.getElementById("lblCurTime").textContent = curFmt;
+  document.getElementById("lblDurTime").textContent = durFmt;
+  document.getElementById("seekBar").value = progressRatio;
   document.getElementById("btnPlay").textContent = isPlaying ? "⏸" : "▶";
+
+  const fpCur = document.getElementById("fpCurTime");
+  if (fpCur) fpCur.textContent = curFmt;
+  const fpDur = document.getElementById("fpDurTime");
+  if (fpDur) fpDur.textContent = durFmt;
+  const fpSeek = document.getElementById("fpSeekBar");
+  if (fpSeek) fpSeek.value = progressRatio;
+  const fpPlay = document.getElementById("fpBtnPlay");
+  if (fpPlay) fpPlay.textContent = isPlaying ? "⏸" : "▶";
 };
 
 window.onNativeMediaCommand = function(cmd) {
@@ -1277,6 +1772,205 @@ function updatePlayerUI() {
   document.getElementById("btnPlay").textContent = isPlaying ? "⏸" : "▶";
   renderTracks();
   highlightPlayingTracks();
+  updateFullPlayerUI();
+}
+
+/* ---------------- REPRODUCTOR DE PANTALLA COMPLETA Y PLAYLIST DESPLEGABLE ---------------- */
+let isFullPlayerOpen = false;
+let fullPlayerTab = "visualizer"; // "visualizer" | "playlist"
+let fullMmCanvas = null;
+let fullMmCtx = null;
+let fullVCanvas = null;
+let fullVCtx = null;
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function initFullPlayer() {
+  if (!fullMmCanvas) {
+    fullMmCanvas = document.getElementById("fullMaomaoCanvas");
+    if (fullMmCanvas) fullMmCtx = fullMmCanvas.getContext("2d");
+  }
+  if (!fullVCanvas) {
+    fullVCanvas = document.getElementById("fullVisCanvas");
+    if (fullVCanvas) fullVCtx = fullVCanvas.getContext("2d");
+  }
+}
+
+function openFullPlayer() {
+  initFullPlayer();
+  isFullPlayerOpen = true;
+  const overlay = document.getElementById("fullPlayerView");
+  if (overlay) overlay.classList.add("open");
+  updateFullPlayerUI();
+  setTimeout(syncCanvasDimensions, 80);
+}
+
+function closeFullPlayer() {
+  isFullPlayerOpen = false;
+  const overlay = document.getElementById("fullPlayerView");
+  if (overlay) overlay.classList.remove("open");
+}
+
+function setFullPlayerTab(tab) {
+  fullPlayerTab = tab;
+  const tabVis = document.getElementById("fpTabVisualizer");
+  const tabPl = document.getElementById("fpTabPlaylist");
+  const paneVis = document.getElementById("fpVisualizerPane");
+  const panePl = document.getElementById("fpPlaylistPane");
+  const queueIcon = document.getElementById("fpQueueIcon");
+
+  if (tab === "visualizer") {
+    if (tabVis) tabVis.classList.add("active");
+    if (tabPl) tabPl.classList.remove("active");
+    if (paneVis) paneVis.classList.add("active");
+    if (panePl) panePl.classList.remove("active");
+    if (queueIcon) queueIcon.textContent = "📜";
+    setTimeout(syncCanvasDimensions, 60);
+  } else {
+    if (tabVis) tabVis.classList.remove("active");
+    if (tabPl) tabPl.classList.add("active");
+    if (paneVis) paneVis.classList.remove("active");
+    if (panePl) panePl.classList.add("active");
+    if (queueIcon) queueIcon.textContent = "🌿";
+    renderFullPlayerPlaylist();
+  }
+}
+
+function toggleFullPlayerViewMode() {
+  setFullPlayerTab(fullPlayerTab === "visualizer" ? "playlist" : "visualizer");
+}
+
+function updateFullPlayerUI() {
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (!t) return;
+
+  const fpTitle = document.getElementById("fpTitle");
+  if (fpTitle) fpTitle.textContent = t.title;
+
+  const fpArtist = document.getElementById("fpArtist");
+  if (fpArtist) fpArtist.textContent = `${t.artist} • ${t.album || t.genre || 'Música'}`;
+
+  const fpHeaderPl = document.getElementById("fpHeaderPlaylist");
+  if (fpHeaderPl) fpHeaderPl.textContent = activeQueueName || "Biblioteca";
+
+  const fpPlName = document.getElementById("fpPlName");
+  if (fpPlName) fpPlName.textContent = activeQueueName || "Playlist Actual";
+
+  const fpPlDetails = document.getElementById("fpPlDetails");
+  if (fpPlDetails) {
+    const qLen = activePlaybackQueue ? activePlaybackQueue.length : tracks.length;
+    fpPlDetails.textContent = `${qLen} canciones • Lista en reproducción`;
+  }
+
+  const fpLikeBtn = document.getElementById("fpLikeBtn");
+  if (fpLikeBtn) {
+    fpLikeBtn.classList.toggle("liked", Boolean(t.liked));
+    fpLikeBtn.textContent = t.liked ? "💚" : "🤍";
+  }
+
+  const fpBtnPlay = document.getElementById("fpBtnPlay");
+  if (fpBtnPlay) fpBtnPlay.textContent = isPlaying ? "⏸" : "▶";
+
+  const fpBtnShuffle = document.getElementById("fpBtnShuffle");
+  if (fpBtnShuffle) fpBtnShuffle.classList.toggle("active", shuffleMode);
+
+  const fpBtnRepeat = document.getElementById("fpBtnRepeat");
+  if (fpBtnRepeat) fpBtnRepeat.classList.toggle("active", repeatMode);
+
+  const fpBpmBadge = document.getElementById("fpBpmBadge");
+  if (fpBpmBadge) fpBpmBadge.textContent = `♩ ${Math.round(currentBpm)} BPM`;
+
+  const fpCountBadge = document.getElementById("fpPlaylistCountBadge");
+  if (fpCountBadge) {
+    const total = activePlaybackQueue ? activePlaybackQueue.length : tracks.length;
+    fpCountBadge.textContent = `(${total} canciones)`;
+  }
+
+  if (fullPlayerTab === "playlist") {
+    renderFullPlayerPlaylist();
+  }
+}
+
+function renderFullPlayerPlaylist() {
+  const container = document.getElementById("fpPlTracksList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const list = (activePlaybackQueue && activePlaybackQueue.length > 0) ? activePlaybackQueue : tracks;
+  const currentTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+
+  list.forEach((t, idx) => {
+    const isThisPlaying = isPlaying && currentTrack && (currentTrack.id === t.id);
+    const row = document.createElement("div");
+    row.className = "fp-track-row" + (isThisPlaying ? " playing" : "");
+    row.onclick = () => {
+      playActiveQueueIndex(idx);
+    };
+
+    const numOrEq = isThisPlaying
+      ? `<div class="eq-anim-icon"><span></span><span></span><span></span></div>`
+      : `<span class="fp-track-num">${idx + 1}</span>`;
+
+    const cloudIcon = t.cloud ? (t.downloaded ? "✔" : "☁️") : "";
+
+    row.innerHTML = `
+      <div style="width:24px; display:flex; justify-content:center; align-items:center;">
+        ${numOrEq}
+      </div>
+      <div class="fp-track-info">
+        <div class="fp-track-title">${escapeHtml(t.title)} ${cloudIcon}</div>
+        <div class="fp-track-artist">${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.genre || 'Música')}</div>
+      </div>
+      <button class="like-btn ${t.liked ? 'liked' : ''}" style="font-size:16px;" onclick="event.stopPropagation(); toggleTrackLike('${t.id}')">
+        ${t.liked ? '💚' : '🤍'}
+      </button>
+      <div class="fp-track-dur">${t.cloud && !t.downloaded ? 'Nube' : '3:20'}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function playActiveQueueIndex(idx) {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    activePlaybackQueue = [...tracks];
+  }
+  if (idx < 0 || idx >= activePlaybackQueue.length) return;
+  activeQueueIndex = idx;
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.indexOf(t);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
+  updatePlayerUI();
+  updateFullPlayerUI();
+}
+
+function toggleCurrentTrackLike() {
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (!t) return;
+  t.liked = !t.liked;
+  savePersistentState();
+  updatePlayerUI();
+  updateFullPlayerUI();
+  showToast(t.liked ? "Añadida a Tus Me Gusta 💚" : "Eliminada de Tus Me Gusta");
+  if (userAccount && cachedDriveDbFileId) {
+    setTimeout(pushCloudDatabaseToDrive, 200);
+  }
+}
+
+function playCurrentFullPlaylistShuffle() {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) return;
+  shuffleMode = true;
+  updateShuffleUI();
+  const randIdx = Math.floor(Math.random() * activePlaybackQueue.length);
+  playActiveQueueIndex(randIdx);
+  showToast("🔀 Modo Aleatorio Activado");
 }
 
 function highlightPlayingTracks() {
@@ -2964,11 +3658,17 @@ function setFilter(flt) {
 
 function cycleMaomaoStyle() {
   maomaoStyle = (maomaoStyle + 1) % MAOMAO_STYLES.length;
-  document.getElementById("lblDanceStyle").textContent = MAOMAO_STYLES[maomaoStyle];
+  const name = MAOMAO_STYLES[maomaoStyle];
+  const lbl1 = document.getElementById("lblDanceStyle");
+  if (lbl1) lbl1.textContent = name;
+  const lbl2 = document.getElementById("fpLblDanceStyle");
+  if (lbl2) lbl2.textContent = name;
+  showToast(`Paso de baile: ${name}`);
 }
 
 function cycleVisMode() {
   visMode = (visMode + 1) % 2;
+  showToast(visMode === 1 ? "Modo: Onda Neón 〰️" : "Modo: Espectro FFT 📊");
 }
 
 /* ---------------- LIENZOS ADAPTATIVOS, MOTOR RÍTMICO Y ANIMACIÓN 60 FPS ---------------- */
@@ -3144,6 +3844,22 @@ function syncCanvasDimensions() {
     vCanvas.width = Math.round(rectV.width);
     vCanvas.height = Math.round(rectV.height);
   }
+  if (!fullMmCanvas) fullMmCanvas = document.getElementById("fullMaomaoCanvas");
+  if (fullMmCanvas) {
+    const rectFM = fullMmCanvas.getBoundingClientRect();
+    if (rectFM.width > 20 && rectFM.height > 20) {
+      fullMmCanvas.width = Math.round(rectFM.width);
+      fullMmCanvas.height = Math.round(rectFM.height);
+    }
+  }
+  if (!fullVCanvas) fullVCanvas = document.getElementById("fullVisCanvas");
+  if (fullVCanvas) {
+    const rectFV = fullVCanvas.getBoundingClientRect();
+    if (rectFV.width > 20 && rectFV.height > 15) {
+      fullVCanvas.width = Math.round(rectFV.width);
+      fullVCanvas.height = Math.round(rectFV.height);
+    }
+  }
 }
 
 window.addEventListener("resize", syncCanvasDimensions);
@@ -3290,11 +4006,19 @@ function animateLoop(nowMs) {
   high /= (NUM_SPEC_BARS - 18);
 
   const pose = computeDancePose(beatPos, maomaoStyle, danceAmp, idleTimeSec);
-  drawMaomaoStage(pose, beatPos, bass, mid, high);
-  drawSpectrum(beatPos, pose.beatPulse, bass, mid, high);
+  drawMaomaoStage(pose, beatPos, bass, mid, high, mmCanvas, mmCtx);
+  drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, vCanvas, vCtx);
+
+  if (isFullPlayerOpen && fullMmCanvas && fullMmCtx && fullVCanvas && fullVCtx && fullPlayerTab === "visualizer") {
+    drawMaomaoStage(pose, beatPos, bass, mid, high, fullMmCanvas, fullMmCtx);
+    drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, fullVCanvas, fullVCtx);
+  }
 }
 
-function drawMaomaoStage(pose, beatPos, bass, mid, high) {
+function drawMaomaoStage(pose, beatPos, bass, mid, high, targetCanvas, targetCtx) {
+  const mmCanvas = targetCanvas || document.getElementById("maomaoCanvas");
+  const mmCtx = targetCtx || (mmCanvas ? mmCanvas.getContext("2d") : null);
+  if (!mmCanvas || !mmCtx) return;
   const w = mmCanvas.width, h = mmCanvas.height;
   mmCtx.clearRect(0, 0, w, h);
 
@@ -3503,7 +4227,10 @@ function drawMaomaoStage(pose, beatPos, bass, mid, high) {
   }
 }
 
-function drawSpectrum(beatPos, beatPulse, bass, mid, high) {
+function drawSpectrum(beatPos, beatPulse, bass, mid, high, targetCanvas, targetCtx) {
+  const vCanvas = targetCanvas || document.getElementById("visCanvas");
+  const vCtx = targetCtx || (vCanvas ? vCanvas.getContext("2d") : null);
+  if (!vCanvas || !vCtx) return;
   const w = vCanvas.width, h = vCanvas.height;
   vCtx.clearRect(0, 0, w, h);
 
@@ -3646,11 +4373,13 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   loadPersistentState();
+  initFullPlayer();
   renderTracks();
   renderHomePlaylists();
   updateAccountUI();
   updateShuffleUI();
   updateRepeatUI();
+  updateFullPlayerUI();
   syncCanvasDimensions();
   animateLoop();
 

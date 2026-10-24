@@ -1466,7 +1466,7 @@ class SpotiLinuxWindow(QMainWindow):
         right_lay.addLayout(maomao_header)
 
         self.maomao_widget = MaomaoDancerWidget()
-        self.maomao_widget.setFixedHeight(195)
+        self.maomao_widget.setFixedHeight(235)
         right_lay.addWidget(self.maomao_widget)
 
         # 3. Visualizador de Espectro / Onda a 60 FPS

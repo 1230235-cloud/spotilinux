@@ -65,39 +65,39 @@ QPushButton#NavButton[active="true"] {
 }
 
 QPushButton#ActionChipButton {
-    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2A2A, stop:1 #202020);
-    color: #EAEAEA;
-    border: 1px solid #343434;
+    background-color: #18181f;
+    color: #e5e5ec;
+    border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 16px;
-    padding: 7px 15px;
+    padding: 7px 16px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 QPushButton#ActionChipButton:hover {
-    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #343434, stop:1 #282828);
-    border-color: #1DB954;
+    background-color: #24242d;
+    border-color: rgba(30, 215, 96, 0.6);
     color: #FFFFFF;
 }
 
 QPushButton#ActionChipButton:pressed {
-    background-color: #1A1A1A;
-    border-color: #17A04A;
+    background-color: #141419;
+    border-color: #1ed760;
 }
 
 QPushButton#ActionChipButton[active="true"] {
-    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22D45F, stop:1 #17A84B);
-    color: #04140A;
-    border: 1px solid #1ED760;
+    background-color: #1ed760;
+    color: #000000;
+    border: 1px solid #1ed760;
     font-weight: 800;
 }
 
 QPushButton#ActionChipButton[active="true"]:hover {
-    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3BE675, stop:1 #1DB954);
+    background-color: #2bf075;
 }
 
 QPushButton#ActionChipButton[active="true"]:pressed {
-    background-color: #14933F;
+    background-color: #17a84b;
 }
 
 QPushButton#SpotifyGreenPlayBig {
