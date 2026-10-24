@@ -963,33 +963,58 @@
   }
   .track-badge-unassigned svg { flex-shrink: 0; color: #707080; }
 
+  /* Botón de reproducción aleatoria flotante en la tarjeta de playlist */
   .playlist-card-shuffle-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    color: #e0e0e0;
-    width: 28px;
-    height: 28px;
+    position: absolute;
+    right: 48px;
+    bottom: 10px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    display: inline-flex;
+    background: #14141d;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #e4e4ed;
+    display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+    cursor: pointer;
+    transition: all 0.16s ease;
+    z-index: 2;
+  }
+  .playlist-card-shuffle-btn:hover {
+    background: #222230;
+    color: var(--green-bright);
+    border-color: var(--green-bright);
+    transform: scale(1.08);
+    box-shadow: 0 4px 18px rgba(30, 215, 96, 0.35);
+  }
+  .playlist-card-shuffle-btn:active {
+    transform: scale(0.92);
+  }
+
+  /* Botón de acción Aleatorio con diseño dark homogéneo */
+  .icon-shuffle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #16171f;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e2ec;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 9999px;
+    padding: 5px 12px;
     cursor: pointer;
     transition: all 0.15s ease;
   }
-  .playlist-card-shuffle-btn:hover {
-    background: var(--green-bright);
-    color: #000;
+  .icon-shuffle-btn:hover {
+    background: #22232f;
     border-color: var(--green-bright);
-  }
-  .playlist-card-shuffle-btn:active {
-    transform: scale(0.9);
-  }
-
-  .btn-chip.shuffle-chip {
-    background: rgba(29, 185, 84, 0.14);
-    border-color: rgba(29, 185, 84, 0.32);
     color: var(--green-bright);
-    font-weight: 800;
+  }
+  .icon-shuffle-btn:active {
+    transform: scale(0.93);
   }
 
   /* Barra fija inferior de controles en pantalla completa */
@@ -1112,12 +1137,18 @@
       </button>
 
       <button class="sm-item-btn" onclick="closeSideMenu(); startRandomPlayback()">
-        <div class="sm-item-icon" style="color:var(--green-bright);">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        <div class="sm-item-icon" style="color:var(--green-bright); background:rgba(30, 215, 96, 0.12); border:1px solid rgba(30, 215, 96, 0.28);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 17C8 17 11 7 16 7H20"/>
+            <polyline points="17 4 21 7 17 10"/>
+            <path d="M4 7C7.2 7 9.4 11.2 10.5 13"/>
+            <path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/>
+            <polyline points="17 14 21 17 17 20"/>
+          </svg>
         </div>
         <div class="sm-item-text">
-          <div class="sm-item-title" style="color:var(--green-bright);">Modo Aleatorio 🔀</div>
-          <div class="sm-item-sub">Empezar a reproducir al azar</div>
+          <div class="sm-item-title" style="color:var(--green-bright); font-weight:800;">Modo Aleatorio</div>
+          <div class="sm-item-sub">Mezclar y reproducir toda la biblioteca</div>
         </div>
       </button>
 
@@ -1248,8 +1279,14 @@
         <div class="section-title">
           <span>Tus Playlists</span>
           <div style="display:flex; gap:6px;">
-            <button class="btn-chip shuffle-chip" onclick="startRandomPlayback()" title="Empezar reproducción aleatoria de la biblioteca" style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; font-size:11px;">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+            <button class="icon-shuffle-btn" onclick="startRandomPlayback()" title="Empezar reproducción aleatoria">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 17C8 17 11 7 16 7H20"/>
+                <polyline points="17 4 21 7 17 10"/>
+                <path d="M4 7C7.2 7 9.4 11.2 10.5 13"/>
+                <path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/>
+                <polyline points="17 14 21 17 17 20"/>
+              </svg>
               <span>Aleatorio</span>
             </button>
             <button class="icon-action-btn" onclick="openCreatePlaylistModal()" title="Nueva Playlist" style="display:inline-flex; align-items:center; gap:5px;">
@@ -1270,8 +1307,14 @@
           <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">Descargadas</button>
           <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">Favoritos</button>
           <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">Google Drive</button>
-          <button class="btn-chip shuffle-chip" onclick="startRandomPlayback()" style="display:inline-flex; align-items:center; gap:5px;">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          <button class="btn-chip" id="flt-shuffle" onclick="startRandomPlayback()" style="display:inline-flex; align-items:center; gap:6px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green-bright);">
+              <path d="M4 17C8 17 11 7 16 7H20"/>
+              <polyline points="17 4 21 7 17 10"/>
+              <path d="M4 7C7.2 7 9.4 11.2 10.5 13"/>
+              <path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/>
+              <polyline points="17 14 21 17 17 20"/>
+            </svg>
             <span>Aleatorio</span>
           </button>
         </div>
@@ -1524,7 +1567,13 @@
       </div>
       <div class="dock-controls" onclick="event.stopPropagation()">
         <button class="ctrl-btn" id="btnShuffle" onclick="toggleShuffle()" title="Aleatorio">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 17C8 17 11 7 16 7H20"/>
+            <polyline points="17 4 21 7 17 10"/>
+            <path d="M4 7C7.2 7 9.4 11.2 10.5 13"/>
+            <path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/>
+            <polyline points="17 14 21 17 17 20"/>
+          </svg>
         </button>
         <button class="ctrl-btn" onclick="prevTrack()" title="Anterior">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
@@ -1632,8 +1681,14 @@
 
         <!-- Acciones de la Playlist -->
         <div class="fp-pl-actions-row">
-          <button class="fp-chip-btn active" onclick="playCurrentFullPlaylistShuffle()" style="display:inline-flex; align-items:center; gap:5px;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          <button class="fp-chip-btn active" onclick="playCurrentFullPlaylistShuffle()" style="display:inline-flex; align-items:center; gap:6px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 17C8 17 11 7 16 7H20"/>
+              <polyline points="17 4 21 7 17 10"/>
+              <path d="M4 7C7.2 7 9.4 11.2 10.5 13"/>
+              <path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/>
+              <polyline points="17 14 21 17 17 20"/>
+            </svg>
             <span>Aleatorio</span>
           </button>
           <button class="fp-chip-btn" id="fpBtnDownloadPl" onclick="downloadCurrentPlaylistTracks()" style="display:inline-flex; align-items:center; gap:5px;">
@@ -1677,7 +1732,13 @@
       <!-- Controles de Reproducción Estilo Spotify con SVGs -->
       <div class="fp-controls-row" style="margin-bottom:4px;">
         <button class="fp-ctrl-btn" id="fpBtnShuffle" onclick="toggleShuffle()" title="Aleatorio">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 17C8 17 11 7 16 7H20"/>
+            <polyline points="17 4 21 7 17 10"/>
+            <path d="M4 7C7.2 7 9.4 11.2 10.5 13"/>
+            <path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/>
+            <polyline points="17 14 21 17 17 20"/>
+          </svg>
         </button>
         <button class="fp-ctrl-btn" onclick="prevTrack()" title="Anterior">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
@@ -2221,7 +2282,7 @@ const ICONS = {
   pause: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4.5" height="16" rx="1.5"/><rect x="14.5" y="4" width="4.5" height="16" rx="1.5"/></svg>`,
   prev: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>`,
   next: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`,
-  shuffle: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>`,
+  shuffle: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17C8 17 11 7 16 7H20"/><polyline points="17 4 21 7 17 10"/><path d="M4 7C7.2 7 9.4 11.2 10.5 13"/><path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/><polyline points="17 14 21 17 17 20"/></svg>`,
   repeat: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
   likeOutline: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
   likeFilled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" stroke="#1ed760" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`
@@ -2444,13 +2505,13 @@ function startRandomPlayback() {
   shuffleMode = true;
   activePlaybackQueue = shuffled;
   activeQueueIndex = 0;
-  activeQueueName = "Modo Aleatorio 🔀";
+  activeQueueName = "Modo Aleatorio";
   executePlayTrack(shuffled[0]);
   updatePlayerUI();
   updateFullPlayerUI();
   setFullPlayerTab("visualizer");
   openFullPlayer();
-  showToast("🔀 Reproducción aleatoria iniciada");
+  showToast("Modo aleatorio iniciado");
 }
 
 function playPlaylistShuffle(plId) {
@@ -2484,7 +2545,7 @@ function playPlaylistShuffle(plId) {
   updateFullPlayerUI();
   setFullPlayerTab("visualizer");
   openFullPlayer();
-  showToast(`🔀 Reproduciendo «${plName}» en aleatorio`);
+  showToast(`Reproduciendo «${plName}» en aleatorio`);
 }
 
 function handleProfilePhotoPicked(ev) {
@@ -2953,7 +3014,7 @@ function playCurrentFullPlaylistShuffle() {
   updateShuffleUI();
   const randIdx = Math.floor(Math.random() * activePlaybackQueue.length);
   playActiveQueueIndex(randIdx);
-  showToast("🔀 Modo Aleatorio Activado");
+  showToast("Modo aleatorio activado");
 }
 
 function highlightPlayingTracks() {
@@ -3180,17 +3241,15 @@ function renderHomePlaylists() {
     openFullPlayer();
   };
   likedCard.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div class="playlist-card-badge">FAVORITOS</div>
-      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_liked')" title="Reproducir en aleatorio">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-      </button>
-    </div>
+    <div class="playlist-card-badge">FAVORITOS</div>
     <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
       ${ICONS.likeFilled}
     </div>
     <div class="playlist-card-title">Tus Favoritos</div>
     <div class="playlist-card-sub">${likedList.length} canciones</div>
+    <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_liked')" title="Reproducir en aleatorio">
+      ${ICONS.shuffle}
+    </button>
     <div class="playlist-card-play-btn">${ICONS.play}</div>
   `;
   grid.appendChild(likedCard);
@@ -3215,17 +3274,15 @@ function renderHomePlaylists() {
     openFullPlayer();
   };
   cloudCard.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div class="playlist-card-badge">NUBE</div>
-      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_cloud')" title="Reproducir en aleatorio">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-      </button>
-    </div>
+    <div class="playlist-card-badge">NUBE</div>
     <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
     </div>
     <div class="playlist-card-title">Google Drive</div>
     <div class="playlist-card-sub">${cloudList.length} canciones</div>
+    <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_cloud')" title="Reproducir en aleatorio">
+      ${ICONS.shuffle}
+    </button>
     <div class="playlist-card-play-btn">${ICONS.play}</div>
   `;
   grid.appendChild(cloudCard);
@@ -3250,16 +3307,14 @@ function renderHomePlaylists() {
       openFullPlayer();
     };
     card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-        </div>
-        <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-        </button>
+      <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       </div>
       <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
       <div class="playlist-card-sub">${plTracks.length} canciones</div>
+      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
+        ${ICONS.shuffle}
+      </button>
       <div class="playlist-card-play-btn">${ICONS.play}</div>
     `;
     grid.appendChild(card);
@@ -3662,7 +3717,7 @@ function shufflePlaySelectedPlaylist() {
   updateShuffleUI();
   const rnd = Math.floor(Math.random() * list.length);
   playTrackFromQueue(list, rnd, name);
-  showToast(`🔀 Modo aleatorio activado en «${name}»`);
+  showToast(`Modo aleatorio activado en «${name}»`);
 }
 
 function deleteSelectedPlaylist() {
