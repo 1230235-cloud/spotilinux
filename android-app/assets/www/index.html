@@ -363,6 +363,141 @@
   .modal-card p { color: var(--muted); font-size: 12px; margin-bottom: 12px; line-height: 1.4; }
 
   /* ========================================================================= */
+  /* MENÚ DESPLEGABLE LATERAL ÚNICO (SIDE MENU DRAWER)                         */
+  /* ========================================================================= */
+  .top-menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: #141419;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 9999px;
+    padding: 4px 11px 4px 5px;
+    color: #e5e5ec;
+    cursor: pointer;
+    transition: all 0.16s ease;
+  }
+  .top-menu-btn:hover { background: #202028; border-color: rgba(30, 215, 96, 0.4); color: #fff; }
+  .top-menu-btn:active { transform: scale(0.95); }
+  .top-menu-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #20202a; color: var(--green-bright);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0;
+  }
+  .top-menu-name {
+    font-size: 11px; font-weight: 700; max-width: 90px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .side-menu-backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    z-index: 1100; opacity: 0; pointer-events: none;
+    transition: opacity 0.24s ease;
+  }
+  .side-menu-backdrop.open {
+    opacity: 1; pointer-events: auto;
+  }
+  .side-menu-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 86%; max-width: 330px;
+    background: #101015;
+    border-left: 1px solid rgba(255, 255, 255, 0.09);
+    z-index: 1200;
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.18, 0.9, 0.22, 1);
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.95);
+  }
+  .side-menu-drawer.open {
+    transform: translateX(0);
+  }
+  .sm-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 16px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #14141c;
+  }
+  .sm-profile-row { display: flex; align-items: center; gap: 10px; overflow: hidden; flex: 1; }
+  .sm-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(30, 215, 96, 0.15); color: var(--green-bright);
+    border: 1px solid rgba(30, 215, 96, 0.35);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; overflow: hidden;
+  }
+  .sm-user-meta { overflow: hidden; min-width: 0; }
+  .sm-username { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sm-status { font-size: 11px; color: var(--green-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .sm-close-btn {
+    background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #fff; width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+  }
+  .sm-close-btn:active { transform: scale(0.9); }
+  .sm-body {
+    flex: 1; overflow-y: auto; padding: 10px 12px 24px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .sm-section-label {
+    font-size: 10px; font-weight: 800; color: var(--muted);
+    letter-spacing: 0.8px; margin: 12px 6px 4px; text-transform: uppercase;
+  }
+  .sm-item-btn {
+    display: flex; align-items: center; gap: 12px;
+    background: transparent; border: none; border-radius: 12px;
+    padding: 10px 10px; color: #fff; text-align: left; cursor: pointer;
+    transition: all 0.14s ease; width: 100%;
+  }
+  .sm-item-btn:hover { background: rgba(255, 255, 255, 0.06); }
+  .sm-item-btn:active { background: rgba(255, 255, 255, 0.12); transform: scale(0.98); }
+  .sm-item-icon {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: #1a1a22; color: #e5e5ee;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .sm-item-btn:hover .sm-item-icon { color: var(--green-bright); background: rgba(30, 215, 96, 0.16); }
+  .sm-item-text { flex: 1; min-width: 0; }
+  .sm-item-title { font-size: 13px; font-weight: 700; color: #fff; }
+  .sm-item-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  .sm-dance-row { display: flex; gap: 6px; margin: 4px 0 10px; }
+  .sm-dance-chip {
+    flex: 1; background: #181820; color: #c0c0cc;
+    border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 9999px;
+    padding: 7px 4px; font-size: 10px; font-weight: 700; text-align: center; cursor: pointer;
+    transition: all 0.14s ease;
+  }
+  .sm-dance-chip:active { transform: scale(0.94); }
+  .sm-dance-chip.active {
+    background: var(--green-bright); color: #000; font-weight: 800; border-color: var(--green-bright);
+  }
+
+  /* Barra de búsqueda limpia con icono embebido */
+  .search-wrapper {
+    position: relative; flex: 1; display: flex; align-items: center;
+  }
+  .search-icon {
+    position: absolute; left: 14px; color: var(--muted); pointer-events: none;
+  }
+  .search-wrapper .search-input {
+    width: 100%; padding-left: 38px;
+  }
+
+  /* Botón de reproducción flotante dentro de la tarjeta de playlist */
+  .playlist-card-play-btn {
+    position: absolute; right: 10px; bottom: 10px;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--green-bright); color: #000;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    opacity: 0.95; transition: all 0.16s ease;
+  }
+  .playlist-card:hover .playlist-card-play-btn {
+    opacity: 1; transform: scale(1.08); box-shadow: 0 4px 18px var(--green-glow);
+  }
+
+  /* ========================================================================= */
   /* REPRODUCTOR DE PANTALLA COMPLETA ESTILO SPOTIFY (FULL-SCREEN NOW PLAYING) */
   /* ========================================================================= */
   .full-player-overlay {
@@ -758,15 +893,123 @@
 </head>
 <body>
 
-  <!-- Cabecera -->
+  <!-- Cabecera Limpia con Acceso al Menú Unificado -->
   <div class="top-header">
     <div class="logo-box">
       <div class="logo-dot"></div>
-      <div class="logo-title">SpotiLinux Mobile</div>
+      <div class="logo-title">SpotiLinux</div>
     </div>
-    <div style="display:flex; gap:6px; align-items:center;">
-      <button class="btn-chip" style="padding:3px 9px; font-size:10px;" onclick="scanPhoneMusic()">🔍 Rastrear Celular</button>
-      <div class="maomao-pill" onclick="cycleMaomaoStyle()">🌿 <span id="lblDanceStyle">Imperial</span></div>
+    <button class="top-menu-btn" onclick="toggleSideMenu()" id="btnTopMenu" title="Menú y Cuenta">
+      <div class="top-menu-avatar" id="topMenuAvatar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <span class="top-menu-name" id="topMenuName">Menú</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- MENÚ DESPLEGABLE LATERAL ÚNICO (CUENTA + ACCIONES + AJUSTES) -->
+  <div id="sideMenuBackdrop" class="side-menu-backdrop" onclick="closeSideMenu()"></div>
+  <div id="sideMenuDrawer" class="side-menu-drawer">
+    <div class="sm-header">
+      <div class="sm-profile-row">
+        <div class="sm-avatar" id="smAvatar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="sm-user-meta">
+          <div class="sm-username" id="smUsername">Cuenta SpotiLinux</div>
+          <div class="sm-status" id="smStatus">Google Drive • Conectado</div>
+        </div>
+      </div>
+      <button class="sm-close-btn" onclick="closeSideMenu()" title="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="sm-body">
+      <!-- Sección Cuenta y Nube -->
+      <div class="sm-section-label">CUENTA Y NUBE</div>
+      <button class="sm-item-btn" onclick="closeSideMenu(); switchTab('drive')">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Configurar Google Drive</div>
+          <div class="sm-item-sub">Token, ID de carpeta y base de datos</div>
+        </div>
+      </button>
+
+      <!-- Sección Biblioteca y Acciones -->
+      <div class="sm-section-label">BIBLIOTECA Y ACCIONES</div>
+      <button class="sm-item-btn" onclick="closeSideMenu(); openCreatePlaylistModal()">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Crear Nueva Playlist</div>
+          <div class="sm-item-sub">Crea listas de reproducción personalizadas</div>
+        </div>
+      </button>
+
+      <button class="sm-item-btn" onclick="closeSideMenu(); refreshDriveCatalog()">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Actualizar Catálogo de Drive</div>
+          <div class="sm-item-sub">Sincronizar nuevas canciones de la nube</div>
+        </div>
+      </button>
+
+      <button class="sm-item-btn" onclick="closeSideMenu(); scanPhoneMusic()">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Rastrear Celular</div>
+          <div class="sm-item-sub">Auto-importar música de tu teléfono</div>
+        </div>
+      </button>
+
+      <button class="sm-item-btn" onclick="closeSideMenu(); document.getElementById('filePicker').click()">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Importar Archivos Locales</div>
+          <div class="sm-item-sub">Abrir canciones MP3, FLAC o WAV</div>
+        </div>
+      </button>
+
+      <!-- Sección Audio y Utilidades -->
+      <div class="sm-section-label">HERRAMIENTAS DE AUDIO</div>
+      <button class="sm-item-btn" onclick="closeSideMenu(); switchTab('eq')">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Ecualizador de Sonido</div>
+          <div class="sm-item-sub">Calibrar curvas de ecualización</div>
+        </div>
+      </button>
+
+      <button class="sm-item-btn" onclick="closeSideMenu(); toggleMultiSelectMode()">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><polyline points="9 11 12 14 22 4"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Selección Múltiple</div>
+          <div class="sm-item-sub">Añadir varias canciones a la vez</div>
+        </div>
+      </button>
+
+      <!-- Estilo de Baile de Maomao -->
+      <div class="sm-section-label">PASO DE BAILE DE MAOMAO</div>
+      <div class="sm-dance-row">
+        <button class="sm-dance-chip active" id="btnDance0" onclick="setMaomaoDanceStyle(0)">Imperial</button>
+        <button class="sm-dance-chip" id="btnDance1" onclick="setMaomaoDanceStyle(1)">Hierbas 🌿</button>
+        <button class="sm-dance-chip" id="btnDance2" onclick="setMaomaoDanceStyle(2)">Neko :3 🐾</button>
+      </div>
     </div>
   </div>
 
@@ -777,11 +1020,12 @@
     <div class="stage-pane">
       <div class="stage-card" onclick="openFullPlayer()" title="Toca para ver a Maomao en grande a pantalla completa">
         <div class="stage-top" onclick="event.stopPropagation()">
-          <span class="stage-label">🌿 MAOMAO BAILANDO AL COMPÁS</span>
-          <div style="display:flex; gap:5px; align-items:center;">
-            <button class="btn-chip" style="padding:3px 8px; font-size:10px;" onclick="cycleMaomaoStyle()">Paso 🐾</button>
-            <button class="btn-chip" style="padding:3px 8px; font-size:10px;" onclick="cycleVisMode()">FFT 📊</button>
-            <button class="btn-chip active" style="padding:3px 8px; font-size:10px;" onclick="openFullPlayer()">⛶ Grande</button>
+          <span class="stage-label">MAOMAO EN VIVO</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="fp-chip-btn" onclick="cycleMaomaoStyle()" id="lblDanceStyleBtn">Paso 🐾</button>
+            <button class="fp-chip-btn active" onclick="openFullPlayer()" title="Abrir en pantalla completa">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            </button>
           </div>
         </div>
         <canvas id="maomaoCanvas" width="360" height="175" onclick="event.stopPropagation(); cycleMaomaoStyle()"></canvas>
@@ -789,98 +1033,42 @@
       </div>
     </div>
 
-    <!-- Buscador + Pestañas -->
+    <!-- Buscador Limpio + Pestañas -->
     <div class="content-pane">
       <div class="search-row">
-        <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar canción, artista, playlist..." oninput="renderTracks()" />
-        <button class="btn-chip" onclick="scanPhoneMusic()" title="Rastrear música del dispositivo y guardar en carpeta">📲 Auto-Importar</button>
-        <button class="btn-chip" onclick="document.getElementById('filePicker').click()">📂 Archivos</button>
+        <div class="search-wrapper">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" class="search-input" placeholder="Buscar canciones o playlists..." oninput="renderTracks()" />
+        </div>
         <input type="file" id="filePicker" accept="audio/*" multiple style="display:none" onchange="importLocalFiles(event)" />
       </div>
 
-      <!-- PESTAÑA 1: INICIO (MUESTRA LAS PLAYLISTS DISPONIBLES) -->
+      <!-- PESTAÑA 1: INICIO (SOLO PLAYLISTS LIMPIAS) -->
       <div id="tab-home" class="tab-pane active">
-        <!-- Tarjeta de Cuenta Google / Sincronización en la Nube -->
-        <div id="homeAccountCard" class="account-badge-card" onclick="switchTab('drive')">
-          <div class="account-avatar" id="homeAvatar">👤</div>
-          <div class="account-info">
-            <div class="account-name" id="homeAccountName">Cuenta de Google / SpotiLinux</div>
-            <div class="account-sub" id="homeAccountSub">Toca para conectar Google Drive y sincronizar en la nube</div>
-          </div>
-          <span style="font-size:12px; color:var(--muted)">☁️</span>
-        </div>
-
         <div class="section-title">
-          <span>🎵 Tus Playlists Disponibles</span>
-          <div style="display:flex; gap:5px;">
-            <button class="btn-chip" style="font-size:10px; padding:4px 9px;" onclick="refreshDriveCatalog()" title="Actualizar canciones de Drive">🔄 Actualizar Drive</button>
-            <button class="btn-chip active" style="font-size:10px; padding:4px 9px;" onclick="openCreatePlaylistModal()">＋ Playlist</button>
-            <button class="btn-chip" id="btnShuffleChip" style="font-size:10px; padding:4px 9px;" onclick="toggleShuffle(true)">🔀 Aleatorio</button>
-          </div>
-        </div>
-
-        <!-- Grid de Playlists disponibles -->
-        <div id="homePlaylistGrid" class="playlist-grid"></div>
-
-        <!-- Vista detallada de la playlist seleccionada -->
-        <div id="activePlaylistBox" class="active-playlist-card" style="display:none; margin-top:12px;">
-          <div class="active-pl-header">
-            <div style="flex:1; min-width:0;">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span id="plViewBadge" class="pl-pill">PLAYLIST SELECCIONADA</span>
-                <span id="plTrackCountBadge" class="pl-count-pill">0 canciones</span>
-              </div>
-              <h3 id="plViewTitle" style="font-size:16px; font-weight:800; color:#fff; margin:4px 0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Mi Playlist</h3>
-              <p id="plViewDesc" style="font-size:11px; color:var(--muted); margin:0;">Descripción</p>
-            </div>
-            <div style="display:flex; gap:5px; align-items:center;">
-              <button class="btn-chip active" id="btnPlayPlAction" onclick="playSelectedPlaylist()" style="padding:6px 12px; font-size:11px;">▶ Reproducir</button>
-              <button class="btn-chip" id="btnTogglePlCollapse" onclick="togglePlaylistCollapse()" title="Reducir / Mostrar lista de canciones" style="padding:6px 9px; font-size:11px;">➖ Reducir</button>
-              <button class="btn-chip" style="background:#3a1822; border-color:#6e2438; padding:6px 9px;" onclick="deleteSelectedPlaylist()" title="Eliminar Playlist">🗑</button>
-            </div>
-          </div>
-
-          <div style="display:flex; gap:6px; margin: 8px 0 6px; flex-wrap:wrap;">
-            <button class="btn-chip active" style="flex:1; font-size:11px; padding:7px 10px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir canciones</button>
-            <button class="btn-chip" id="btnDownloadCurrentPl" style="font-size:11px; padding:7px 10px; background:rgba(29, 185, 84, 0.22); border-color:var(--green-bright); color:var(--green-bright);" onclick="downloadCurrentPlaylistTracks()">⬇️ Descargar Playlist</button>
-            <button class="btn-chip" style="font-size:11px; padding:7px 10px;" onclick="shufflePlaySelectedPlaylist()">🔀 Aleatorio</button>
-          </div>
-
-          <!-- Contenedor colapsable de la lista de canciones -->
-          <div id="plTracksCollapsibleContainer">
-            <div id="playlistTracksList" class="track-list" style="margin-top:6px;"></div>
-            <div id="plExpandMoreBar" style="display:none; margin-top:6px; text-align:center;">
-              <button class="btn-chip" id="btnExpandMoreTracks" onclick="togglePlaylistExpandFull()" style="width:100%; font-size:11px; padding:8px 12px; background:#1e1e28; border-color:#353545;">
-                ▼ Ver todas las canciones
-              </button>
-            </div>
-          </div>
-
-          <!-- Resumen cuando la lista está reducida -->
-          <div id="plCollapsedSummary" style="display:none; padding:10px 12px; text-align:center; background:#161620; border-radius:8px; margin-top:6px;">
-            <span style="font-size:11px; color:var(--muted);">Lista reducida para mayor comodidad visual.<br>Pulsa <b>[➕ Mostrar lista]</b> para ver las canciones o <b>[▶ Reproducir]</b> para escuchar la playlist.</span>
-          </div>
-        </div>
-
-        <div style="margin-top:14px; text-align:center;">
-          <button class="btn-chip" style="width:100%; padding:10px; font-size:12px;" onclick="switchTab('songs')">
-            💿 Explorar todas las canciones sueltas / Biblioteca
+          <span>Tus Playlists</span>
+          <button class="icon-action-btn" onclick="openCreatePlaylistModal()" title="Nueva Playlist" style="display:inline-flex; align-items:center; gap:5px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Nueva</span>
           </button>
         </div>
+
+        <!-- Grid de Playlists disponibles sin pistas sueltas que ensucien la pantalla -->
+        <div id="homePlaylistGrid" class="playlist-grid"></div>
       </div>
 
       <!-- PESTAÑA 2: TODAS LAS CANCIONES Y SELECCIÓN MÚLTIPLE -->
       <div id="tab-songs" class="tab-pane">
         <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;">
           <button class="btn-chip active" id="flt-all" onclick="setFilter('all')">Todo</button>
-          <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">📱 Guardadas en App</button>
-          <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">♥ Favoritos</button>
-          <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">☁️ Google Drive</button>
+          <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">Descargadas</button>
+          <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">Favoritos</button>
+          <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">Google Drive</button>
         </div>
         <div class="section-title">
           <span id="listHeading">Biblioteca de Canciones</span>
           <div style="display:flex; gap:5px;">
-            <button class="btn-chip" id="btnToggleMultiSelect" style="font-size:10px; padding:4px 9px;" onclick="toggleMultiSelectMode()">☑️ Seleccionar Varias</button>
+            <button class="btn-chip" id="btnToggleMultiSelect" style="font-size:10px; padding:4px 9px;" onclick="toggleMultiSelectMode()">Seleccionar Varias</button>
           </div>
         </div>
         <div id="scanBanner" style="font-size:11px; color:var(--green-bright); margin-bottom:6px; display:none;"></div>
@@ -1120,12 +1308,24 @@
         <div class="dock-artist" id="nowArtist">Neon Pulse • Synthwave</div>
       </div>
       <div class="dock-controls" onclick="event.stopPropagation()">
-        <button class="ctrl-btn" id="btnShuffle" onclick="toggleShuffle()">🔀</button>
-        <button class="ctrl-btn" onclick="prevTrack()">⏮</button>
-        <button class="play-circle" id="btnPlay" onclick="togglePlay()">▶</button>
-        <button class="ctrl-btn" onclick="nextTrack()">⏭</button>
-        <button class="ctrl-btn" id="btnRepeat" onclick="toggleRepeat()">🔁</button>
-        <button class="ctrl-btn" onclick="openFullPlayer()" title="Expandir reproductor">⛶</button>
+        <button class="ctrl-btn" id="btnShuffle" onclick="toggleShuffle()" title="Aleatorio">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="prevTrack()" title="Anterior">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+        </button>
+        <button class="play-circle" id="btnPlay" onclick="togglePlay()" title="Reproducir">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="nextTrack()" title="Siguiente">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btnRepeat" onclick="toggleRepeat()" title="Repetir">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="openFullPlayer()" title="Expandir reproductor">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </button>
       </div>
     </div>
     <div class="seek-row" onclick="event.stopPropagation()">
@@ -1147,14 +1347,14 @@
         <span class="fp-header-title" id="fpHeaderPlaylist">Biblioteca</span>
       </div>
       <button class="fp-icon-btn" id="fpBtnQueueToggle" onclick="toggleFullPlayerViewMode()" title="Alternar Playlist / Maomao">
-        <span id="fpQueueIcon">📜</span>
+        <svg id="fpQueueIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.5" fill="currentColor"/><circle cx="3.5" cy="12" r="1.5" fill="currentColor"/><circle cx="3.5" cy="18" r="1.5" fill="currentColor"/></svg>
       </button>
     </div>
 
-    <!-- Selector de vista tipo pill: [ 🌿 Visualizador Maomao ]  [ 📜 Playlist Completa ] -->
+    <!-- Selector de vista tipo pill: [ Visualizador Maomao ]  [ Playlist Completa ] -->
     <div class="fp-segmented-tabs">
-      <button class="fp-tab-btn active" id="fpTabVisualizer" onclick="setFullPlayerTab('visualizer')">🌿 Visualizador Maomao</button>
-      <button class="fp-tab-btn" id="fpTabPlaylist" onclick="setFullPlayerTab('playlist')">📜 Playlist Completa</button>
+      <button class="fp-tab-btn active" id="fpTabVisualizer" onclick="setFullPlayerTab('visualizer')">Visualizador Maomao</button>
+      <button class="fp-tab-btn" id="fpTabPlaylist" onclick="setFullPlayerTab('playlist')">Playlist Completa</button>
     </div>
 
     <!-- SECCIÓN 1: VISTA DE MAOMAO Y ESPECTRO EN GRANDE -->
@@ -1180,7 +1380,9 @@
             <div class="fp-title" id="fpTitle">Midnight Horizon</div>
             <div class="fp-artist" id="fpArtist">Neon Pulse • Synthwave</div>
           </div>
-          <button class="fp-like-btn" id="fpLikeBtn" onclick="toggleCurrentTrackLike()" title="Me gusta">💚</button>
+          <button class="fp-like-btn" id="fpLikeBtn" onclick="toggleCurrentTrackLike()" title="Me gusta">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
         </div>
 
         <!-- Barra de progreso / seekbar -->
@@ -1192,19 +1394,30 @@
           </div>
         </div>
 
-        <!-- Controles de Reproducción Estilo Spotify -->
+        <!-- Controles de Reproducción Estilo Spotify con SVGs -->
         <div class="fp-controls-row">
-          <button class="fp-ctrl-btn" id="fpBtnShuffle" onclick="toggleShuffle()" title="Aleatorio">🔀</button>
-          <button class="fp-ctrl-btn" onclick="prevTrack()" title="Anterior">⏮</button>
-          <button class="fp-play-btn" id="fpBtnPlay" onclick="togglePlay()" title="Reproducir / Pausar">▶</button>
-          <button class="fp-ctrl-btn" onclick="nextTrack()" title="Siguiente">⏭</button>
-          <button class="fp-ctrl-btn" id="fpBtnRepeat" onclick="toggleRepeat()" title="Repetir">🔁</button>
+          <button class="fp-ctrl-btn" id="fpBtnShuffle" onclick="toggleShuffle()" title="Aleatorio">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          </button>
+          <button class="fp-ctrl-btn" onclick="prevTrack()" title="Anterior">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+          </button>
+          <button class="fp-play-btn" id="fpBtnPlay" onclick="togglePlay()" title="Reproducir / Pausar">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+          </button>
+          <button class="fp-ctrl-btn" onclick="nextTrack()" title="Siguiente">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+          </button>
+          <button class="fp-ctrl-btn" id="fpBtnRepeat" onclick="toggleRepeat()" title="Repetir">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </button>
         </div>
 
         <!-- Botón para desplegar la playlist -->
         <div style="display:flex; justify-content:center; margin-top:6px;">
           <button class="fp-pill-action-btn" onclick="setFullPlayerTab('playlist')">
-            <span>📜 Desplegar Playlist en Pantalla Completa</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.5" fill="currentColor"/><circle cx="3.5" cy="12" r="1.5" fill="currentColor"/><circle cx="3.5" cy="18" r="1.5" fill="currentColor"/></svg>
+            <span>Ver Playlist Completa</span>
             <span id="fpPlaylistCountBadge" style="opacity:0.75; font-size:11px;">(6 canciones)</span>
           </button>
         </div>
@@ -1214,7 +1427,9 @@
     <!-- SECCIÓN 2: VISTA DE LA PLAYLIST DESPLEGADA EN TODA LA PANTALLA -->
     <div id="fpPlaylistPane" class="fp-content-pane">
       <div class="fp-pl-header-box">
-        <div class="fp-pl-cover-art" id="fpPlCoverArt">🎵</div>
+        <div class="fp-pl-cover-art" id="fpPlCoverArt">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
         <div class="fp-pl-info">
           <span class="fp-pill-badge" id="fpPlBadge">PLAYLIST</span>
           <h2 class="fp-pl-title" id="fpPlName">Night Drive &amp; Synthwave</h2>
@@ -1224,10 +1439,19 @@
 
       <!-- Acciones de la Playlist -->
       <div class="fp-pl-actions-row">
-        <button class="fp-chip-btn active" onclick="playCurrentFullPlaylistShuffle()">🔀 Aleatorio</button>
-        <button class="fp-chip-btn" id="fpBtnDownloadPl" onclick="downloadCurrentPlaylistTracks()">⬇️ Descargar Playlist</button>
-        <button class="fp-chip-btn" onclick="openAddSelectedToPlaylistModal()">＋ Añadir Canción</button>
-        <button class="fp-chip-btn" onclick="setFullPlayerTab('visualizer')">🌿 Ver Maomao</button>
+        <button class="fp-chip-btn active" onclick="playCurrentFullPlaylistShuffle()" style="display:inline-flex; align-items:center; gap:5px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          <span>Aleatorio</span>
+        </button>
+        <button class="fp-chip-btn" id="fpBtnDownloadPl" onclick="downloadCurrentPlaylistTracks()" style="display:inline-flex; align-items:center; gap:5px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Descargar Todo</span>
+        </button>
+        <button class="fp-chip-btn" onclick="openAddSelectedToPlaylistModal()" style="display:inline-flex; align-items:center; gap:5px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>Añadir</span>
+        </button>
+        <button class="fp-chip-btn" onclick="setFullPlayerTab('visualizer')">Ver Maomao</button>
       </div>
 
       <!-- Lista completa de canciones con indicador de reproducción -->
@@ -1237,19 +1461,25 @@
     </div>
   </div>
 
-  <!-- Barra de Navegación Inferior con 4 Pestañas (Inicio, Canciones, Mi Drive, Ecualizador) -->
+  <!-- Barra de Navegación Inferior Limpia con Iconos SVG -->
   <div class="bottom-nav">
     <button class="nav-item active" id="nav-home" onclick="switchTab('home')">
-      <span class="ico">🏠</span><span>Inicio</span>
+      <span class="ico">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </span>
+      <span>Inicio</span>
     </button>
     <button class="nav-item" id="nav-songs" onclick="switchTab('songs')">
-      <span class="ico">💿</span><span>Canciones</span>
+      <span class="ico">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+      </span>
+      <span>Canciones</span>
     </button>
-    <button class="nav-item" id="nav-drive" onclick="switchTab('drive')">
-      <span class="ico">☁️</span><span>Mi Cuenta</span>
-    </button>
-    <button class="nav-item" id="nav-eq" onclick="switchTab('eq')">
-      <span class="ico">🎚</span><span>Ecualizador</span>
+    <button class="nav-item" id="nav-menu" onclick="toggleSideMenu()">
+      <span class="ico">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </span>
+      <span>Menú</span>
     </button>
   </div>
 
@@ -1316,6 +1546,40 @@ let googleUserProfile = null;
 let cachedMusicaFolderId = "";
 
 const audio = document.getElementById("audioPlayer");
+
+audio.ontimeupdate = function() {
+  if (hasNativeAndroid) return;
+  const cur = audio.currentTime || 0;
+  const dur = audio.duration || 28;
+  const curFmt = fmtTime(cur);
+  const durFmt = fmtTime(dur);
+  const progressRatio = Math.min(1000, Math.floor((cur / dur) * 1000));
+
+  const lblCur = document.getElementById("lblCurTime");
+  if (lblCur) lblCur.textContent = curFmt;
+  const lblDur = document.getElementById("lblDurTime");
+  if (lblDur) lblDur.textContent = durFmt;
+  const sBar = document.getElementById("seekBar");
+  if (sBar) sBar.value = progressRatio;
+
+  const playSvg = audio.paused ? ICONS.play : ICONS.pause;
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay) btnPlay.innerHTML = playSvg;
+
+  const fpCur = document.getElementById("fpCurTime");
+  if (fpCur) fpCur.textContent = curFmt;
+  const fpDur = document.getElementById("fpDurTime");
+  if (fpDur) fpDur.textContent = durFmt;
+  const fpSeek = document.getElementById("fpSeekBar");
+  if (fpSeek) fpSeek.value = progressRatio;
+  const fpPlay = document.getElementById("fpBtnPlay");
+  if (fpPlay) fpPlay.innerHTML = playSvg;
+};
+
+audio.onended = function() {
+  if (hasNativeAndroid) return;
+  nextTrack();
+};
 
 function normalizeTrackKey(str) {
   return String(str || "")
@@ -1672,36 +1936,50 @@ function showToast(msg) {
   }, 1800);
 }
 
+/* ---------------- ICONOS VECTORIALES SVG DARK HECHOS A MEDIDA ---------------- */
+const ICONS = {
+  play: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>`,
+  pause: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4.5" height="16" rx="1.5"/><rect x="14.5" y="4" width="4.5" height="16" rx="1.5"/></svg>`,
+  prev: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>`,
+  next: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`,
+  shuffle: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>`,
+  repeat: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
+  likeOutline: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  likeFilled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" stroke="#1ed760" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`
+};
+
 function updateShuffleUI() {
   const btn = document.getElementById("btnShuffle");
-  const chip = document.getElementById("btnShuffleChip");
+  const fpBtn = document.getElementById("fpBtnShuffle");
   if (btn) {
     btn.classList.toggle("active", shuffleMode);
-    btn.setAttribute("title", shuffleMode ? "Modo aleatorio: ACTIVADO" : "Modo aleatorio: Desactivado");
-    btn.innerHTML = shuffleMode ? `🔀<span class="active-dot"></span>` : `🔀`;
+    btn.setAttribute("title", shuffleMode ? "Aleatorio activado" : "Aleatorio desactivado");
+    btn.innerHTML = ICONS.shuffle + (shuffleMode ? `<span class="active-dot"></span>` : "");
   }
-  if (chip) {
-    chip.classList.toggle("active", shuffleMode);
-    chip.textContent = shuffleMode ? "🔀 Aleatorio: ACTIVADO" : "🔀 Aleatorio";
-    chip.style.backgroundColor = shuffleMode ? "var(--green)" : "";
-    chip.style.color = shuffleMode ? "#000" : "";
-    chip.style.borderColor = shuffleMode ? "var(--green-bright)" : "";
+  if (fpBtn) {
+    fpBtn.classList.toggle("active", shuffleMode);
+    fpBtn.innerHTML = ICONS.shuffle;
   }
 }
 
 function updateRepeatUI() {
   const btn = document.getElementById("btnRepeat");
+  const fpBtn = document.getElementById("fpBtnRepeat");
   if (btn) {
     btn.classList.toggle("active", repeatMode);
-    btn.setAttribute("title", repeatMode ? "Repetir canción: ACTIVADO" : "Repetir canción: Desactivado");
-    btn.innerHTML = repeatMode ? `🔁<span class="active-dot"></span>` : `🔁`;
+    btn.setAttribute("title", repeatMode ? "Repetir activado" : "Repetir desactivado");
+    btn.innerHTML = ICONS.repeat + (repeatMode ? `<span class="active-dot"></span>` : "");
+  }
+  if (fpBtn) {
+    fpBtn.classList.toggle("active", repeatMode);
+    fpBtn.innerHTML = ICONS.repeat;
   }
 }
 
 function toggleShuffle(forcePlayIfOff = false) {
   shuffleMode = !shuffleMode;
   updateShuffleUI();
-  showToast(shuffleMode ? "🔀 Modo aleatorio: ACTIVADO" : "🔀 Modo aleatorio: Desactivado");
+  showToast(shuffleMode ? "Modo aleatorio: ACTIVADO" : "Modo aleatorio: Desactivado");
   if (shuffleMode && forcePlayIfOff && !isPlaying && tracks.length > 0) {
     nextTrack();
   }
@@ -1710,7 +1988,7 @@ function toggleShuffle(forcePlayIfOff = false) {
 function toggleRepeat() {
   repeatMode = !repeatMode;
   updateRepeatUI();
-  showToast(repeatMode ? "🔁 Repetición: ACTIVADA" : "🔁 Repetición: Desactivada");
+  showToast(repeatMode ? "Repetición: ACTIVADA" : "Repetición: Desactivada");
   if (hasNativeAndroid) {
     window.AndroidMedia.setRepeat(repeatMode);
   } else {
@@ -1721,7 +1999,7 @@ function toggleRepeat() {
 function shufflePlayAll() {
   shuffleMode = true;
   updateShuffleUI();
-  showToast("🔀 Modo aleatorio: ACTIVADO");
+  showToast("Modo aleatorio: ACTIVADO");
   nextTrack();
 }
 
@@ -1737,7 +2015,10 @@ window.onNativeProgress = function(posMs, durMs, playingState) {
   document.getElementById("lblCurTime").textContent = curFmt;
   document.getElementById("lblDurTime").textContent = durFmt;
   document.getElementById("seekBar").value = progressRatio;
-  document.getElementById("btnPlay").textContent = isPlaying ? "⏸" : "▶";
+  
+  const playSvg = isPlaying ? ICONS.pause : ICONS.play;
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay) btnPlay.innerHTML = playSvg;
 
   const fpCur = document.getElementById("fpCurTime");
   if (fpCur) fpCur.textContent = curFmt;
@@ -1746,7 +2027,7 @@ window.onNativeProgress = function(posMs, durMs, playingState) {
   const fpSeek = document.getElementById("fpSeekBar");
   if (fpSeek) fpSeek.value = progressRatio;
   const fpPlay = document.getElementById("fpBtnPlay");
-  if (fpPlay) fpPlay.textContent = isPlaying ? "⏸" : "▶";
+  if (fpPlay) fpPlay.innerHTML = playSvg;
 };
 
 window.onNativeMediaCommand = function(cmd) {
@@ -1766,13 +2047,81 @@ function updatePlayerUI() {
   if (t) {
     const badge = t.cloud ? (t.downloaded ? " ✔" : " ☁️") : "";
     document.getElementById("nowTitle").textContent = t.title + badge;
-    const ctxText = activeQueueName ? ` • 🎵 ${activeQueueName}` : "";
+    const ctxText = activeQueueName ? ` • ${activeQueueName}` : "";
     document.getElementById("nowArtist").textContent = `${t.artist}${ctxText}`;
   }
-  document.getElementById("btnPlay").textContent = isPlaying ? "⏸" : "▶";
+  const playSvg = isPlaying ? ICONS.pause : ICONS.play;
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay) btnPlay.innerHTML = playSvg;
+
   renderTracks();
   highlightPlayingTracks();
   updateFullPlayerUI();
+}
+
+/* ---------------- MENÚ DESPLEGABLE ÚNICO (CUENTA + ACCIONES) ---------------- */
+function openSideMenu() {
+  const backdrop = document.getElementById("sideMenuBackdrop");
+  const drawer = document.getElementById("sideMenuDrawer");
+  if (backdrop) backdrop.classList.add("open");
+  if (drawer) drawer.classList.add("open");
+  updateSideMenuProfile();
+}
+
+function closeSideMenu() {
+  const backdrop = document.getElementById("sideMenuBackdrop");
+  const drawer = document.getElementById("sideMenuDrawer");
+  if (backdrop) backdrop.classList.remove("open");
+  if (drawer) drawer.classList.remove("open");
+}
+
+function toggleSideMenu() {
+  const drawer = document.getElementById("sideMenuDrawer");
+  if (drawer && drawer.classList.contains("open")) {
+    closeSideMenu();
+  } else {
+    openSideMenu();
+  }
+}
+
+function updateSideMenuProfile() {
+  const avatar = document.getElementById("smAvatar");
+  const topAvatar = document.getElementById("topMenuAvatar");
+  const username = document.getElementById("smUsername");
+  const topName = document.getElementById("topMenuName");
+  const status = document.getElementById("smStatus");
+
+  const name = userAccount ? userAccount.username : (googleUserProfile ? (googleUserProfile.name || "Usuario Google") : "Cuenta SpotiLinux");
+  if (username) username.textContent = name;
+  if (topName) topName.textContent = userAccount ? userAccount.username : "Menú";
+
+  const isConnected = Boolean(document.getElementById("gdToken").value.trim() || userAccount);
+  if (status) {
+    status.textContent = isConnected ? "Google Drive • Conectado" : "Nube Desconectada";
+    status.style.color = isConnected ? "var(--green-bright)" : "var(--muted)";
+  }
+
+  if (googleUserProfile && googleUserProfile.picture) {
+    const imgHtml = `<img src="${googleUserProfile.picture}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" />`;
+    if (avatar) avatar.innerHTML = imgHtml;
+    if (topAvatar) topAvatar.innerHTML = imgHtml;
+  }
+}
+
+function setMaomaoDanceStyle(idx) {
+  maomaoStyle = idx;
+  const name = MAOMAO_STYLES[maomaoStyle];
+  const lbl1 = document.getElementById("lblDanceStyle");
+  if (lbl1) lbl1.textContent = name;
+  const lbl2 = document.getElementById("fpLblDanceStyle");
+  if (lbl2) lbl2.textContent = name;
+  const lblBtn = document.getElementById("lblDanceStyleBtn");
+  if (lblBtn) lblBtn.textContent = name;
+  [0, 1, 2].forEach(i => {
+    const btn = document.getElementById("btnDance" + i);
+    if (btn) btn.classList.toggle("active", i === idx);
+  });
+  showToast(`Paso de baile: ${name}`);
 }
 
 /* ---------------- REPRODUCTOR DE PANTALLA COMPLETA Y PLAYLIST DESPLEGABLE ---------------- */
@@ -1872,11 +2221,11 @@ function updateFullPlayerUI() {
   const fpLikeBtn = document.getElementById("fpLikeBtn");
   if (fpLikeBtn) {
     fpLikeBtn.classList.toggle("liked", Boolean(t.liked));
-    fpLikeBtn.textContent = t.liked ? "💚" : "🤍";
+    fpLikeBtn.innerHTML = t.liked ? ICONS.likeFilled : ICONS.likeOutline;
   }
 
   const fpBtnPlay = document.getElementById("fpBtnPlay");
-  if (fpBtnPlay) fpBtnPlay.textContent = isPlaying ? "⏸" : "▶";
+  if (fpBtnPlay) fpBtnPlay.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
 
   const fpBtnShuffle = document.getElementById("fpBtnShuffle");
   if (fpBtnShuffle) fpBtnShuffle.classList.toggle("active", shuffleMode);
@@ -1918,7 +2267,7 @@ function renderFullPlayerPlaylist() {
       ? `<div class="eq-anim-icon"><span></span><span></span><span></span></div>`
       : `<span class="fp-track-num">${idx + 1}</span>`;
 
-    const cloudIcon = t.cloud ? (t.downloaded ? "✔" : "☁️") : "";
+    const cloudIcon = t.cloud ? (t.downloaded ? `<span style="color:var(--green-bright); font-size:10px;">✔</span>` : `<span style="color:var(--muted); font-size:10px;">☁️</span>`) : "";
 
     row.innerHTML = `
       <div style="width:24px; display:flex; justify-content:center; align-items:center;">
@@ -1928,8 +2277,8 @@ function renderFullPlayerPlaylist() {
         <div class="fp-track-title">${escapeHtml(t.title)} ${cloudIcon}</div>
         <div class="fp-track-artist">${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.genre || 'Música')}</div>
       </div>
-      <button class="like-btn ${t.liked ? 'liked' : ''}" style="font-size:16px;" onclick="event.stopPropagation(); toggleTrackLike('${t.id}')">
-        ${t.liked ? '💚' : '🤍'}
+      <button class="like-btn ${t.liked ? 'liked' : ''}" style="font-size:16px; display:flex; align-items:center;" onclick="event.stopPropagation(); toggleTrackLike('${t.id}')">
+        ${t.liked ? ICONS.likeFilled : ICONS.likeOutline}
       </button>
       <div class="fp-track-dur">${t.cloud && !t.downloaded ? 'Nube' : '3:20'}</div>
     `;
@@ -2129,7 +2478,7 @@ function renderTracks() {
       // Botón ＋ para agregar a Playlist individual
       const plBtn = document.createElement("button");
       plBtn.className = "icon-action-btn";
-      plBtn.textContent = "＋";
+      plBtn.innerHTML = ICONS.plus;
       plBtn.title = "Añadir a Playlist";
       plBtn.onclick = (ev) => {
         ev.stopPropagation();
@@ -2137,10 +2486,10 @@ function renderTracks() {
       };
       div.appendChild(plBtn);
 
-      // Botón ♥ Favorito
+      // Botón Favorito
       const likeBtn = document.createElement("button");
       likeBtn.className = "like-btn" + (t.liked ? " liked" : "");
-      likeBtn.textContent = t.liked ? "♥" : "♡";
+      likeBtn.innerHTML = t.liked ? ICONS.likeFilled : ICONS.likeOutline;
       likeBtn.onclick = (ev) => {
         ev.stopPropagation();
         t.liked = !t.liked;
@@ -2162,63 +2511,94 @@ function renderHomePlaylists() {
   if (!grid) return;
   grid.innerHTML = "";
 
-  // 1. Tarjeta Especial: Crear Nueva Playlist
-  const createCard = document.createElement("div");
-  createCard.className = "playlist-card";
-  createCard.style.border = "1px dashed var(--green)";
-  createCard.style.background = "rgba(29, 185, 84, 0.08)";
-  createCard.onclick = () => openCreatePlaylistModal();
-  createCard.innerHTML = `
-    <div style="font-size:20px; color:var(--green-bright); margin-bottom:2px;">✨ ＋</div>
-    <div class="playlist-card-title">Nueva Playlist</div>
-    <div class="playlist-card-sub">Crea una lista personalizada</div>
-  `;
-  grid.appendChild(createCard);
-
-  // 2. Tarjeta Especial: Canciones que te gustan
+  // 1. Tarjeta Especial: Canciones que te gustan
   const likedCount = tracks.filter(t => t.liked).length;
   const likedCard = document.createElement("div");
-  likedCard.className = "playlist-card" + (selectedPlaylistId === "pl_liked" ? " active" : "");
-  likedCard.style.background = "linear-gradient(135deg, #450af5 0%, #8e73eb 100%)";
-  likedCard.onclick = () => selectAndDisplaySpecialPlaylist("pl_liked", "💜 Canciones que te gustan", "Tus temas marcados con corazón", tracks.filter(t => t.liked));
+  likedCard.className = "playlist-card";
+  likedCard.style.background = "linear-gradient(135deg, #2b1754 0%, #150f28 100%)";
+  likedCard.onclick = () => {
+    const list = tracks.filter(t => t.liked);
+    if (!list.length) {
+      showToast("Aún no tienes canciones favoritas marcadas con corazón");
+      return;
+    }
+    activePlaybackQueue = [...list];
+    activeQueueIndex = 0;
+    activeQueueName = "Tus Me Gusta";
+    executePlayTrack(list[0]);
+    updatePlayerUI();
+    setFullPlayerTab("playlist");
+    openFullPlayer();
+  };
   likedCard.innerHTML = `
     <div class="playlist-card-badge">FAVORITOS</div>
-    <div class="playlist-card-title" style="margin-top:16px;">💜 Tus Favoritos</div>
-    <div class="playlist-card-sub" style="color:#e0e0ff;">${likedCount} canciones</div>
+    <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+      ${ICONS.likeFilled}
+    </div>
+    <div class="playlist-card-title">Tus Favoritos</div>
+    <div class="playlist-card-sub">${likedCount} canciones</div>
+    <div class="playlist-card-play-btn">${ICONS.play}</div>
   `;
   grid.appendChild(likedCard);
 
-  // 3. Tarjeta Especial: Google Drive Cloud
+  // 2. Tarjeta Especial: Google Drive Cloud
   const cloudCount = tracks.filter(t => t.cloud).length;
   const cloudCard = document.createElement("div");
-  cloudCard.className = "playlist-card" + (selectedPlaylistId === "pl_cloud" ? " active" : "");
-  cloudCard.style.background = "linear-gradient(135deg, #0f5fc3 0%, #1db954 100%)";
-  cloudCard.onclick = () => selectAndDisplaySpecialPlaylist("pl_cloud", "☁️ Mi Google Drive", "Música de tu nube privada de Google", tracks.filter(t => t.cloud));
+  cloudCard.className = "playlist-card";
+  cloudCard.style.background = "linear-gradient(135deg, #0d261e 0%, #0a1410 100%)";
+  cloudCard.onclick = () => {
+    const list = tracks.filter(t => t.cloud);
+    if (!list.length) {
+      showToast("No se encontraron canciones en Google Drive");
+      return;
+    }
+    activePlaybackQueue = [...list];
+    activeQueueIndex = 0;
+    activeQueueName = "Google Drive";
+    executePlayTrack(list[0]);
+    updatePlayerUI();
+    setFullPlayerTab("playlist");
+    openFullPlayer();
+  };
   cloudCard.innerHTML = `
     <div class="playlist-card-badge">NUBE</div>
-    <div class="playlist-card-title" style="margin-top:16px;">☁️ Google Drive</div>
-    <div class="playlist-card-sub" style="color:#d8ffff;">${cloudCount} canciones</div>
+    <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+    </div>
+    <div class="playlist-card-title">Google Drive</div>
+    <div class="playlist-card-sub">${cloudCount} canciones</div>
+    <div class="playlist-card-play-btn">${ICONS.play}</div>
   `;
   grid.appendChild(cloudCard);
 
-  // 4. Playlists del usuario
+  // 3. Playlists del usuario
   playlists.forEach(pl => {
     const card = document.createElement("div");
-    card.className = "playlist-card" + (pl.id === selectedPlaylistId ? " active" : "");
+    card.className = "playlist-card";
+    const plTracks = tracks.filter(t => pl.trackIds.includes(t.id));
     card.onclick = () => {
-      selectedPlaylistId = pl.id;
-      renderHomePlaylists();
+      if (!plTracks.length) {
+        showToast("Esta playlist no contiene canciones aún");
+        return;
+      }
+      activePlaybackQueue = [...plTracks];
+      activeQueueIndex = 0;
+      activeQueueName = pl.name;
+      executePlayTrack(plTracks[0]);
+      updatePlayerUI();
+      setFullPlayerTab("playlist");
+      openFullPlayer();
     };
     card.innerHTML = `
-      <div style="font-size:22px; margin-bottom:2px;">🎵</div>
-      <div class="playlist-card-title">${pl.name}</div>
+      <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </div>
+      <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
       <div class="playlist-card-sub">${pl.trackIds.length} canciones</div>
+      <div class="playlist-card-play-btn">${ICONS.play}</div>
     `;
     grid.appendChild(card);
   });
-
-  // Mostrar detalle de la playlist activa dentro de Inicio
-  renderActivePlaylistDetail();
 }
 
 function togglePlaylistCollapse() {
@@ -2908,6 +3288,7 @@ function updateAccountUI() {
     if (dNameEl) dNameEl.textContent = nameStr;
     if (dSubEl) dSubEl.textContent = subStr;
     if (logoutBtn) logoutBtn.style.display = "inline-block";
+    updateSideMenuProfile();
     return;
   }
   if (logoutBtn) logoutBtn.style.display = "none";
@@ -2939,6 +3320,7 @@ function updateAccountUI() {
       if (dSubEl) dSubEl.textContent = "Crea tu cuenta con Usuario, Correo y Contraseña abajo";
     }
   }
+  updateSideMenuProfile();
 }
 
 function handleTokenManualInput() {
