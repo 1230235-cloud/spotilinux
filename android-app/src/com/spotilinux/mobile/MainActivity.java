@@ -83,8 +83,19 @@ public class MainActivity extends Activity {
 
         webView.addJavascriptInterface(new AndroidMediaBridge(), "AndroidMedia");
 
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                android.util.Log.e("SpotiLinuxWeb", "Error al cargar " + failingUrl + ": " + description);
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                android.util.Log.d("SpotiLinuxJS", consoleMessage.message() + " (" + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + ")");
+                return true;
+            }
+
             @Override
             public boolean onShowFileChooser(
                     WebView webView,
@@ -348,6 +359,11 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void togglePlayPause() {
+            MediaPlaybackService svc = MediaPlaybackService.getInstance();
+            if (svc != null) {
+                svc.toggleNativePlayback();
+                return;
+            }
             Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
             serviceIntent.setAction(MediaPlaybackService.ACTION_PLAY_PAUSE);
             startMediaServiceSafely(serviceIntent);
@@ -355,6 +371,11 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void seekTo(int posMs) {
+            MediaPlaybackService svc = MediaPlaybackService.getInstance();
+            if (svc != null) {
+                svc.seekNativePlayback(posMs);
+                return;
+            }
             Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
             serviceIntent.setAction(MediaPlaybackService.ACTION_SEEK);
             serviceIntent.putExtra("posMs", posMs);
@@ -363,6 +384,11 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void setRepeat(boolean repeat) {
+            MediaPlaybackService svc = MediaPlaybackService.getInstance();
+            if (svc != null) {
+                svc.setRepeatMode(repeat);
+                return;
+            }
             Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
             serviceIntent.setAction(MediaPlaybackService.ACTION_SET_REPEAT);
             serviceIntent.putExtra("repeat", repeat);
@@ -371,6 +397,11 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void setEqBand(int band, float gainDb) {
+            MediaPlaybackService svc = MediaPlaybackService.getInstance();
+            if (svc != null) {
+                svc.setEqBandGain(band, gainDb);
+                return;
+            }
             Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
             serviceIntent.setAction(MediaPlaybackService.ACTION_SET_EQ);
             serviceIntent.putExtra("band", band);
@@ -380,7 +411,11 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String getSavedTracks() {
-            return buildSavedTracksJson();
+            try {
+                return buildSavedTracksJson();
+            } catch (Throwable t) {
+                return "[]";
+            }
         }
 
         @JavascriptInterface
@@ -574,15 +609,17 @@ public class MainActivity extends Activity {
 
     private void startMediaServiceSafely(Intent serviceIntent) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (MediaPlaybackService.getInstance() != null) {
+                startService(serviceIntent);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent);
             } else {
                 startService(serviceIntent);
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             try {
                 startService(serviceIntent);
-            } catch (Exception ignored) {
+            } catch (Throwable ignored) {
             }
         }
     }
@@ -593,7 +630,12 @@ public class MainActivity extends Activity {
             act.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    act.webView.evaluateJavascript(jsCode, null);
+                    try {
+                        if (act.webView != null) {
+                            act.webView.evaluateJavascript(jsCode, null);
+                        }
+                    } catch (Throwable ignored) {
+                    }
                 }
             });
         }

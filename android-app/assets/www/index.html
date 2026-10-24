@@ -773,6 +773,14 @@
   <audio id="audioPlayer" crossorigin="anonymous"></audio>
 
 <script>
+window.onerror = function(msg, url, line, col, error) {
+  console.error("SpotiLinuxJS-Catch:", msg, "at line", line, "col", col);
+  return false;
+};
+window.onunhandledrejection = function(event) {
+  console.error("SpotiLinuxJS-PromiseRejection:", event.reason);
+};
+
 const hasNativeAndroid = Boolean(window.AndroidMedia && typeof window.AndroidMedia.playSource === "function");
 
 const DEMO_TRACKS = [
@@ -1226,7 +1234,6 @@ function fmtTime(sec) {
 /* ---------------- VARIABLES DE SELECCIÓN MÚLTIPLE Y PERFIL GOOGLE ---------------- */
 let selectedTrackIds = new Set();
 let isMultiSelectMode = false;
-let googleUserProfile = null;
 let multiPickerSelectedIds = new Set();
 
 /* ---------------- RENDERIZADO DE CANCIONES Y ACCIONES ---------------- */

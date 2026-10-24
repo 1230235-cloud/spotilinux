@@ -59,6 +59,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock wifiLock;
     private Handler uiSyncHandler;
+    private long lastSpectrumDispatchMs = 0L;
 
     private String currentTitle = "SpotiLinux Mobile";
     private String currentArtist = "Maomao & Cloud Edition";
@@ -117,6 +118,25 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
         initMediaPlayer();
         initMediaSession();
+
+        // Iniciar en primer plano inmediatamente para satisfacer el contrato de Android (elimina ANR / RemoteServiceException)
+        startForegroundImmediately();
+    }
+
+    private void startForegroundImmediately() {
+        try {
+            Notification notification = buildMediaNotification();
+            if (Build.VERSION.SDK_INT >= 34) {
+                try {
+                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                } catch (Throwable t) {
+                    startForeground(NOTIFICATION_ID, notification);
+                }
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private void initMediaPlayer() {
@@ -225,7 +245,9 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                         sb.append(pInt);
                     }
                     sb.append(']');
-                    if (maxPeak > 2) {
+                    long now = System.currentTimeMillis();
+                    if (maxPeak > 2 && (now - lastSpectrumDispatchMs >= 60)) {
+                        lastSpectrumDispatchMs = now;
                         MainActivity.dispatchJs("if(window.onNativeSpectrum){window.onNativeSpectrum(" + sb + ");}");
                     }
                 }
@@ -531,6 +553,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        startForegroundImmediately();
         if (intent != null && intent.getAction() != null) {
             String action = intent.getAction();
             if (Intent.ACTION_MEDIA_BUTTON.equals(action)) {
@@ -612,14 +635,21 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
         try {
             if (Build.VERSION.SDK_INT >= 34) {
-                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                try {
+                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                } catch (Throwable t) {
+                    startForeground(NOTIFICATION_ID, notification);
+                }
             } else {
                 startForeground(NOTIFICATION_ID, notification);
             }
-        } catch (Exception e) {
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null) {
-                nm.notify(NOTIFICATION_ID, notification);
+        } catch (Throwable e) {
+            try {
+                NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                if (nm != null) {
+                    nm.notify(NOTIFICATION_ID, notification);
+                }
+            } catch (Throwable ignored) {
             }
         }
 
