@@ -563,6 +563,21 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     JSONArray filesArr = new JSONArray();
+                    try {
+                        String apiUrl = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec?action=list_music";
+                        String res = fetchUrlText(apiUrl);
+                        if (res != null && !res.trim().isEmpty() && res.trim().startsWith("{")) {
+                            JSONObject obj = new JSONObject(res);
+                            if (obj.has("files")) {
+                                filesArr = obj.getJSONArray("files");
+                                String json = filesArr.toString();
+                                dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + json + ");");
+                                return;
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+
                     List<String> musicaFolders = new ArrayList<>();
                     if (!musicaFolders.contains("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T")) {
                         musicaFolders.add("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T");
@@ -587,7 +602,37 @@ public class MainActivity extends Activity {
                     boolean success = false;
                     String fid = (folderId != null && !folderId.trim().isEmpty()) ? folderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
                     
-                    // 1. Enviar al Servidor Central REST de la base de datos de Drive
+                    // 1. Enviar al Servidor Oficial de Google Drive (Google Apps Script Web App)
+                    try {
+                        URL url = new URL("https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec");
+                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                        conn.setInstanceFollowRedirects(true);
+                        conn.setRequestMethod("POST");
+                        conn.setDoOutput(true);
+                        conn.setConnectTimeout(15000);
+                        conn.setReadTimeout(15000);
+                        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                        
+                        JSONObject req = new JSONObject();
+                        req.put("action", "sync_db");
+                        try {
+                            req.put("db", new JSONObject(jsonPayload));
+                        } catch (Exception ex) {
+                            req.put("db", jsonPayload);
+                        }
+                        byte[] bytes = req.toString().getBytes(StandardCharsets.UTF_8);
+                        conn.setFixedLengthStreamingMode(bytes.length);
+                        try (java.io.OutputStream os = conn.getOutputStream()) {
+                            os.write(bytes);
+                        }
+                        int code = conn.getResponseCode();
+                        if (code >= 200 && code < 400) {
+                            success = true;
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    // 2. Respaldo: Servidor Central REST
                     try {
                         URL url = new URL("https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a");
                         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -616,7 +661,7 @@ public class MainActivity extends Activity {
                     } catch (Exception ignored) {
                     }
 
-                    // 2. Respaldo local persistente
+                    // 3. Respaldo local persistente
                     try {
                         File f = new File(getFilesDir(), "spotilinux_cloud_backup.json");
                         try (FileOutputStream out = new FileOutputStream(f)) {
@@ -638,7 +683,21 @@ public class MainActivity extends Activity {
                 public void run() {
                     String fid = (rootFolderId != null && !rootFolderId.trim().isEmpty()) ? rootFolderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
 
-                    // 1. Intentar el Servidor Central REST de la base de datos de Drive
+                    // 1. Consultar el Servidor Oficial de Google Drive (Google Apps Script Web App)
+                    try {
+                        String dUrl = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec";
+                        String jsonDrive = fetchUrlText(dUrl);
+                        if (jsonDrive != null && !jsonDrive.trim().isEmpty() && jsonDrive.trim().startsWith("{")) {
+                            JSONObject root = new JSONObject(jsonDrive);
+                            JSONObject dataObj = root.has("data") ? root.getJSONObject("data") : root;
+                            String safeJson = dataObj.toString().replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+                            dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', 'drive_server');");
+                            return;
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    // 2. Respaldo: Servidor Central REST
                     try {
                         String sUrl = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a";
                         String jsonSrv = fetchUrlText(sUrl);

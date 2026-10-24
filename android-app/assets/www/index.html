@@ -821,6 +821,7 @@ let currentEqValues = [0, 0, 0, 0, 0];
 
 const DEFAULT_DRIVE_ROOT_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
 const DEFAULT_MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T";
+const DEFAULT_DRIVE_SERVER_URL = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec";
 const DEFAULT_CLOUD_SERVER_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a";
 const DEFAULT_CLOUD_OBJECT_NAME = "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
 const CLOUD_DB_FILENAME = "spotilinux_database.json";
@@ -2284,7 +2285,7 @@ async function pullCloudDatabaseFromDrive() {
   const apiKey = document.getElementById("gdApiKey").value.trim();
   const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
 
-  // 1. En Android: consulta pública nativa de Java al Servidor Cloud REST sin CORS
+  // 1. En Android: consulta pública nativa de Java al Servidor Oficial de Google Drive
   if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.fetchPublicCloudDatabase) {
     const res = await new Promise(resolve => {
       window._cloudDbFetchResolver = resolve;
@@ -2294,12 +2295,33 @@ async function pullCloudDatabaseFromDrive() {
           window._cloudDbFetchResolver(null);
           window._cloudDbFetchResolver = null;
         }
-      }, 5000);
+      }, 6000);
     });
     if (res) return res;
   }
 
-  // 2. Consulta directa al Servidor Central REST
+  // 2. Consulta directa al Servidor Oficial de Google Drive (Apps Script Web App)
+  try {
+    const dRes = await fetch(DEFAULT_DRIVE_SERVER_URL, { cache: "no-store" });
+    if (dRes.ok) {
+      const dData = await dRes.json();
+      const payload = (dData && dData.data && typeof dData.data === "object" && dData.data.accounts) ? dData.data : dData;
+      if (payload.accounts && typeof payload.accounts === "object") {
+        Object.assign(accountsDb, payload.accounts);
+      }
+      applyAccountRecordToState(payload);
+      if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+        applyAccountRecordToState(accountsDb[userAccount.email]);
+      }
+      savePersistentState();
+      renderHomePlaylists();
+      renderTracks();
+      cachedCloudDbFileId = "drive_server";
+      return "drive_server";
+    }
+  } catch (_e) {}
+
+  // 3. Consulta de respaldo al Servidor Central REST
   try {
     const sRes = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
     if (sRes.ok) {
@@ -2421,10 +2443,20 @@ async function uploadPlaylistsToDrive(existingFileId) {
   };
   const jsonStr = JSON.stringify(payload, null, 2);
 
-  // 1. Siempre sincronizar con el Servidor Central REST de la base de datos de Drive
+  // 1. Sincronizar mediante el servicio nativo de Android
   if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.syncDatabaseToCloudServer) {
     window.AndroidMedia.syncDatabaseToCloudServer(rootId, jsonStr);
   } else {
+    // 2. Sincronizar directamente con el Servidor Oficial de Google Drive (Apps Script Web App)
+    try {
+      fetch(DEFAULT_DRIVE_SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify({ action: "sync_db", db: payload })
+      }).catch(() => {});
+    } catch (_e) {}
+
+    // 3. Sincronizar de respaldo con el Servidor Central REST
     try {
       const wrap = {
         name: DEFAULT_CLOUD_OBJECT_NAME,
@@ -2695,6 +2727,18 @@ async function autoDiscoverDriveMusic() {
       window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
       return;
     }
+    // Si estamos en navegador Web puro sin puente Android, consultar directo al Servidor de Drive
+    try {
+      st.textContent = "🔍 Escaneando canciones de «Musica» vía Servidor de Google Drive...";
+      const listRes = await fetch(DEFAULT_DRIVE_SERVER_URL + "?action=list_music");
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        if (listData.files && Array.isArray(listData.files)) {
+          window.onPublicDriveFolderFetched(listData.files);
+          return;
+        }
+      }
+    } catch (_e) {}
   }
 
   st.textContent = "🔍 Localizando subcarpeta «Musica» dentro del Drive...";

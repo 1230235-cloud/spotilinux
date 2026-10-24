@@ -42,6 +42,7 @@ DEFAULT_ROOT_DRIVE_FOLDER_URL = (
     "https://drive.google.com/drive/folders/1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT?usp=sharing"
 )
 DEFAULT_MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T"
+DEFAULT_DRIVE_SERVER_URL = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec"
 DEFAULT_CLOUD_SERVER_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a"
 DEFAULT_CLOUD_OBJECT_NAME = "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT"
 CLOUD_DB_FILENAME = "spotilinux_database.json"
@@ -936,7 +937,31 @@ def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> t
 
     fid = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
 
-    # 1. Intentar el Servidor Central REST de la base de datos de Drive
+    # 1. Consultar el Servidor Oficial de Google Drive (Google Apps Script Web App)
+    try:
+        r_drive = requests.get(DEFAULT_DRIVE_SERVER_URL, timeout=12)
+        if r_drive.status_code == 200:
+            drive_db = r_drive.json()
+            if isinstance(drive_db, dict) and "accounts" in drive_db:
+                rem_accs = drive_db.get("accounts", {})
+                loc_accs = base_db.setdefault("accounts", {})
+                for acc_k, rem_a in rem_accs.items():
+                    if acc_k not in loc_accs:
+                        loc_accs[acc_k] = rem_a
+                    else:
+                        loc_accs[acc_k] = merge_account_records(loc_accs[acc_k], rem_a)
+                cat_by_id = {c["id"]: c for c in base_db.get("drive_catalog", []) if isinstance(c, dict) and "id" in c}
+                for rc in drive_db.get("drive_catalog", []):
+                    if isinstance(rc, dict) and "id" in rc:
+                        cat_by_id[rc["id"]] = rc
+                base_db["drive_catalog"] = list(cat_by_id.values())
+                local_db_path.parent.mkdir(parents=True, exist_ok=True)
+                local_db_path.write_text(json.dumps(base_db, indent=2, ensure_ascii=False), encoding="utf-8")
+                return base_db, "drive_server"
+    except Exception:
+        pass
+
+    # 2. Respaldo: Servidor Central REST de la base de datos de Drive
     try:
         r_srv = requests.get(DEFAULT_CLOUD_SERVER_URL, timeout=8)
         if r_srv.status_code == 200:
@@ -1080,8 +1105,20 @@ def upload_cloud_database(
     json_bytes = json.dumps(db_data, indent=2, ensure_ascii=False).encode("utf-8")
     local_db_path.write_text(json_bytes.decode("utf-8"), encoding="utf-8")
 
-    # 1. Siempre sincronizar con el Servidor Central REST de la base de datos de Drive
+    # 1. Siempre sincronizar con el Servidor Oficial de Google Drive (Apps Script Web App)
     cloud_synced = False
+    try:
+        r_drive = requests.post(
+            DEFAULT_DRIVE_SERVER_URL,
+            json={"action": "sync_db", "db": db_data},
+            timeout=15,
+        )
+        if r_drive.status_code in (200, 201, 302):
+            cloud_synced = True
+    except Exception:
+        pass
+
+    # 2. Sincronizar también con el Servidor Central REST de respaldo
     try:
         wrap = {
             "name": DEFAULT_CLOUD_OBJECT_NAME,
