@@ -820,6 +820,9 @@ let nativeDurationMs = 28000;
 let currentEqValues = [0, 0, 0, 0, 0];
 
 const DEFAULT_DRIVE_ROOT_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+const DEFAULT_MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T";
+const DEFAULT_CLOUD_SERVER_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a";
+const DEFAULT_CLOUD_OBJECT_NAME = "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
 const CLOUD_DB_FILENAME = "spotilinux_database.json";
 let userAccount = null; // { username, email, passwordHash }
 let accountsDb = {}; // Mapa de cuentas sincronizado con spotilinux_database.json en Drive
@@ -2043,8 +2046,22 @@ async function submitSpotiAccountForm() {
     }
   }
 
-  if (stEl) stEl.textContent = "☁️ Consultando cuentas en Google Drive...";
+  if (stEl) stEl.textContent = "☁️ Conectando con el servidor de Google Drive...";
   await pullCloudDatabaseFromDrive();
+
+  // Si estamos iniciando sesión y la base aún no tiene cuentas, reintentar directo al Servidor Cloud
+  if (accountFormMode === "login" && (!accountsDb || Object.keys(accountsDb).length === 0)) {
+    try {
+      const sRes = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        const payload = (sData && sData.data && typeof sData.data === "object" && sData.data.accounts) ? sData.data : sData;
+        if (payload.accounts && typeof payload.accounts === "object") {
+          Object.assign(accountsDb, payload.accounts);
+        }
+      }
+    } catch (_e) {}
+  }
 
   const pwHash = hashPassword(passInp);
   const oldHash = legacyPasswordHash(passInp);
@@ -2112,6 +2129,7 @@ async function submitSpotiAccountForm() {
     renderHomePlaylists();
     renderTracks();
     updateAccountUI();
+    autoDiscoverDriveMusic();
     const token = document.getElementById("gdToken").value.trim();
     if (token) {
       await uploadPlaylistsToDrive();
@@ -2241,10 +2259,11 @@ window.onCloudDatabaseFetched = function(jsonStr, fileId) {
   if (jsonStr) {
     try {
       const data = JSON.parse(jsonStr);
-      if (data.accounts && typeof data.accounts === "object") {
-        Object.assign(accountsDb, data.accounts);
+      const payload = (data && data.data && typeof data.data === "object" && data.data.accounts) ? data.data : data;
+      if (payload.accounts && typeof payload.accounts === "object") {
+        Object.assign(accountsDb, payload.accounts);
       }
-      applyAccountRecordToState(data);
+      applyAccountRecordToState(payload);
       if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
         applyAccountRecordToState(accountsDb[userAccount.email]);
       }
@@ -2265,7 +2284,7 @@ async function pullCloudDatabaseFromDrive() {
   const apiKey = document.getElementById("gdApiKey").value.trim();
   const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
 
-  // 1. En Android: consulta pública nativa de Java sin token y sin problemas de CORS
+  // 1. En Android: consulta pública nativa de Java al Servidor Cloud REST sin CORS
   if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.fetchPublicCloudDatabase) {
     const res = await new Promise(resolve => {
       window._cloudDbFetchResolver = resolve;
@@ -2280,7 +2299,28 @@ async function pullCloudDatabaseFromDrive() {
     if (res) return res;
   }
 
-  // 2. Si hay token o apiKey, consultar API v3
+  // 2. Consulta directa al Servidor Central REST
+  try {
+    const sRes = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      const payload = (sData && sData.data && typeof sData.data === "object" && sData.data.accounts) ? sData.data : sData;
+      if (payload.accounts && typeof payload.accounts === "object") {
+        Object.assign(accountsDb, payload.accounts);
+      }
+      applyAccountRecordToState(payload);
+      if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+        applyAccountRecordToState(accountsDb[userAccount.email]);
+      }
+      savePersistentState();
+      renderHomePlaylists();
+      renderTracks();
+      cachedCloudDbFileId = "cloud_server";
+      return "cloud_server";
+    }
+  } catch (_e) {}
+
+  // 3. Si hay token o apiKey, consultar API v3 de Google Drive
   if (!token && !apiKey) return null;
   const headers = token ? { "Authorization": `Bearer ${token}` } : {};
 
@@ -2381,15 +2421,19 @@ async function uploadPlaylistsToDrive(existingFileId) {
   };
   const jsonStr = JSON.stringify(payload, null, 2);
 
-  // 1. Siempre sincronizar con el Servidor Cloud REST de la carpeta de Google Drive
+  // 1. Siempre sincronizar con el Servidor Central REST de la base de datos de Drive
   if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.syncDatabaseToCloudServer) {
     window.AndroidMedia.syncDatabaseToCloudServer(rootId, jsonStr);
   } else {
     try {
-      fetch(`https://kvdb.io/spoti_${rootId}/spotilinux_database`, {
-        method: "POST",
+      const wrap = {
+        name: DEFAULT_CLOUD_OBJECT_NAME,
+        data: payload
+      };
+      fetch(DEFAULT_CLOUD_SERVER_URL, {
+        method: "PUT",
         headers: { "Content-Type": "application/json; charset=UTF-8" },
-        body: jsonStr
+        body: JSON.stringify(wrap)
       }).catch(() => {});
     } catch (_e) {}
   }
@@ -2507,7 +2551,7 @@ async function resolveMusicaSubfolderId(rootFolderId, token, apiKey) {
       }
     } catch (_e) {}
   }
-  return rootFolderId;
+  return DEFAULT_MUSICA_FOLDER_ID;
 }
 
 function triggerDriveUploadPicker() {

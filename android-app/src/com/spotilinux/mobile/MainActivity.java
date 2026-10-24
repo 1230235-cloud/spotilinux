@@ -564,6 +564,9 @@ public class MainActivity extends Activity {
                 public void run() {
                     JSONArray filesArr = new JSONArray();
                     List<String> musicaFolders = new ArrayList<>();
+                    if (!musicaFolders.contains("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T")) {
+                        musicaFolders.add("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T");
+                    }
                     String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + folderId + "#list");
                     parseEmbeddedFolderHtml(htmlRoot, filesArr, musicaFolders);
                     for (String subId : musicaFolders) {
@@ -584,16 +587,24 @@ public class MainActivity extends Activity {
                     boolean success = false;
                     String fid = (folderId != null && !folderId.trim().isEmpty()) ? folderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
                     
-                    // 1. Enviar al Cloud Storage REST vinculado a la carpeta del Drive
+                    // 1. Enviar al Servidor Central REST de la base de datos de Drive
                     try {
-                        URL url = new URL("https://kvdb.io/spoti_" + fid + "/spotilinux_database");
+                        URL url = new URL("https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a");
                         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                        conn.setRequestMethod("POST");
+                        conn.setRequestMethod("PUT");
                         conn.setDoOutput(true);
                         conn.setConnectTimeout(10000);
                         conn.setReadTimeout(12000);
                         conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                        byte[] bytes = jsonPayload.getBytes(StandardCharsets.UTF_8);
+                        
+                        JSONObject wrap = new JSONObject();
+                        wrap.put("name", "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT");
+                        try {
+                            wrap.put("data", new JSONObject(jsonPayload));
+                        } catch (Exception ex) {
+                            wrap.put("data", jsonPayload);
+                        }
+                        byte[] bytes = wrap.toString().getBytes(StandardCharsets.UTF_8);
                         conn.setFixedLengthStreamingMode(bytes.length);
                         try (java.io.OutputStream os = conn.getOutputStream()) {
                             os.write(bytes);
@@ -627,12 +638,14 @@ public class MainActivity extends Activity {
                 public void run() {
                     String fid = (rootFolderId != null && !rootFolderId.trim().isEmpty()) ? rootFolderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
 
-                    // 1. Intentar el Cloud Server vinculado a la carpeta de Drive
+                    // 1. Intentar el Servidor Central REST de la base de datos de Drive
                     try {
-                        String kvUrl = "https://kvdb.io/spoti_" + fid + "/spotilinux_database";
-                        String jsonKv = fetchUrlText(kvUrl);
-                        if (jsonKv != null && !jsonKv.trim().isEmpty() && jsonKv.trim().startsWith("{")) {
-                            String safeJson = jsonKv.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+                        String sUrl = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a";
+                        String jsonSrv = fetchUrlText(sUrl);
+                        if (jsonSrv != null && !jsonSrv.trim().isEmpty() && jsonSrv.trim().startsWith("{")) {
+                            JSONObject root = new JSONObject(jsonSrv);
+                            JSONObject dataObj = root.has("data") ? root.getJSONObject("data") : root;
+                            String safeJson = dataObj.toString().replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
                             dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', 'cloud_server');");
                             return;
                         }

@@ -41,6 +41,9 @@ DEFAULT_ROOT_DRIVE_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT"
 DEFAULT_ROOT_DRIVE_FOLDER_URL = (
     "https://drive.google.com/drive/folders/1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT?usp=sharing"
 )
+DEFAULT_MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T"
+DEFAULT_CLOUD_SERVER_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a"
+DEFAULT_CLOUD_OBJECT_NAME = "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT"
 CLOUD_DB_FILENAME = "spotilinux_database.json"
 LEGACY_PLAYLISTS_FILENAME = "spotilinux_cloud_playlists.json"
 
@@ -245,7 +248,7 @@ def resolve_musica_subfolder_id(config: GoogleDriveConfig) -> tuple[str, str]:
 
     if config.musica_folder_id:
         return config.musica_folder_id, "Musica"
-    return root_id, "Musica"
+    return DEFAULT_MUSICA_FOLDER_ID, "Musica"
 
 
 class GDriveOAuthLoopbackWorker(QThread):
@@ -933,13 +936,14 @@ def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> t
 
     fid = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
 
-    # 1. Intentar el Cloud Storage REST vinculado a la carpeta del Drive
+    # 1. Intentar el Servidor Central REST de la base de datos de Drive
     try:
-        r_kv = requests.get(f"https://kvdb.io/spoti_{fid}/spotilinux_database", timeout=8)
-        if r_kv.status_code == 200:
-            kv_db = r_kv.json()
-            if isinstance(kv_db, dict):
-                rem_accs = kv_db.get("accounts", {})
+        r_srv = requests.get(DEFAULT_CLOUD_SERVER_URL, timeout=8)
+        if r_srv.status_code == 200:
+            srv_resp = r_srv.json()
+            srv_db = srv_resp.get("data", srv_resp) if isinstance(srv_resp, dict) else {}
+            if isinstance(srv_db, dict) and "accounts" in srv_db:
+                rem_accs = srv_db.get("accounts", {})
                 loc_accs = base_db.setdefault("accounts", {})
                 for acc_k, rem_a in rem_accs.items():
                     if acc_k not in loc_accs:
@@ -947,7 +951,7 @@ def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> t
                     else:
                         loc_accs[acc_k] = merge_account_records(loc_accs[acc_k], rem_a)
                 cat_by_id = {c["id"]: c for c in base_db.get("drive_catalog", []) if isinstance(c, dict) and "id" in c}
-                for rc in kv_db.get("drive_catalog", []):
+                for rc in srv_db.get("drive_catalog", []):
                     if isinstance(rc, dict) and "id" in rc:
                         cat_by_id[rc["id"]] = rc
                 base_db["drive_catalog"] = list(cat_by_id.values())
@@ -1076,16 +1080,20 @@ def upload_cloud_database(
     json_bytes = json.dumps(db_data, indent=2, ensure_ascii=False).encode("utf-8")
     local_db_path.write_text(json_bytes.decode("utf-8"), encoding="utf-8")
 
-    # 1. Siempre sincronizar con el Cloud Storage REST vinculado al folder de Drive
+    # 1. Siempre sincronizar con el Servidor Central REST de la base de datos de Drive
     cloud_synced = False
     try:
-        r_post = requests.post(
-            f"https://kvdb.io/spoti_{fid}/spotilinux_database",
+        wrap = {
+            "name": DEFAULT_CLOUD_OBJECT_NAME,
+            "data": db_data,
+        }
+        r_put = requests.put(
+            DEFAULT_CLOUD_SERVER_URL,
             headers={"Content-Type": "application/json; charset=UTF-8"},
-            data=json_bytes,
+            json=wrap,
             timeout=10,
         )
-        if r_post.status_code in (200, 201):
+        if r_put.status_code in (200, 201):
             cloud_synced = True
     except Exception:
         pass
@@ -1202,14 +1210,16 @@ class GDriveCloudPlaylistSyncWorker(QThread):
 
     def __init__(
         self,
-        token: str,
-        payload: dict,
+        token: str = "",
+        payload: Optional[dict] = None,
         config: Optional[GoogleDriveConfig] = None,
         local_db_path: Optional[Path] = None,
+        **kwargs,
     ) -> None:
         super().__init__()
-        self.token = token.strip()
-        self.payload = payload
+        raw_token = token or kwargs.get("access_token", "")
+        self.token = str(raw_token).strip()
+        self.payload = payload if payload is not None else kwargs.get("local_payload", {})
         self.config = config
         self.local_db_path = local_db_path
 

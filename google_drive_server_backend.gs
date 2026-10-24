@@ -18,6 +18,7 @@
  */
 
 var ROOT_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+var MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T";
 var DB_FILENAME = "spotilinux_database.json";
 
 function doGet(e) {
@@ -28,8 +29,15 @@ function doGet(e) {
     var folder = DriveApp.getFolderById(folderId);
 
     if (action === "list_music") {
-      var musicFolders = folder.getFoldersByName("Musica");
-      var mFolder = musicFolders.hasNext() ? musicFolders.next() : folder;
+      var mFolder = null;
+      try {
+        mFolder = DriveApp.getFolderById(MUSICA_FOLDER_ID);
+      } catch (_e) {}
+      if (!mFolder) {
+        var mf = folder.getFoldersByName("Música");
+        if (!mf.hasNext()) mf = folder.getFoldersByName("Musica");
+        mFolder = mf.hasNext() ? mf.next() : folder;
+      }
       var files = mFolder.getFiles();
       var list = [];
       while (files.hasNext()) {
