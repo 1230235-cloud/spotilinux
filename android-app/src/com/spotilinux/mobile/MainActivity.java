@@ -275,6 +275,11 @@ public class MainActivity extends Activity {
                             if (!driveId.isEmpty()) {
                                 obj.put("driveId", driveId);
                             }
+                            String localSavedId = "saved_" + Math.abs(f.getAbsolutePath().hashCode());
+                            obj.put("savedId", localSavedId);
+                            obj.put("altId", localSavedId);
+                            obj.put("filePath", f.getAbsolutePath());
+                            obj.put("fileName", f.getName());
                             obj.put("title", title);
                             obj.put("artist", artist);
                             obj.put("album", fromDrive ? "Google Drive Offline" : "Biblioteca Guardada");

@@ -947,6 +947,62 @@
   }
   .track-badge-pl svg { flex-shrink: 0; color: var(--green-bright); }
 
+  .track-badge-unassigned {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    color: #8e8e9e;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1.5px 7px;
+    border-radius: 9999px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .track-badge-unassigned svg { flex-shrink: 0; color: #707080; }
+
+  .playlist-card-shuffle-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #e0e0e0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .playlist-card-shuffle-btn:hover {
+    background: var(--green-bright);
+    color: #000;
+    border-color: var(--green-bright);
+  }
+  .playlist-card-shuffle-btn:active {
+    transform: scale(0.9);
+  }
+
+  .btn-chip.shuffle-chip {
+    background: rgba(29, 185, 84, 0.14);
+    border-color: rgba(29, 185, 84, 0.32);
+    color: var(--green-bright);
+    font-weight: 800;
+  }
+
+  /* Barra fija inferior de controles en pantalla completa */
+  .fp-bottom-controls-bar {
+    width: 100%;
+    background: #09090d;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    flex-shrink: 0;
+    box-sizing: border-box;
+    z-index: 100;
+  }
+
   /* Modo Horizontal (Landscape) en Celulares */
   @media (orientation: landscape), (max-height: 520px) and (min-width: 540px) {
     .top-header { padding: 4px 14px; }
@@ -1052,6 +1108,16 @@
         <div class="sm-item-text">
           <div class="sm-item-title">Todas las Canciones</div>
           <div class="sm-item-sub">Biblioteca, filtros y descargas</div>
+        </div>
+      </button>
+
+      <button class="sm-item-btn" onclick="closeSideMenu(); startRandomPlayback()">
+        <div class="sm-item-icon" style="color:var(--green-bright);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title" style="color:var(--green-bright);">Modo Aleatorio 🔀</div>
+          <div class="sm-item-sub">Empezar a reproducir al azar</div>
         </div>
       </button>
 
@@ -1181,10 +1247,16 @@
       <div id="tab-home" class="tab-pane active">
         <div class="section-title">
           <span>Tus Playlists</span>
-          <button class="icon-action-btn" onclick="openCreatePlaylistModal()" title="Nueva Playlist" style="display:inline-flex; align-items:center; gap:5px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span>Nueva</span>
-          </button>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-chip shuffle-chip" onclick="startRandomPlayback()" title="Empezar reproducción aleatoria de la biblioteca" style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; font-size:11px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+              <span>Aleatorio</span>
+            </button>
+            <button class="icon-action-btn" onclick="openCreatePlaylistModal()" title="Nueva Playlist" style="display:inline-flex; align-items:center; gap:5px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Nueva</span>
+            </button>
+          </div>
         </div>
 
         <!-- Grid de Playlists disponibles sin pistas sueltas que ensucien la pantalla -->
@@ -1193,11 +1265,15 @@
 
       <!-- PESTAÑA 2: TODAS LAS CANCIONES Y SELECCIÓN MÚLTIPLE -->
       <div id="tab-songs" class="tab-pane">
-        <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;">
+        <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; align-items:center;">
           <button class="btn-chip active" id="flt-all" onclick="setFilter('all')">Todo</button>
           <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">Descargadas</button>
           <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">Favoritos</button>
           <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">Google Drive</button>
+          <button class="btn-chip shuffle-chip" onclick="startRandomPlayback()" style="display:inline-flex; align-items:center; gap:5px;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+            <span>Aleatorio</span>
+          </button>
         </div>
         <div class="section-title">
           <span id="listHeading">Biblioteca de Canciones</span>
@@ -1496,110 +1572,125 @@
       <button class="fp-tab-btn" id="fpTabPlaylist" onclick="setFullPlayerTab('playlist')">Playlist Completa</button>
     </div>
 
-    <!-- SECCIÓN 1: VISTA DE MAOMAO Y ESPECTRO EN GRANDE -->
-    <div id="fpVisualizerPane" class="fp-content-pane active">
-      <div class="fp-stage-card">
-        <div class="fp-stage-top">
-          <div class="fp-pill-badge" onclick="cycleMaomaoStyle()" id="fpMaomaoStyleBadge">🌿 <span id="fpLblDanceStyle">Imperial</span></div>
-          <div style="display:flex; gap:6px;">
-            <button class="fp-chip-btn" onclick="cycleVisMode()">Modo FFT 📊</button>
-            <span class="fp-pill-badge" id="fpBpmBadge">♩ 112 BPM</span>
-          </div>
-        </div>
-        <!-- Canvas de Maomao en grande -->
-        <canvas id="fullMaomaoCanvas" width="400" height="250" onclick="cycleMaomaoStyle()"></canvas>
-        <!-- Canvas de Ondas reactivas debajo de Maomao -->
-        <canvas id="fullVisCanvas" width="400" height="65" onclick="cycleVisMode()"></canvas>
-      </div>
-
-      <div class="fp-visualizer-right">
-        <!-- Datos de la canción: Título grande, Artista y Corazón -->
-        <div class="fp-meta-card">
-          <div class="fp-meta-left">
-            <div class="fp-title" id="fpTitle">Midnight Horizon</div>
-            <div class="fp-artist" id="fpArtist">Neon Pulse • Synthwave</div>
-            <div class="badge-playlist" id="fpTrackPlaylist" style="display:none; margin-top:5px;">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              <span id="fpTrackPlaylistText">Playlist</span>
+    <!-- CONTENEDOR CON SCROLL DE LAS VISTAS (VISUALIZADOR O PLAYLIST) -->
+    <div class="fp-scroll-body" style="flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;">
+      <!-- SECCIÓN 1: VISTA DE MAOMAO Y ESPECTRO EN GRANDE -->
+      <div id="fpVisualizerPane" class="fp-content-pane active">
+        <div class="fp-stage-card">
+          <div class="fp-stage-top">
+            <div class="fp-pill-badge" onclick="cycleMaomaoStyle()" id="fpMaomaoStyleBadge">🌿 <span id="fpLblDanceStyle">Imperial</span></div>
+            <div style="display:flex; gap:6px;">
+              <button class="fp-chip-btn" onclick="cycleVisMode()">Modo FFT 📊</button>
+              <span class="fp-pill-badge" id="fpBpmBadge">♩ 112 BPM</span>
             </div>
           </div>
-          <button class="fp-like-btn" id="fpLikeBtn" onclick="toggleCurrentTrackLike()" title="Me gusta">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-          </button>
+          <!-- Canvas de Maomao en grande -->
+          <canvas id="fullMaomaoCanvas" width="400" height="250" onclick="cycleMaomaoStyle()"></canvas>
+          <!-- Canvas de Ondas reactivas debajo de Maomao -->
+          <canvas id="fullVisCanvas" width="400" height="65" onclick="cycleVisMode()"></canvas>
         </div>
 
-        <!-- Barra de progreso / seekbar -->
-        <div class="fp-seek-container">
-          <input type="range" id="fpSeekBar" class="fp-seek-slider" min="0" max="1000" value="0" oninput="seekAudio(this.value)" />
-          <div class="fp-time-row">
-            <span id="fpCurTime">0:00</span>
-            <span id="fpDurTime">0:28</span>
+        <div class="fp-visualizer-right">
+          <!-- Datos de la canción: Título grande, Artista y Corazón -->
+          <div class="fp-meta-card">
+            <div class="fp-meta-left">
+              <div class="fp-title" id="fpTitle">Midnight Horizon</div>
+              <div class="fp-artist" id="fpArtist">Neon Pulse • Synthwave</div>
+              <div class="badge-playlist" id="fpTrackPlaylist" style="display:none; margin-top:5px;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span id="fpTrackPlaylistText">Playlist</span>
+              </div>
+            </div>
+            <button class="fp-like-btn" id="fpLikeBtn" onclick="toggleCurrentTrackLike()" title="Me gusta">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </button>
+          </div>
+
+          <!-- Botón para desplegar la playlist -->
+          <div style="display:flex; justify-content:center; margin-top:6px;">
+            <button class="fp-pill-action-btn" onclick="setFullPlayerTab('playlist')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.5" fill="currentColor"/><circle cx="3.5" cy="12" r="1.5" fill="currentColor"/><circle cx="3.5" cy="18" r="1.5" fill="currentColor"/></svg>
+              <span>Ver Playlist Completa</span>
+              <span id="fpPlaylistCountBadge" style="opacity:0.75; font-size:11px;">(0 canciones)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN 2: VISTA DE LA PLAYLIST DESPLEGADA EN TODA LA PANTALLA -->
+      <div id="fpPlaylistPane" class="fp-content-pane">
+        <div class="fp-pl-header-box">
+          <div class="fp-pl-cover-art" id="fpPlCoverArt">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          </div>
+          <div class="fp-pl-info">
+            <span class="fp-pill-badge" id="fpPlBadge">PLAYLIST</span>
+            <h2 class="fp-pl-title" id="fpPlName">Night Drive &amp; Synthwave</h2>
+            <p class="fp-pl-sub" id="fpPlDetails">6 canciones • Sintetizadores retro</p>
           </div>
         </div>
 
-        <!-- Controles de Reproducción Estilo Spotify con SVGs -->
-        <div class="fp-controls-row">
-          <button class="fp-ctrl-btn" id="fpBtnShuffle" onclick="toggleShuffle()" title="Aleatorio">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        <!-- Acciones de la Playlist -->
+        <div class="fp-pl-actions-row">
+          <button class="fp-chip-btn active" onclick="playCurrentFullPlaylistShuffle()" style="display:inline-flex; align-items:center; gap:5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+            <span>Aleatorio</span>
           </button>
-          <button class="fp-ctrl-btn" onclick="prevTrack()" title="Anterior">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+          <button class="fp-chip-btn" id="fpBtnDownloadPl" onclick="downloadCurrentPlaylistTracks()" style="display:inline-flex; align-items:center; gap:5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Descargar Todo</span>
           </button>
-          <button class="fp-play-btn" id="fpBtnPlay" onclick="togglePlay()" title="Reproducir / Pausar">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+          <button class="fp-chip-btn" onclick="openAddSelectedToPlaylistModal()" style="display:inline-flex; align-items:center; gap:5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Añadir</span>
           </button>
-          <button class="fp-ctrl-btn" onclick="nextTrack()" title="Siguiente">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-          </button>
-          <button class="fp-ctrl-btn" id="fpBtnRepeat" onclick="toggleRepeat()" title="Repetir">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-          </button>
+          <button class="fp-chip-btn" onclick="setFullPlayerTab('visualizer')">Ver Maomao 🌿</button>
         </div>
 
-        <!-- Botón para desplegar la playlist -->
-        <div style="display:flex; justify-content:center; margin-top:6px;">
-          <button class="fp-pill-action-btn" onclick="setFullPlayerTab('playlist')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.5" fill="currentColor"/><circle cx="3.5" cy="12" r="1.5" fill="currentColor"/><circle cx="3.5" cy="18" r="1.5" fill="currentColor"/></svg>
-            <span>Ver Playlist Completa</span>
-            <span id="fpPlaylistCountBadge" style="opacity:0.75; font-size:11px;">(6 canciones)</span>
-          </button>
+        <!-- Lista completa de canciones con indicador de reproducción -->
+        <div class="fp-pl-tracks-scroll" id="fpPlTracksList">
+          <!-- Generado dinámicamente -->
         </div>
       </div>
     </div>
 
-    <!-- SECCIÓN 2: VISTA DE LA PLAYLIST DESPLEGADA EN TODA LA PANTALLA -->
-    <div id="fpPlaylistPane" class="fp-content-pane">
-      <div class="fp-pl-header-box">
-        <div class="fp-pl-cover-art" id="fpPlCoverArt">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    <!-- CONTROLES PERSISTENTES FIJOS EN LA PARTE INFERIOR (SIEMPRE VISIBLES EN PANTALLA COMPLETA) -->
+    <div class="fp-bottom-controls-bar">
+      <!-- Fila informativa compacta cuando se está viendo la lista de canciones de la Playlist -->
+      <div id="fpMiniTrackRow" style="display:none; align-items:center; justify-content:space-between; margin-bottom:5px; padding:0 4px;">
+        <div style="display:flex; align-items:baseline; overflow:hidden; min-width:0; gap:6px;">
+          <span id="fpMiniTitle" style="font-size:13px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">-</span>
+          <span id="fpMiniArtist" style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">-</span>
         </div>
-        <div class="fp-pl-info">
-          <span class="fp-pill-badge" id="fpPlBadge">PLAYLIST</span>
-          <h2 class="fp-pl-title" id="fpPlName">Night Drive &amp; Synthwave</h2>
-          <p class="fp-pl-sub" id="fpPlDetails">6 canciones • Sintetizadores retro</p>
+        <button class="fp-chip-btn" style="padding:2px 8px; font-size:10px; flex-shrink:0;" onclick="setFullPlayerTab('visualizer')">Ver Maomao 🌿</button>
+      </div>
+
+      <!-- Barra de progreso / seekbar -->
+      <div class="fp-seek-container" style="margin-bottom:6px;">
+        <input type="range" id="fpSeekBar" class="fp-seek-slider" min="0" max="1000" value="0" oninput="seekAudio(this.value)" />
+        <div class="fp-time-row">
+          <span id="fpCurTime">0:00</span>
+          <span id="fpDurTime">0:28</span>
         </div>
       </div>
 
-      <!-- Acciones de la Playlist -->
-      <div class="fp-pl-actions-row">
-        <button class="fp-chip-btn active" onclick="playCurrentFullPlaylistShuffle()" style="display:inline-flex; align-items:center; gap:5px;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-          <span>Aleatorio</span>
+      <!-- Controles de Reproducción Estilo Spotify con SVGs -->
+      <div class="fp-controls-row" style="margin-bottom:4px;">
+        <button class="fp-ctrl-btn" id="fpBtnShuffle" onclick="toggleShuffle()" title="Aleatorio">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
         </button>
-        <button class="fp-chip-btn" id="fpBtnDownloadPl" onclick="downloadCurrentPlaylistTracks()" style="display:inline-flex; align-items:center; gap:5px;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>Descargar Todo</span>
+        <button class="fp-ctrl-btn" onclick="prevTrack()" title="Anterior">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
         </button>
-        <button class="fp-chip-btn" onclick="openAddSelectedToPlaylistModal()" style="display:inline-flex; align-items:center; gap:5px;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>Añadir</span>
+        <button class="fp-play-btn" id="fpBtnPlay" onclick="togglePlay()" title="Reproducir / Pausar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
         </button>
-        <button class="fp-chip-btn" onclick="setFullPlayerTab('visualizer')">Ver Maomao</button>
-      </div>
-
-      <!-- Lista completa de canciones con indicador de reproducción -->
-      <div class="fp-pl-tracks-scroll" id="fpPlTracksList">
-        <!-- Generado dinámicamente -->
+        <button class="fp-ctrl-btn" onclick="nextTrack()" title="Siguiente">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        </button>
+        <button class="fp-ctrl-btn" id="fpBtnRepeat" onclick="toggleRepeat()" title="Repetir">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
       </div>
     </div>
   </div>
@@ -1915,12 +2006,22 @@ function mergeScannedDeviceTracks(savedList) {
       tracks[existingIdx].downloaded = true;
       tracks[existingIdx].title = cleanTitle;
       if (item.driveId && !tracks[existingIdx].driveId) tracks[existingIdx].driveId = item.driveId;
+      if (item.savedId && !tracks[existingIdx].savedId) tracks[existingIdx].savedId = item.savedId;
+      if (item.altId && !tracks[existingIdx].altId) tracks[existingIdx].altId = item.altId;
+      if (item.filePath && !tracks[existingIdx].filePath) tracks[existingIdx].filePath = item.filePath;
+      if (item.id && tracks[existingIdx].id !== item.id) {
+        if (!tracks[existingIdx].extraIds) tracks[existingIdx].extraIds = [];
+        if (!tracks[existingIdx].extraIds.includes(item.id)) tracks[existingIdx].extraIds.push(item.id);
+      }
       if (item.cover && !tracks[existingIdx].cover) tracks[existingIdx].cover = item.cover;
       tracks[existingIdx].artist = "Google Drive (Descargada) ✔";
     } else {
       tracks.unshift({
         id: item.id,
+        savedId: item.savedId || item.id,
+        altId: item.altId || item.id,
         driveId: item.driveId || "",
+        filePath: item.filePath || item.src,
         title: cleanTitle,
         artist: item.artist || "Carpeta SpotiLinux 📱",
         album: item.album || "Biblioteca Guardada",
@@ -1938,7 +2039,6 @@ function mergeScannedDeviceTracks(savedList) {
   savePersistentState();
   renderTracks();
   renderHomePlaylists();
-  renderPlaylists();
   if (newCount > 0) {
     const banner = document.getElementById("scanBanner");
     if (banner) {
@@ -2221,18 +2321,170 @@ window.onNativeMediaCommand = function(cmd) {
   }
 };
 
+function javaHashCode(str) {
+  if (!str) return 0;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function trackMatchesPlaylistId(track, tid) {
+  if (!track || !tid) return false;
+  if (track.id === tid) return true;
+  if (track.savedId && track.savedId === tid) return true;
+  if (track.altId && track.altId === tid) return true;
+  if (Array.isArray(track.extraIds) && track.extraIds.includes(tid)) return true;
+  if (track.driveId) {
+    if (track.driveId === tid) return true;
+    if (`gd_${track.driveId}` === tid) return true;
+  }
+  if (typeof tid === "string") {
+    if (tid.startsWith("gd_")) {
+      const raw = tid.slice(3);
+      if (track.driveId === raw || track.id === raw) return true;
+    }
+    if (track.id && typeof track.id === "string" && track.id.startsWith("gd_")) {
+      const raw = track.id.slice(3);
+      if (tid === raw) return true;
+    }
+    if (track.src) {
+      if (track.src.includes(tid)) return true;
+      if (("saved_" + javaHashCode(track.src)) === tid) return true;
+    }
+    if (track.savedPath) {
+      if (track.savedPath.includes(tid)) return true;
+      if (("saved_" + javaHashCode(track.savedPath)) === tid) return true;
+    }
+    if (track.filePath) {
+      if (track.filePath.includes(tid)) return true;
+      if (("saved_" + javaHashCode(track.filePath)) === tid) return true;
+    }
+  }
+  return false;
+}
+
+function findTrackByPlaylistId(tid) {
+  if (!tid) return null;
+  // 1. Coincidencia directa en tracks de la biblioteca
+  let found = tracks.find(t => trackMatchesPlaylistId(t, tid));
+  if (found) return found;
+
+  // 2. Si accountsDb tiene metadatos de esta pista, emparejar por título normalizado
+  if (accountsDb && typeof accountsDb === "object") {
+    for (const accKey in accountsDb) {
+      const acc = accountsDb[accKey];
+      if (acc && Array.isArray(acc.drive_tracks)) {
+        const dt = acc.drive_tracks.find(d => d.id === tid || d.file_id === tid || ("gd_" + d.file_id) === tid);
+        if (dt) {
+          const normTitle = normalizeFullTitle(cleanTrackTitle(dt.title));
+          const match = tracks.find(t => normalizeFullTitle(t.title) === normTitle);
+          if (match) {
+            if (!match.extraIds) match.extraIds = [];
+            if (!match.extraIds.includes(tid)) match.extraIds.push(tid);
+            return match;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function getPlaylistTracks(pl) {
+  if (!pl || !Array.isArray(pl.trackIds)) return [];
+  const matched = [];
+  const matchedIds = new Set();
+  for (const tid of pl.trackIds) {
+    const t = findTrackByPlaylistId(tid);
+    if (t && !matchedIds.has(t.id)) {
+      matched.push(t);
+      matchedIds.add(t.id);
+    }
+  }
+  return matched;
+}
+
+function getTrackPlaylists(track) {
+  if (!track || !Array.isArray(playlists)) return [];
+  const res = [];
+  for (const pl of playlists) {
+    if (!pl || !Array.isArray(pl.trackIds)) continue;
+    const isMember = pl.trackIds.some(tid => trackMatchesPlaylistId(track, tid));
+    if (isMember) {
+      res.push(pl);
+    }
+  }
+  return res;
+}
+
 function getTrackPlaylistName(track) {
   if (!track) return "Biblioteca";
+  const pls = getTrackPlaylists(track);
+  if (pls.length > 0) {
+    return pls.map(p => p.name).join(", ");
+  }
   if (activeQueueName && activeQueueName !== "Toda la biblioteca" && activeQueueName !== "Biblioteca" && activeQueueName !== "Playlist Actual") {
     return activeQueueName;
-  }
-  if (Array.isArray(playlists)) {
-    const pl = playlists.find(p => p.trackIds && p.trackIds.includes(track.id));
-    if (pl) return pl.name;
   }
   if (track.liked) return "Tus Me Gusta 💚";
   if (track.cloud) return "Google Drive (Musica)";
   return "Biblioteca";
+}
+
+function startRandomPlayback() {
+  const sourceTracks = tracks.filter(t => t.src || t.cloud);
+  if (!sourceTracks.length) {
+    showToast("No hay canciones disponibles para reproducir");
+    return;
+  }
+  const shuffled = [...sourceTracks].sort(() => Math.random() - 0.5);
+  shuffleMode = true;
+  activePlaybackQueue = shuffled;
+  activeQueueIndex = 0;
+  activeQueueName = "Modo Aleatorio 🔀";
+  executePlayTrack(shuffled[0]);
+  updatePlayerUI();
+  updateFullPlayerUI();
+  setFullPlayerTab("visualizer");
+  openFullPlayer();
+  showToast("🔀 Reproducción aleatoria iniciada");
+}
+
+function playPlaylistShuffle(plId) {
+  let plTracks = [];
+  let plName = "Playlist";
+  if (plId === "pl_liked") {
+    plTracks = tracks.filter(t => t.liked);
+    plName = "Tus Me Gusta";
+  } else if (plId === "pl_cloud") {
+    plTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const pl = playlists.find(p => p.id === plId);
+    if (!pl) return;
+    plTracks = getPlaylistTracks(pl);
+    plName = pl.name;
+  }
+
+  if (!plTracks.length) {
+    showToast(`La playlist «${plName}» no contiene canciones aún`);
+    return;
+  }
+
+  const shuffled = [...plTracks].sort(() => Math.random() - 0.5);
+  shuffleMode = true;
+  activePlaybackQueue = shuffled;
+  activeQueueIndex = 0;
+  activeQueueName = plName;
+  executePlayTrack(shuffled[0]);
+  updatePlayerUI();
+  updateFullPlayerUI();
+  setFullPlayerTab("visualizer");
+  openFullPlayer();
+  showToast(`🔀 Reproduciendo «${plName}» en aleatorio`);
 }
 
 function handleProfilePhotoPicked(ev) {
@@ -2515,6 +2767,7 @@ function setFullPlayerTab(tab) {
   const paneVis = document.getElementById("fpVisualizerPane");
   const panePl = document.getElementById("fpPlaylistPane");
   const queueIcon = document.getElementById("fpQueueIcon");
+  const miniRow = document.getElementById("fpMiniTrackRow");
 
   if (tab === "visualizer") {
     if (tabVis) tabVis.classList.add("active");
@@ -2522,6 +2775,8 @@ function setFullPlayerTab(tab) {
     if (paneVis) paneVis.classList.add("active");
     if (panePl) panePl.classList.remove("active");
     if (queueIcon) queueIcon.textContent = "📜";
+    if (miniRow) miniRow.style.display = "none";
+    syncCanvasDimensions();
     setTimeout(syncCanvasDimensions, 60);
   } else {
     if (tabVis) tabVis.classList.remove("active");
@@ -2529,6 +2784,7 @@ function setFullPlayerTab(tab) {
     if (paneVis) paneVis.classList.remove("active");
     if (panePl) panePl.classList.add("active");
     if (queueIcon) queueIcon.textContent = "🌿";
+    if (miniRow) miniRow.style.display = "flex";
     renderFullPlayerPlaylist();
   }
 }
@@ -2546,6 +2802,11 @@ function updateFullPlayerUI() {
 
   const fpArtist = document.getElementById("fpArtist");
   if (fpArtist) fpArtist.textContent = `${t.artist} • ${t.album || t.genre || 'Música'}`;
+
+  const fpMiniTitle = document.getElementById("fpMiniTitle");
+  if (fpMiniTitle) fpMiniTitle.textContent = t.title;
+  const fpMiniArtist = document.getElementById("fpMiniArtist");
+  if (fpMiniArtist) fpMiniArtist.textContent = `• ${t.artist}`;
 
   const plName = getTrackPlaylistName(t);
 
@@ -2636,9 +2897,9 @@ function renderFullPlayerPlaylist() {
       ? `<div class="fp-track-cover"><img src="${t.cover}" alt="cover" /></div>`
       : "";
 
-    const plTrackName = getTrackPlaylistName(t);
-    const plBadgeHtml = (plTrackName && plTrackName !== "Biblioteca")
-      ? `<span class="track-badge-pl"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(plTrackName)}</span>`
+    const memberPlaylists = getTrackPlaylists(t);
+    const plBadgeHtml = memberPlaylists.length > 0
+      ? memberPlaylists.map(pl => `<span class="track-badge-pl"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl.name)}</span>`).join("")
       : "";
 
     row.innerHTML = `
@@ -2836,10 +3097,10 @@ function renderTracks() {
       thumb.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
     }
 
-    const plTrackName = getTrackPlaylistName(t);
-    const plBadgeHtml = (plTrackName && plTrackName !== "Biblioteca")
-      ? `<span class="track-badge-pl"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(plTrackName)}</span>`
-      : "";
+    const memberPlaylists = getTrackPlaylists(t);
+    const plBadgeHtml = memberPlaylists.length > 0
+      ? memberPlaylists.map(pl => `<span class="track-badge-pl" title="En playlist: ${escapeHtml(pl.name)}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl.name)}</span>`).join("")
+      : `<span class="track-badge-unassigned" title="Aún no añadida a ninguna playlist"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Sin playlist</span>`;
     const modeBadge = t.cloud ? (t.downloaded ? " • Guardada Offline ✔" : " • En línea ☁️") : "";
     const meta = document.createElement("div");
     meta.className = "track-meta";
@@ -2900,61 +3161,71 @@ function renderHomePlaylists() {
   grid.innerHTML = "";
 
   // 1. Tarjeta Especial: Canciones que te gustan
-  const likedCount = tracks.filter(t => t.liked).length;
+  const likedList = tracks.filter(t => t.liked);
   const likedCard = document.createElement("div");
   likedCard.className = "playlist-card";
   likedCard.style.background = "linear-gradient(135deg, #2b1754 0%, #150f28 100%)";
   likedCard.onclick = () => {
-    const list = tracks.filter(t => t.liked);
-    if (!list.length) {
+    if (!likedList.length) {
       showToast("Aún no tienes canciones favoritas marcadas con corazón");
       return;
     }
-    activePlaybackQueue = [...list];
+    activePlaybackQueue = [...likedList];
     activeQueueIndex = 0;
     activeQueueName = "Tus Me Gusta";
-    executePlayTrack(list[0]);
+    executePlayTrack(likedList[0]);
     updatePlayerUI();
-    setFullPlayerTab("playlist");
+    updateFullPlayerUI();
+    setFullPlayerTab("visualizer");
     openFullPlayer();
   };
   likedCard.innerHTML = `
-    <div class="playlist-card-badge">FAVORITOS</div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="playlist-card-badge">FAVORITOS</div>
+      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_liked')" title="Reproducir en aleatorio">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+      </button>
+    </div>
     <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
       ${ICONS.likeFilled}
     </div>
     <div class="playlist-card-title">Tus Favoritos</div>
-    <div class="playlist-card-sub">${likedCount} canciones</div>
+    <div class="playlist-card-sub">${likedList.length} canciones</div>
     <div class="playlist-card-play-btn">${ICONS.play}</div>
   `;
   grid.appendChild(likedCard);
 
   // 2. Tarjeta Especial: Google Drive Cloud
-  const cloudCount = tracks.filter(t => t.cloud).length;
+  const cloudList = tracks.filter(t => t.cloud);
   const cloudCard = document.createElement("div");
   cloudCard.className = "playlist-card";
   cloudCard.style.background = "linear-gradient(135deg, #0d261e 0%, #0a1410 100%)";
   cloudCard.onclick = () => {
-    const list = tracks.filter(t => t.cloud);
-    if (!list.length) {
+    if (!cloudList.length) {
       showToast("No se encontraron canciones en Google Drive");
       return;
     }
-    activePlaybackQueue = [...list];
+    activePlaybackQueue = [...cloudList];
     activeQueueIndex = 0;
     activeQueueName = "Google Drive";
-    executePlayTrack(list[0]);
+    executePlayTrack(cloudList[0]);
     updatePlayerUI();
-    setFullPlayerTab("playlist");
+    updateFullPlayerUI();
+    setFullPlayerTab("visualizer");
     openFullPlayer();
   };
   cloudCard.innerHTML = `
-    <div class="playlist-card-badge">NUBE</div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="playlist-card-badge">NUBE</div>
+      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_cloud')" title="Reproducir en aleatorio">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+      </button>
+    </div>
     <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
     </div>
     <div class="playlist-card-title">Google Drive</div>
-    <div class="playlist-card-sub">${cloudCount} canciones</div>
+    <div class="playlist-card-sub">${cloudList.length} canciones</div>
     <div class="playlist-card-play-btn">${ICONS.play}</div>
   `;
   grid.appendChild(cloudCard);
@@ -2963,7 +3234,7 @@ function renderHomePlaylists() {
   playlists.forEach(pl => {
     const card = document.createElement("div");
     card.className = "playlist-card";
-    const plTracks = tracks.filter(t => pl.trackIds.includes(t.id));
+    const plTracks = getPlaylistTracks(pl);
     card.onclick = () => {
       if (!plTracks.length) {
         showToast("Esta playlist no contiene canciones aún");
@@ -2974,15 +3245,21 @@ function renderHomePlaylists() {
       activeQueueName = pl.name;
       executePlayTrack(plTracks[0]);
       updatePlayerUI();
-      setFullPlayerTab("playlist");
+      updateFullPlayerUI();
+      setFullPlayerTab("visualizer");
       openFullPlayer();
     };
     card.innerHTML = `
-      <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
+        <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </button>
       </div>
       <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
-      <div class="playlist-card-sub">${pl.trackIds.length} canciones</div>
+      <div class="playlist-card-sub">${plTracks.length} canciones</div>
       <div class="playlist-card-play-btn">${ICONS.play}</div>
     `;
     grid.appendChild(card);
@@ -3095,11 +3372,12 @@ function renderActivePlaylistDetail() {
     return;
   }
 
+  const plTracks = getPlaylistTracks(curPl);
   activeBox.style.display = "block";
   document.getElementById("plViewTitle").textContent = "🎵 " + curPl.name;
   document.getElementById("plViewDesc").textContent = curPl.desc || "Playlist personalizada";
   const badgeEl = document.getElementById("plTrackCountBadge");
-  if (badgeEl) badgeEl.textContent = `${curPl.trackIds.length} canciones`;
+  if (badgeEl) badgeEl.textContent = `${plTracks.length} canciones`;
 
   const container = document.getElementById("plTracksCollapsibleContainer");
   const summary = document.getElementById("plCollapsedSummary");
@@ -3113,8 +3391,6 @@ function renderActivePlaylistDetail() {
 
   const plListEl = document.getElementById("playlistTracksList");
   plListEl.innerHTML = "";
-
-  const plTracks = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
 
   if (plTracks.length === 0) {
     plListEl.innerHTML = `
@@ -3345,11 +3621,11 @@ function playSelectedPlaylist() {
     name = "Mi Google Drive";
   } else {
     const curPl = playlists.find(p => p.id === selectedPlaylistId);
-    if (!curPl || !curPl.trackIds.length) {
-      showToast("Esta playlist no tiene canciones");
+    if (!curPl) {
+      showToast("Esta playlist no existe");
       return;
     }
-    list = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
+    list = getPlaylistTracks(curPl);
     name = curPl.name;
   }
   if (!list.length) {
@@ -3371,11 +3647,11 @@ function shufflePlaySelectedPlaylist() {
     name = "Mi Google Drive";
   } else {
     const curPl = playlists.find(p => p.id === selectedPlaylistId);
-    if (!curPl || !curPl.trackIds.length) {
-      showToast("Esta playlist no tiene canciones");
+    if (!curPl) {
+      showToast("Esta playlist no existe");
       return;
     }
-    list = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
+    list = getPlaylistTracks(curPl);
     name = curPl.name;
   }
   if (!list.length) {
@@ -3449,14 +3725,22 @@ function applyAccountRecordToState(acc) {
       const cid = "gd_" + fid;
       const cleanTitle = cleanTrackTitle(dt.title || "");
       const normKey = normalizeFullTitle(cleanTitle);
-      const exists = tracks.some(x =>
+      const existing = tracks.find(x =>
         x.id === cid ||
         x.driveId === fid ||
         (normKey && normalizeFullTitle(x.title) === normKey)
       );
-      if (!exists) {
+      if (existing) {
+        if (!existing.driveId) existing.driveId = fid;
+        if (!existing.altId) existing.altId = cid;
+        if (dt.id && existing.id !== dt.id) {
+          if (!existing.extraIds) existing.extraIds = [];
+          if (!existing.extraIds.includes(dt.id)) existing.extraIds.push(dt.id);
+        }
+      } else {
         tracks.unshift({
           id: cid,
+          altId: dt.id || cid,
           driveId: fid,
           title: cleanTitle || ("Canción Drive " + fid.substring(0, 6)),
           artist: dt.artist || "Google Drive Cloud ☁️",
@@ -4361,7 +4645,7 @@ function downloadCurrentPlaylistTracks() {
     const curPl = playlists.find(p => p.id === selectedPlaylistId);
     if (!curPl) return;
     plName = curPl.name;
-    plTracks = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
+    plTracks = getPlaylistTracks(curPl);
   }
 
   const cloudPending = plTracks.filter(t => t.cloud && !t.downloaded && t.driveId);
@@ -4648,6 +4932,12 @@ function syncCanvasDimensions() {
     if (rectFM.width > 20 && rectFM.height > 20) {
       fullMmCanvas.width = Math.round(rectFM.width);
       fullMmCanvas.height = Math.round(rectFM.height);
+    } else if (fullMmCanvas.clientWidth > 20 && fullMmCanvas.clientHeight > 20) {
+      fullMmCanvas.width = Math.round(fullMmCanvas.clientWidth);
+      fullMmCanvas.height = Math.round(fullMmCanvas.clientHeight);
+    } else if (fullMmCanvas.width < 50) {
+      fullMmCanvas.width = 380;
+      fullMmCanvas.height = 220;
     }
   }
   if (!fullVCanvas) fullVCanvas = document.getElementById("fullVisCanvas");
@@ -4656,6 +4946,12 @@ function syncCanvasDimensions() {
     if (rectFV.width > 20 && rectFV.height > 15) {
       fullVCanvas.width = Math.round(rectFV.width);
       fullVCanvas.height = Math.round(rectFV.height);
+    } else if (fullVCanvas.clientWidth > 20 && fullVCanvas.clientHeight > 15) {
+      fullVCanvas.width = Math.round(fullVCanvas.clientWidth);
+      fullVCanvas.height = Math.round(fullVCanvas.clientHeight);
+    } else if (fullVCanvas.width < 50) {
+      fullVCanvas.width = 380;
+      fullVCanvas.height = 56;
     }
   }
 }
@@ -4807,9 +5103,24 @@ function animateLoop(nowMs) {
   drawMaomaoStage(pose, beatPos, bass, mid, high, mmCanvas, mmCtx);
   drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, vCanvas, vCtx);
 
-  if (isFullPlayerOpen && fullMmCanvas && fullMmCtx && fullVCanvas && fullVCtx && fullPlayerTab === "visualizer") {
-    drawMaomaoStage(pose, beatPos, bass, mid, high, fullMmCanvas, fullMmCtx);
-    drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, fullVCanvas, fullVCtx);
+  if (isFullPlayerOpen) {
+    if (!fullMmCanvas || !fullMmCtx || !fullVCanvas || !fullVCtx) {
+      initFullPlayer();
+    }
+    if (fullMmCanvas && fullMmCtx && fullVCanvas && fullVCtx) {
+      if (fullMmCanvas.width < 50 || fullMmCanvas.height < 50) {
+        fullMmCanvas.width = fullMmCanvas.clientWidth || 380;
+        fullMmCanvas.height = fullMmCanvas.clientHeight || 220;
+      }
+      if (fullVCanvas.width < 50 || fullVCanvas.height < 20) {
+        fullVCanvas.width = fullVCanvas.clientWidth || 380;
+        fullVCanvas.height = fullVCanvas.clientHeight || 56;
+      }
+      if (fullPlayerTab === "visualizer") {
+        drawMaomaoStage(pose, beatPos, bass, mid, high, fullMmCanvas, fullMmCtx);
+        drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, fullVCanvas, fullVCtx);
+      }
+    }
   }
 }
 
