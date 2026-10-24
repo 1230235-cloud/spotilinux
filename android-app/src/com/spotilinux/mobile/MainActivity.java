@@ -577,6 +577,45 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void fetchPublicCloudDatabase(final String rootFolderId) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        String fid = (rootFolderId != null && !rootFolderId.trim().isEmpty()) ? rootFolderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+                        String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + fid + "#list");
+                        String dbFileId = null;
+                        if (htmlRoot != null && !htmlRoot.isEmpty()) {
+                            Pattern filePat = Pattern.compile("href=\"https://drive\\.google\\.com/file/d/([A-Za-z0-9_-]{15,})/[^\"]*\"[^>]*>([\\s\\S]*?)</a>");
+                            Matcher fileM = filePat.matcher(htmlRoot);
+                            while (fileM.find()) {
+                                String fId = fileM.group(1);
+                                String inner = fileM.group(2);
+                                Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<").matcher(inner);
+                                String name = tm.find() ? tm.group(1).trim() : "";
+                                if (name.equalsIgnoreCase("spotilinux_database.json") || name.equalsIgnoreCase("spotilinux_cloud_playlists.json")) {
+                                    dbFileId = fId;
+                                    break;
+                                }
+                            }
+                        }
+                        if (dbFileId != null) {
+                            String jsonContent = fetchUrlText("https://drive.google.com/uc?export=download&id=" + dbFileId + "&confirm=t");
+                            if (jsonContent != null && !jsonContent.trim().isEmpty() && jsonContent.trim().startsWith("{")) {
+                                String safeJson = jsonContent.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+                                dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', '" + dbFileId + "');");
+                                return;
+                            }
+                        }
+                        dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('', '');");
+                    } catch (Exception e) {
+                        dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('', '');");
+                    }
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
         public void saveAppStateJson(String json) {
             try {
                 File f = new File(getFilesDir(), "spotilinux_state.json");

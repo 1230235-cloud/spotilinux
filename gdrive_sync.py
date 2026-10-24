@@ -912,8 +912,9 @@ def _find_cloud_db_file_id(config: GoogleDriveConfig, filename: str = CLOUD_DB_F
     return None
 
 
-def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> dict:
-    """Descarga y combina spotilinux_database.json desde la carpeta 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT con la copia local."""
+def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> tuple[dict, Optional[str]]:
+    """Descarga y combina spotilinux_database.json desde la carpeta 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT con la copia local.
+    Retorna (base_db, cloud_file_id)."""
     base_db: dict = {
         "app": "SpotiLinux",
         "version": "2.0.0",
@@ -932,7 +933,9 @@ def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> d
 
     file_id = _find_cloud_db_file_id(config, CLOUD_DB_FILENAME)
     if not file_id:
-        return base_db
+        file_id = _find_cloud_db_file_id(config, "spotilinux_cloud_playlists.json")
+    if not file_id:
+        return base_db, None
 
     headers = {"Authorization": f"Bearer {config.access_token}"} if config.access_token else {}
     urls = [
@@ -967,7 +970,7 @@ def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> d
                     break
         except Exception:
             continue
-    return base_db
+    return base_db, file_id
 
 
 def merge_account_records(acc_a: dict, acc_b: dict) -> dict:
@@ -1027,11 +1030,19 @@ def merge_account_records(acc_a: dict, acc_b: dict) -> dict:
     return merged
 
 
-def upload_cloud_database(config: GoogleDriveConfig, local_db_path: Path, db_data: dict) -> tuple[bool, str]:
+def upload_cloud_database(
+    config: GoogleDriveConfig,
+    local_db_path: Path,
+    db_data: dict,
+    existing_file_id: Optional[str] = None,
+) -> tuple[bool, str]:
     """
     Guarda la base de datos localmente en data/accounts_db.json y la sube/actualiza en la carpeta
     1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT de Google Drive como spotilinux_database.json.
     """
+    if isinstance(local_db_path, dict) and isinstance(db_data, Path):
+        local_db_path, db_data = db_data, local_db_path
+
     db_data["updated_at"] = time.time()
     db_data["root_folder_id"] = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
     local_db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1042,7 +1053,7 @@ def upload_cloud_database(config: GoogleDriveConfig, local_db_path: Path, db_dat
         return True, "Base de datos guardada localmente (conecta Token OAuth para escribir en Google Drive)."
 
     root_id = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
-    file_id = _find_cloud_db_file_id(config, CLOUD_DB_FILENAME)
+    file_id = existing_file_id or _find_cloud_db_file_id(config, CLOUD_DB_FILENAME)
     try:
         if file_id:
             patch_res = requests.patch(

@@ -838,7 +838,66 @@ function normalizeTrackKey(str) {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-function simplePasswordHash(pw) {
+function sha256Pure(ascii) {
+  function rightRotate(value, amount) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  var mathPow = Math.pow;
+  var maxWord = mathPow(2, 32);
+  var i, j;
+  var result = '';
+  var words = [];
+  var asciiBitLength = ascii.length * 8;
+  var hash = [];
+  var k = [];
+  var primeCounter = 0;
+  var isComposite = {};
+  for (var candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) isComposite[i] = candidate;
+      hash[primeCounter] = (mathPow(candidate, .5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+  ascii += '\x80';
+  while (ascii.length % 64 - 56) ascii += '\x00';
+  for (i = 0; i < ascii.length; i++) {
+    j = ascii.charCodeAt(i);
+    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+  }
+  words[words.length] = ((asciiBitLength / maxWord) | 0);
+  words[words.length] = (asciiBitLength | 0);
+  for (j = 0; j < words.length;) {
+    var w = words.slice(j, j += 16);
+    var oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (i = 0; i < 64; i++) {
+      var w15 = w[i - 15], w2 = w[i - 2];
+      var s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
+      var s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
+      var ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
+      var maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
+      var temp1 = hash[7] + (rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25)) + ch + k[i] + (w[i] = (i < 16) ? w[i] : (w[i - 16] + s0 + w[i - 7] + s1) | 0);
+      var temp2 = (rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22)) + maj;
+      hash = [(temp1 + temp2) | 0].concat(hash);
+      hash[4] = (hash[4] + temp1) | 0;
+    }
+    for (i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+  }
+  for (i = 0; i < 8; i++) {
+    for (var b = 3; b >= 0; b--) {
+      var byte = (hash[i] >> (b * 8)) & 255;
+      result += (byte < 16 ? '0' : '') + byte.toString(16);
+    }
+  }
+  return result;
+}
+
+function hashPassword(pw) {
+  return sha256Pure('spotilinux_v2:' + String(pw || '').trim());
+}
+
+function legacyPasswordHash(pw) {
   let s = "spotilinux_salt_v1:" + String(pw || "");
   let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length;
   for (let i = 0, ch; i < s.length; i++) {
@@ -1984,33 +2043,47 @@ async function submitSpotiAccountForm() {
     }
   }
 
-  if (stEl) stEl.textContent = "☁️ Sincronizando base de datos con Google Drive...";
+  if (stEl) stEl.textContent = "☁️ Consultando cuentas en Google Drive...";
   await pullCloudDatabaseFromDrive();
 
-  const pwHash = simplePasswordHash(passInp);
+  const pwHash = hashPassword(passInp);
+  const oldHash = legacyPasswordHash(passInp);
+
   if (accountFormMode === "register") {
     const existing = accountsDb[emailInp];
-    if (existing && existing.passwordHash && existing.passwordHash !== pwHash) {
-      if (stEl) stEl.textContent = "⚠️ Ese correo ya está registrado con otra contraseña. Usa «Iniciar Sesión».";
-      return;
+    if (existing && (existing.password_hash || existing.passwordHash)) {
+      const exHash = existing.password_hash || existing.passwordHash;
+      if (exHash !== pwHash && exHash !== oldHash) {
+        if (stEl) stEl.textContent = "⚠️ Ese correo ya está registrado con otra contraseña. Usa «Iniciar Sesión».";
+        return;
+      }
     }
     const rec = {
       username: userInp,
       email: emailInp,
+      password_hash: pwHash,
       passwordHash: pwHash,
+      updated_at: Date.now(),
       updatedAt: Date.now(),
       playlists: playlists,
+      liked_ids: tracks.filter(t => t.liked).map(t => t.id),
       likedIds: tracks.filter(t => t.liked).map(t => t.id),
       drive_tracks: collectCurrentDriveTracksForAccount()
     };
     if (existing) applyAccountRecordToState(existing);
     accountsDb[emailInp] = rec;
-    userAccount = { username: userInp, email: emailInp, passwordHash: pwHash };
+    userAccount = { username: userInp, email: emailInp, passwordHash: pwHash, password_hash: pwHash };
     savePersistentState();
     updateAccountUI();
-    await uploadPlaylistsToDrive();
-    if (stEl) stEl.textContent = `✔ Cuenta «${userInp}» (${emailInp}) creada y vinculada al Drive.`;
-    showToast(`👤 Cuenta ${userInp} creada y vinculada`);
+
+    const token = document.getElementById("gdToken").value.trim();
+    if (token) {
+      await uploadPlaylistsToDrive();
+      if (stEl) stEl.textContent = `✔ Cuenta «${userInp}» (${emailInp}) creada y sincronizada en Google Drive.`;
+    } else {
+      if (stEl) stEl.textContent = `✔ Cuenta creada. Conecta Google Drive pulsando «Iniciar con Google» para sincronizarla en otros dispositivos.`;
+    }
+    showToast(`👤 Cuenta ${userInp} creada`);
   } else {
     const qLow = userInp.toLowerCase();
     let foundKey = null;
@@ -2024,15 +2097,19 @@ async function submitSpotiAccountForm() {
       }
     }
     if (!foundAcc) {
-      if (stEl) stEl.textContent = "⚠️ No se encontró esa cuenta. Créala en «Crear Cuenta».";
+      if (stEl) stEl.textContent = "⚠️ No se encontró esa cuenta en Google Drive. Si la creaste en otro dispositivo, asegúrate de haberla guardado en Drive o créala en «Crear Cuenta».";
       return;
     }
-    if (foundAcc.passwordHash && foundAcc.passwordHash !== pwHash) {
-      if (stEl) stEl.textContent = "⚠️ Contraseña incorrecta.";
+    const storedHash = foundAcc.password_hash || foundAcc.passwordHash;
+    const match = (storedHash === pwHash) || (storedHash === oldHash);
+    if (!match) {
+      if (stEl) stEl.textContent = "⚠️ Contraseña incorrecta para esa cuenta.";
       return;
     }
     applyAccountRecordToState(foundAcc);
-    userAccount = { username: foundAcc.username, email: foundAcc.email || foundKey, passwordHash: pwHash };
+    userAccount = { username: foundAcc.username, email: foundAcc.email || foundKey, passwordHash: pwHash, password_hash: pwHash };
+    foundAcc.password_hash = pwHash;
+    foundAcc.passwordHash = pwHash;
     foundAcc.playlists = playlists;
     foundAcc.likedIds = tracks.filter(t => t.liked).map(t => t.id);
     foundAcc.drive_tracks = collectCurrentDriveTracksForAccount();
@@ -2040,7 +2117,10 @@ async function submitSpotiAccountForm() {
     renderHomePlaylists();
     renderTracks();
     updateAccountUI();
-    await uploadPlaylistsToDrive();
+    const token = document.getElementById("gdToken").value.trim();
+    if (token) {
+      await uploadPlaylistsToDrive();
+    }
     if (stEl) stEl.textContent = `✔ Sesión iniciada: ${userAccount.username} (${userAccount.email}). Playlists y canciones restauradas.`;
     showToast(`🔑 Bienvenido, ${userAccount.username}`);
   }
@@ -2160,10 +2240,52 @@ function handleTokenManualInput() {
   }
 }
 
+let cachedCloudDbFileId = null;
+
+window.onCloudDatabaseFetched = function(jsonStr, fileId) {
+  if (jsonStr) {
+    try {
+      const data = JSON.parse(jsonStr);
+      if (data.accounts && typeof data.accounts === "object") {
+        Object.assign(accountsDb, data.accounts);
+      }
+      applyAccountRecordToState(data);
+      if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+        applyAccountRecordToState(accountsDb[userAccount.email]);
+      }
+      savePersistentState();
+      renderHomePlaylists();
+      renderTracks();
+      if (fileId) cachedCloudDbFileId = fileId;
+    } catch (_e) {}
+  }
+  if (window._cloudDbFetchResolver) {
+    window._cloudDbFetchResolver(fileId || null);
+    window._cloudDbFetchResolver = null;
+  }
+};
+
 async function pullCloudDatabaseFromDrive() {
   const token = document.getElementById("gdToken").value.trim();
   const apiKey = document.getElementById("gdApiKey").value.trim();
   const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+
+  // 1. En Android: consulta pública nativa de Java sin token y sin problemas de CORS
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.fetchPublicCloudDatabase) {
+    const res = await new Promise(resolve => {
+      window._cloudDbFetchResolver = resolve;
+      window.AndroidMedia.fetchPublicCloudDatabase(rootId);
+      setTimeout(() => {
+        if (window._cloudDbFetchResolver) {
+          window._cloudDbFetchResolver(null);
+          window._cloudDbFetchResolver = null;
+        }
+      }, 5000);
+    });
+    if (res) return res;
+  }
+
+  // 2. Si hay token o apiKey, consultar API v3
   if (!token && !apiKey) return null;
   const headers = token ? { "Authorization": `Bearer ${token}` } : {};
 
@@ -2200,6 +2322,7 @@ async function pullCloudDatabaseFromDrive() {
         savePersistentState();
         renderHomePlaylists();
         renderTracks();
+        cachedCloudDbFileId = fileId;
         return fileId;
       }
     }
@@ -3390,6 +3513,11 @@ window.addEventListener("DOMContentLoaded", () => {
   updateRepeatUI();
   syncCanvasDimensions();
   animateLoop();
+
+  // Precargar base de datos de cuentas y catálogo de Google Drive
+  setTimeout(() => {
+    pullCloudDatabaseFromDrive();
+  }, 250);
 
   // Escanear automáticamente la carpeta «Musica» del Drive compartido 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT
   setTimeout(() => {

@@ -13,3 +13,4 @@ dist/*.idsig
 data/eq_cache/
 data/gdrive_cache/
 data/library.json
+data/accounts_db.json

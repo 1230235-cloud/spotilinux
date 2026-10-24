@@ -1043,7 +1043,7 @@ class AccountDialog(QDialog):
             }
             merged_record = merge_account_records(existing or {}, new_record)
             accounts[acc_key] = merged_record
-            upload_cloud_database(self.store.gdrive_config, db, self.store.accounts_db_path, existing_file_id)
+            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
             self.authenticated_account = merged_record
             self.accept()
         else:
@@ -1082,7 +1082,7 @@ class AccountDialog(QDialog):
             }
             merged_record = merge_account_records(found_acc, current_record)
             accounts[found_key] = merged_record
-            upload_cloud_database(self.store.gdrive_config, db, self.store.accounts_db_path, existing_file_id)
+            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
             self.authenticated_account = merged_record
             self.accept()
 
