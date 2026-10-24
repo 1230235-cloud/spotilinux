@@ -290,11 +290,19 @@ public class MainActivity extends Activity {
                                     opts.inSampleSize = sample;
                                     Bitmap bmp = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length, opts);
                                     if (bmp != null) {
-                                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                        bmp.compress(Bitmap.CompressFormat.JPEG, 75, baos);
-                                        byte[] jpegBytes = baos.toByteArray();
-                                        String b64 = Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
-                                        obj.put("cover", "data:image/jpeg;base64," + b64);
+                                        File coversDir = new File(getCacheDir(), "covers");
+                                        if (!coversDir.exists()) coversDir.mkdirs();
+                                        String hash = Integer.toHexString(f.getAbsolutePath().hashCode());
+                                        File coverFile = new File(coversDir, hash + ".jpg");
+                                        if (!coverFile.exists() || coverFile.length() < 100) {
+                                            try (FileOutputStream fos = new FileOutputStream(coverFile)) {
+                                                bmp.compress(Bitmap.CompressFormat.JPEG, 80, fos);
+                                            } catch (Throwable ignored) {
+                                            }
+                                        }
+                                        if (coverFile.exists() && coverFile.length() > 0) {
+                                            obj.put("cover", "file://" + coverFile.getAbsolutePath());
+                                        }
                                         bmp.recycle();
                                     }
                                 }
