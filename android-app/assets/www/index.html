@@ -933,16 +933,17 @@
   .track-badge-pl {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    color: #c0c0d0;
+    gap: 4px;
+    background: rgba(29, 185, 84, 0.12);
+    border: 1px solid rgba(29, 185, 84, 0.32);
+    color: var(--green-bright);
     font-size: 9.5px;
     font-weight: 700;
-    padding: 1px 7px;
+    padding: 1.5px 8px;
     border-radius: 9999px;
-    margin-left: 5px;
+    margin-left: 6px;
     vertical-align: middle;
+    letter-spacing: 0.2px;
   }
   .track-badge-pl svg { flex-shrink: 0; color: var(--green-bright); }
 
@@ -1785,7 +1786,7 @@ function legacyPasswordHash(pw) {
 
 /* ---------------- PERSISTENCIA DE ESTADO Y PLAYLISTS ---------------- */
 function savePersistentState() {
-  const cloudTracksOnly = tracks.filter(t => t.cloud && !t.downloaded);
+  const cloudTracksOnly = tracks.filter(t => t.cloud || t.driveId || String(t.id).startsWith("gd_"));
   const likedIds = tracks.filter(t => t.liked).map(t => t.id);
   const chkDedup = document.getElementById("chkVerifyDuplicates");
   const stateObj = {
@@ -1821,7 +1822,7 @@ function loadPersistentState() {
       if (Array.isArray(st.playlists) && st.playlists.length > 0) playlists = st.playlists;
       if (Array.isArray(st.cloudTracksOnly)) {
         st.cloudTracksOnly.forEach(ct => {
-          if (!tracks.some(x => x.id === ct.id || (normalizeTrackKey(x.title) && normalizeTrackKey(x.title) === normalizeTrackKey(ct.title)))) {
+          if (!tracks.some(x => x.id === ct.id || (ct.driveId && x.driveId === ct.driveId))) {
             tracks.unshift(ct);
           }
         });
@@ -1856,12 +1857,10 @@ function mergeScannedDeviceTracks(savedList) {
   if (!Array.isArray(savedList)) return;
   let newCount = 0;
   savedList.forEach(item => {
-    const normTitle = normalizeTrackKey(item.title);
     const existingIdx = tracks.findIndex(t =>
       t.src === item.src ||
       t.id === item.id ||
-      (item.driveId && t.driveId === item.driveId) ||
-      (normTitle && normalizeTrackKey(t.title) === normTitle)
+      (item.driveId && t.driveId === item.driveId)
     );
     if (existingIdx >= 0) {
       // Si ya existía como pista online de Drive, actualizarla al archivo local descargado sin duplicar
@@ -3395,8 +3394,7 @@ function applyAccountRecordToState(acc) {
       const fid = dt.file_id || String(dt.id || "").replace(/^gd_/, "");
       if (!fid) return;
       const cid = "gd_" + fid;
-      const normKey = normalizeTrackKey(dt.title);
-      const exists = tracks.some(x => x.id === cid || x.driveId === fid || (normKey && normalizeTrackKey(x.title) === normKey));
+      const exists = tracks.some(x => x.id === cid || x.driveId === fid);
       if (!exists) {
         tracks.unshift({
           id: cid,
@@ -4069,20 +4067,18 @@ async function uploadSelectedFilesToDrive(ev) {
 window.onPublicDriveFolderFetched = function(filesList) {
   const st = document.getElementById("gdStatus");
   if (!Array.isArray(filesList)) return;
-  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
   let added = 0;
-  let skipped = 0;
+  let updated = 0;
 
   filesList.forEach(f => {
     if (!f || !f.id) return;
     const fname = f.name || "";
-    if (fname === CLOUD_DB_FILENAME || fname.endsWith(".json")) return;
-    if (!/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(fname) && fname.includes(".")) return;
+    // Ignorar base de datos y archivos que no son audio (imágenes, textos, pdfs, zips)
+    if (fname === CLOUD_DB_FILENAME || /^(.*\.json|.*\.png|.*\.jpe?g|.*\.gif|.*\.webp|.*\.txt|.*\.pdf|.*\.zip|.*\.rar)$/i.test(fname)) return;
 
     const cleanTitle = fname.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-    const normTitle = normalizeTrackKey(cleanTitle);
     const cid = "gd_" + f.id;
-    const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id || (verifyDedup && normTitle && normalizeTrackKey(x.title) === normTitle));
+    const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id);
 
     const trackObj = {
       id: cid,
@@ -4099,11 +4095,14 @@ window.onPublicDriveFolderFetched = function(filesList) {
     };
 
     if (existingIdx >= 0) {
+      if (tracks[existingIdx].cover) trackObj.cover = tracks[existingIdx].cover;
       if (tracks[existingIdx].downloaded) {
-        skipped++;
-      } else {
-        tracks[existingIdx] = trackObj;
+        trackObj.downloaded = true;
+        trackObj.src = tracks[existingIdx].src;
+        trackObj.artist = tracks[existingIdx].artist;
       }
+      tracks[existingIdx] = trackObj;
+      updated++;
     } else {
       tracks.unshift(trackObj);
       added++;
@@ -4118,7 +4117,7 @@ window.onPublicDriveFolderFetched = function(filesList) {
   renderTracks();
   renderHomePlaylists();
   if (st) {
-    st.textContent = `✔ Carpeta «Musica» sincronizada: ${added} nuevas, ${skipped} ya existentes (${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
+    st.textContent = `✔ Sincronizadas ${filesList.length} canciones de Google Drive (${added} agregadas • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
   }
 };
 
@@ -4170,24 +4169,20 @@ async function autoDiscoverDriveMusic() {
       const resp = await fetch(url, { headers });
       if (resp.ok) {
         const data = await resp.json();
-        const files = (data.files || []).filter(f =>
-          (f.mimeType && f.mimeType.startsWith("audio/")) ||
-          /\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(f.name || "")
-        );
+        const files = (data.files || []).filter(f => {
+          const fname = f.name || "";
+          return f.mimeType !== "application/vnd.google-apps.folder" &&
+                 fname !== CLOUD_DB_FILENAME &&
+                 !/^(.*\.json|.*\.png|.*\.jpe?g|.*\.gif|.*\.webp|.*\.txt|.*\.pdf|.*\.zip|.*\.rar)$/i.test(fname);
+        });
 
         for (const f of files) {
           let streamUrl = `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`;
           if (apiKey && !token) streamUrl += `&key=${encodeURIComponent(apiKey)}`;
 
           const cleanTitle = (f.name || f.id).replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-          const normTitle = normalizeTrackKey(cleanTitle);
           const cid = "gd_" + f.id;
-          const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id || (verifyDedup && normTitle && normalizeTrackKey(x.title) === normTitle));
-
-          if (existingIdx >= 0 && tracks[existingIdx].downloaded && verifyDedup) {
-            skippedDup++;
-            continue;
-          }
+          const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id);
 
           const trackObj = {
             id: cid,
@@ -4200,15 +4195,25 @@ async function autoDiscoverDriveMusic() {
             authToken: token,
             liked: existingIdx >= 0 ? tracks[existingIdx].liked : false,
             cloud: true,
-            downloaded: false,
+            downloaded: existingIdx >= 0 ? tracks[existingIdx].downloaded : false,
             color: "#00d2ff"
           };
 
-          if (existingIdx >= 0) tracks[existingIdx] = trackObj;
-          else tracks.unshift(trackObj);
-          added++;
+          if (existingIdx >= 0) {
+            if (tracks[existingIdx].cover) trackObj.cover = tracks[existingIdx].cover;
+            if (tracks[existingIdx].downloaded) {
+              trackObj.downloaded = true;
+              trackObj.src = tracks[existingIdx].src;
+              trackObj.artist = tracks[existingIdx].artist;
+            }
+            tracks[existingIdx] = trackObj;
+            skippedDup++;
+          } else {
+            tracks.unshift(trackObj);
+            added++;
+          }
 
-          if (driveImportMode === "download") {
+          if (driveImportMode === "download" && !trackObj.downloaded) {
             downloadSingleDriveTrack(trackObj, null);
           }
         }
@@ -4228,15 +4233,14 @@ async function autoDiscoverDriveMusic() {
   renderTracks();
   renderHomePlaylists();
   await uploadPlaylistsToDrive();
-  st.textContent = `✔ Carpeta «Musica» lista: ${added} canciones (${skippedDup} duplicados evitados • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
+  st.textContent = `✔ Carpeta «Musica» lista: ${added} agregadas (${skippedDup} actualizadas • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
 }
 
 function downloadSingleDriveTrack(trackObj, btnEl) {
   if (!trackObj || !trackObj.driveId) return;
   const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
   if (verifyDedup) {
-    const normT = normalizeTrackKey(trackObj.title);
-    const localDup = tracks.find(x => x.downloaded && (x.driveId === trackObj.driveId || x.id === "gd_" + trackObj.driveId || (normT && normalizeTrackKey(x.title) === normT)));
+    const localDup = tracks.find(x => x.downloaded && (x.driveId === trackObj.driveId || x.id === "gd_" + trackObj.driveId));
     if (localDup && localDup.src && !localDup.src.startsWith("http")) {
       trackObj.src = localDup.src;
       trackObj.downloaded = true;
