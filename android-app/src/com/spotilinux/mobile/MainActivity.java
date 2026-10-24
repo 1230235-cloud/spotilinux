@@ -188,10 +188,35 @@ public class MainActivity extends Activity {
         return folder;
     }
 
+    private String cleanTrackTitle(String name) {
+        if (name == null) return "";
+        String t = name.trim();
+        t = t.replaceFirst("(?i)\\.(mp3|flac|wav|m4a|ogg|opus|aac|webm|mp4)$", "");
+        t = t.replaceFirst("(?i)^(y2mate(\\.com|\\.is)?|y2meta(\\.com)?|snaptik(\\.[a-z]+)?|yt1s(\\.com)?)\\s*[-_–—:]\\s*", "");
+        t = t.replaceAll("(?i)\\by2mate(\\.com)?\\s*[-_–—:]*\\s*", "");
+        t = t.replace("⧸", " / ").replace("_", " ");
+        t = t.replaceFirst("(?i)^[「\\[]Nightcore[」\\]]\\s*[➼♡–—\\-]*\\s*", "Nightcore - ");
+        t = t.replaceAll("(?i)\\s*/\\s*(lyrics|letras)\\b", "");
+        t = t.replaceAll("(?i)\\s*[\\[(]\\s*(video\\s*oficial|official\\s*(music\\s*)?video|video|lyrics|letras|letra|official|audio\\s*oficial|audio|amv)\\s*[\\])]", "");
+        t = t.replaceFirst("(?i)\\s+(lyrics|letras)\\b.*$", "");
+        t = t.replaceAll("\\s*#[a-zA-Z0-9_-]+", "");
+        t = t.replaceFirst("^[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\\s–—-]+", "");
+        t = t.replaceFirst("[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\\s–—-]+$", "");
+        t = t.replaceAll("[◼💖💞]+", "");
+        t = t.replaceAll("\\s*°•[^\\s•]+•°\\s*", " ");
+        t = t.replaceAll("\\s*[\\[(]\\s*[\\])]", "");
+        t = t.replaceAll("\\s+", " ").trim();
+        if (!t.isEmpty() && Character.isLowerCase(t.charAt(0))) {
+            t = Character.toUpperCase(t.charAt(0)) + t.substring(1);
+        }
+        return t.isEmpty() ? name.trim() : t;
+    }
+
     private String sanitizeFilename(String name) {
         if (name == null || name.trim().isEmpty()) return "track_" + System.currentTimeMillis() + ".mp3";
-        String clean = name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
-        if (!clean.contains(".")) {
+        String clean = cleanTrackTitle(name);
+        clean = clean.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        if (!clean.endsWith(".mp3") && !clean.endsWith(".m4a") && !clean.endsWith(".flac") && !clean.endsWith(".wav") && !clean.endsWith(".ogg") && !clean.endsWith(".opus")) {
             clean += ".mp3";
         }
         return clean;
@@ -199,13 +224,18 @@ public class MainActivity extends Activity {
 
     private String normalizeTrackKey(String name) {
         if (name == null) return "";
-        String clean = name.replaceFirst("\\.[^.]+$", "");
+        String clean = cleanTrackTitle(name);
         if (clean.startsWith("gd_") && clean.contains("__")) {
             clean = clean.substring(clean.indexOf("__") + 2);
         } else if (clean.startsWith("gd_")) {
             clean = clean.substring(3);
         }
-        return clean.toLowerCase().replaceAll("[^a-z0-9]+", "");
+        clean = cleanTrackTitle(clean).toLowerCase();
+        try {
+            clean = java.text.Normalizer.normalize(clean, java.text.Normalizer.Form.NFD)
+                    .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+        } catch (Throwable ignored) {}
+        return clean.replaceAll("[^a-z0-9]+", " ").trim();
     }
 
     private String buildSavedTracksJson() {
@@ -221,7 +251,7 @@ public class MainActivity extends Activity {
                             || lower.endsWith(".m4a") || lower.endsWith(".ogg") || lower.endsWith(".opus") || lower.endsWith(".aac")) {
                         try {
                             JSONObject obj = new JSONObject();
-                            String stem = fname.replaceFirst("\\.[^.]+$", "");
+                            String stem = fname.replaceFirst("(?i)\\.(mp3|flac|wav|m4a|ogg|opus|aac)$", "");
                             boolean fromDrive = fname.startsWith("gd_");
                             String canonicalId = "saved_" + Math.abs(f.getAbsolutePath().hashCode());
                             String driveId = "";
@@ -233,13 +263,13 @@ public class MainActivity extends Activity {
                             } else if (fromDrive && stem.startsWith("gd_")) {
                                 stem = stem.substring(3);
                             }
-                            stem = stem.replace("_", " ").trim();
+                            stem = cleanTrackTitle(stem);
                             String artist = fromDrive ? "Google Drive (Descargada) ✔" : "Carpeta SpotiLinux 📱";
                             String title = stem;
                             if (stem.contains(" - ")) {
                                 String[] parts = stem.split(" - ", 2);
                                 artist = parts[0].trim();
-                                title = parts[1].trim();
+                                title = cleanTrackTitle(parts[1].trim());
                             }
                             obj.put("id", canonicalId);
                             if (!driveId.isEmpty()) {
@@ -613,7 +643,7 @@ public class MainActivity extends Activity {
                     String name = tm.find() ? tm.group(1).trim() : ("Drive_Track_" + fid.substring(0, 6) + ".mp3");
                     JSONObject obj = new JSONObject();
                     obj.put("id", fid);
-                    obj.put("name", name);
+                    obj.put("name", cleanTrackTitle(name));
                     outFiles.put(obj);
                 }
             } catch (Exception ignored) {

@@ -1703,13 +1703,54 @@ audio.onended = function() {
   nextTrack();
 };
 
-function normalizeTrackKey(str) {
-  return String(str || "")
-    .replace(/\.[^/.]+$/, "")
-    .replace(/^gd_[A-Za-z0-9_-]+__/, "")
-    .replace(/^gd_/, "")
+function cleanTrackTitle(name) {
+  let t = String(name || "").trim();
+  // 1. Quitar SOLO extensiones de audio reales
+  t = t.replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|webm|mp4)$/i, "");
+  // 2. Quitar prefijo de sitios de descarga: y2mate, y2meta, snaptik, yt1s, etc.
+  t = t.replace(/^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*/i, "");
+  t = t.replace(/\by2mate(\.com)?\s*[-_–—:]*\s*/gi, "");
+  // 3. Normalizar barras y caracteres raros
+  t = t.replace(/⧸/g, " / ").replace(/_/g, " ");
+  // 4. Quitar adornos Nightcore envolventes: 「Nightcore」➼ o [Nightcore] -> Nightcore -
+  t = t.replace(/^[「\[]Nightcore[」\]]\s*[➼♡–—\-]*\s*/i, "Nightcore - ");
+  // 5. Quitar / Lyrics o / Letras dentro o fuera de paréntesis
+  t = t.replace(/\s*\/\s*(lyrics|letras)\b/gi, "");
+  // 6. Quitar sufijos ruidosos de youtube (Video Oficial, Lyrics, etc.)
+  t = t.replace(/\s*[\(\[]\s*(video\s*oficial|official\s*(music\s*)?video|video|lyrics|letras|letra|official|audio\s*oficial|audio|amv)\s*[\)\]]/gi, "");
+  t = t.replace(/\s+(lyrics|letras)\b.*$/i, "");
+  t = t.replace(/\s*#[a-zA-Z0-9_-]+/g, "");
+  // 7. Quitar adornos iniciales y finales molestos
+  t = t.replace(/^[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+/, "");
+  t = t.replace(/[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+$/, "");
+  t = t.replace(/[◼💖💞]+/g, "");
+  t = t.replace(/\s*°•[^\s•]+•°\s*/g, " ");
+  t = t.replace(/\s*[\(\[]\s*[\)\]]/g, "");
+  t = t.replace(/\s+/g, " ").trim();
+  if (t && t[0] >= "a" && t[0] <= "z") {
+    t = t[0].toUpperCase() + t.slice(1);
+  }
+  return t || String(name || "Canción").trim();
+}
+
+function normalizeFullTitle(str) {
+  if (!str) return "";
+  let clean = cleanTrackTitle(str);
+  if (clean.startsWith("gd_") && clean.includes("__")) {
+    clean = clean.substring(clean.indexOf("__") + 2);
+  } else if (clean.startsWith("gd_")) {
+    clean = clean.substring(3);
+  }
+  return clean
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeTrackKey(str) {
+  return normalizeFullTitle(str);
 }
 
 function sha256Pure(ascii) {
@@ -1822,7 +1863,9 @@ function loadPersistentState() {
       if (Array.isArray(st.playlists) && st.playlists.length > 0) playlists = st.playlists;
       if (Array.isArray(st.cloudTracksOnly)) {
         st.cloudTracksOnly.forEach(ct => {
-          if (!tracks.some(x => x.id === ct.id || (ct.driveId && x.driveId === ct.driveId))) {
+          ct.title = cleanTrackTitle(ct.title);
+          const normKey = normalizeFullTitle(ct.title);
+          if (!tracks.some(x => x.id === ct.id || (ct.driveId && x.driveId === ct.driveId) || (normKey && normalizeFullTitle(x.title) === normKey))) {
             tracks.unshift(ct);
           }
         });
@@ -1857,41 +1900,51 @@ function mergeScannedDeviceTracks(savedList) {
   if (!Array.isArray(savedList)) return;
   let newCount = 0;
   savedList.forEach(item => {
+    const cleanTitle = cleanTrackTitle(item.title || "");
+    const normKey = normalizeFullTitle(cleanTitle);
+
     const existingIdx = tracks.findIndex(t =>
       t.src === item.src ||
       t.id === item.id ||
-      (item.driveId && t.driveId === item.driveId)
+      (item.driveId && t.driveId === item.driveId) ||
+      (normKey && normalizeFullTitle(t.title) === normKey)
     );
     if (existingIdx >= 0) {
-      // Si ya existía como pista online de Drive, actualizarla al archivo local descargado sin duplicar
+      // Si ya existía como pista de Drive o con el mismo título completo, vincularla al archivo descargado sin duplicar
       tracks[existingIdx].src = item.src;
       tracks[existingIdx].downloaded = true;
-      if (item.driveId) tracks[existingIdx].driveId = item.driveId;
+      tracks[existingIdx].title = cleanTitle;
+      if (item.driveId && !tracks[existingIdx].driveId) tracks[existingIdx].driveId = item.driveId;
       if (item.cover && !tracks[existingIdx].cover) tracks[existingIdx].cover = item.cover;
+      tracks[existingIdx].artist = "Google Drive (Descargada) ✔";
     } else {
       tracks.unshift({
         id: item.id,
         driveId: item.driveId || "",
-        title: item.title || "Canción del dispositivo",
+        title: cleanTitle,
         artist: item.artist || "Carpeta SpotiLinux 📱",
         album: item.album || "Biblioteca Guardada",
         genre: item.genre || "Local",
         cover: item.cover || null,
         src: item.src,
         liked: false,
-        cloud: Boolean(item.cloud),
+        cloud: Boolean(item.cloud || item.driveId),
         downloaded: true,
         color: item.cloud ? "#00d2ff" : "#1db954"
       });
       newCount++;
     }
   });
+  savePersistentState();
   renderTracks();
+  renderHomePlaylists();
   renderPlaylists();
   if (newCount > 0) {
     const banner = document.getElementById("scanBanner");
-    banner.style.display = "block";
-    banner.textContent = `✔ ${savedList.length} canciones disponibles en la carpeta de la aplicación (SpotiLinuxMusic).`;
+    if (banner) {
+      banner.style.display = "block";
+      banner.textContent = `✔ ${savedList.length} canciones disponibles en la carpeta de la aplicación (SpotiLinuxMusic).`;
+    }
   }
 }
 
@@ -3394,12 +3447,18 @@ function applyAccountRecordToState(acc) {
       const fid = dt.file_id || String(dt.id || "").replace(/^gd_/, "");
       if (!fid) return;
       const cid = "gd_" + fid;
-      const exists = tracks.some(x => x.id === cid || x.driveId === fid);
+      const cleanTitle = cleanTrackTitle(dt.title || "");
+      const normKey = normalizeFullTitle(cleanTitle);
+      const exists = tracks.some(x =>
+        x.id === cid ||
+        x.driveId === fid ||
+        (normKey && normalizeFullTitle(x.title) === normKey)
+      );
       if (!exists) {
         tracks.unshift({
           id: cid,
           driveId: fid,
-          title: dt.title || ("Canción Drive " + fid.substring(0, 6)),
+          title: cleanTitle || ("Canción Drive " + fid.substring(0, 6)),
           artist: dt.artist || "Google Drive Cloud ☁️",
           album: dt.album || "Google Drive (Musica)",
           genre: dt.genre || "Cloud",
@@ -4024,12 +4083,15 @@ async function uploadSelectedFilesToDrive(ev) {
 
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
-    const normNew = normalizeTrackKey(f.name);
-    if (verifyDedup && tracks.some(t => t.cloud && normalizeTrackKey(t.title) === normNew)) {
+    const cleanName = cleanTrackTitle(f.name);
+    const ext = (/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(f.name) ? f.name.match(/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i)[0] : ".mp3");
+    const safeUploadName = cleanName + ext;
+    const normNew = normalizeFullTitle(cleanName);
+    if (verifyDedup && tracks.some(t => t.cloud && normalizeFullTitle(t.title) === normNew)) {
       skippedDupCount++;
       continue;
     }
-    st.textContent = `⬆️ Subiendo (${i + 1}/${files.length}): ${f.name} a «Musica»...`;
+    st.textContent = `⬆️ Subiendo (${i + 1}/${files.length}): ${safeUploadName} a «Musica»...`;
     try {
       const metaRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable", {
         method: "POST",
@@ -4040,7 +4102,7 @@ async function uploadSelectedFilesToDrive(ev) {
           "X-Upload-Content-Length": String(f.size)
         },
         body: JSON.stringify({
-          name: f.name,
+          name: safeUploadName,
           parents: [musicaId]
         })
       });
@@ -4076,9 +4138,16 @@ window.onPublicDriveFolderFetched = function(filesList) {
     // Ignorar base de datos y archivos que no son audio (imágenes, textos, pdfs, zips)
     if (fname === CLOUD_DB_FILENAME || /^(.*\.json|.*\.png|.*\.jpe?g|.*\.gif|.*\.webp|.*\.txt|.*\.pdf|.*\.zip|.*\.rar)$/i.test(fname)) return;
 
-    const cleanTitle = fname.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    const cleanTitle = cleanTrackTitle(fname);
+    const normKey = normalizeFullTitle(cleanTitle);
     const cid = "gd_" + f.id;
-    const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id);
+
+    // Deduplicación inteligente: por ID exacto de archivo o por nombre completo idéntico (local y nube)
+    const existingIdx = tracks.findIndex(x =>
+      x.id === cid ||
+      x.driveId === f.id ||
+      (normKey && normalizeFullTitle(x.title) === normKey)
+    );
 
     const trackObj = {
       id: cid,
@@ -4099,7 +4168,7 @@ window.onPublicDriveFolderFetched = function(filesList) {
       if (tracks[existingIdx].downloaded) {
         trackObj.downloaded = true;
         trackObj.src = tracks[existingIdx].src;
-        trackObj.artist = tracks[existingIdx].artist;
+        trackObj.artist = tracks[existingIdx].artist || "Google Drive (Descargada) ✔";
       }
       tracks[existingIdx] = trackObj;
       updated++;
@@ -4117,7 +4186,7 @@ window.onPublicDriveFolderFetched = function(filesList) {
   renderTracks();
   renderHomePlaylists();
   if (st) {
-    st.textContent = `✔ Sincronizadas ${filesList.length} canciones de Google Drive (${added} agregadas • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
+    st.textContent = `✔ Sincronizadas ${filesList.length} canciones (${added} nuevas, ${updated} actualizadas • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
   }
 };
 
@@ -4180,9 +4249,14 @@ async function autoDiscoverDriveMusic() {
           let streamUrl = `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`;
           if (apiKey && !token) streamUrl += `&key=${encodeURIComponent(apiKey)}`;
 
-          const cleanTitle = (f.name || f.id).replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+          const cleanTitle = cleanTrackTitle(f.name || f.id);
+          const normKey = normalizeFullTitle(cleanTitle);
           const cid = "gd_" + f.id;
-          const existingIdx = tracks.findIndex(x => x.id === cid || x.driveId === f.id);
+          const existingIdx = tracks.findIndex(x =>
+            x.id === cid ||
+            x.driveId === f.id ||
+            (normKey && normalizeFullTitle(x.title) === normKey)
+          );
 
           const trackObj = {
             id: cid,
@@ -4204,7 +4278,7 @@ async function autoDiscoverDriveMusic() {
             if (tracks[existingIdx].downloaded) {
               trackObj.downloaded = true;
               trackObj.src = tracks[existingIdx].src;
-              trackObj.artist = tracks[existingIdx].artist;
+              trackObj.artist = tracks[existingIdx].artist || "Google Drive (Descargada) ✔";
             }
             tracks[existingIdx] = trackObj;
             skippedDup++;
@@ -4240,7 +4314,8 @@ function downloadSingleDriveTrack(trackObj, btnEl) {
   if (!trackObj || !trackObj.driveId) return;
   const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
   if (verifyDedup) {
-    const localDup = tracks.find(x => x.downloaded && (x.driveId === trackObj.driveId || x.id === "gd_" + trackObj.driveId));
+    const normT = normalizeFullTitle(trackObj.title);
+    const localDup = tracks.find(x => x.downloaded && (x.driveId === trackObj.driveId || x.id === "gd_" + trackObj.driveId || (normT && normalizeFullTitle(x.title) === normT)));
     if (localDup && localDup.src && !localDup.src.startsWith("http")) {
       trackObj.src = localDup.src;
       trackObj.downloaded = true;

@@ -131,6 +131,30 @@ def generate_fallback_cover(title: str, artist: str, output_path: Path, seed_str
     img.save(output_path, format="JPEG", quality=90)
 
 
+def clean_track_title(name: str) -> str:
+    """Limpia el título de la canción eliminando prefijos de y2mate, sufijos ruidosos y extensiones."""
+    import re
+    t = str(name or "").strip()
+    t = re.sub(r"\.(mp3|flac|wav|m4a|ogg|opus|aac|webm|mp4)$", "", t, flags=re.I)
+    t = re.sub(r"^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*", "", t, flags=re.I)
+    t = re.sub(r"\by2mate(\.com)?\s*[-_–—:]*\s*", "", t, flags=re.I)
+    t = t.replace("⧸", " / ").replace("_", " ")
+    t = re.sub(r"^[「\[]Nightcore[」\]]\s*[➼♡–—\-]*\s*", "Nightcore - ", t, flags=re.I)
+    t = re.sub(r"\s*/\s*(lyrics|letras)\b", "", t, flags=re.I)
+    t = re.sub(r"\s*[\(\[]\s*(video\s*oficial|official\s*(music\s*)?video|video|lyrics|letras|letra|official|audio\s*oficial|audio|amv)\s*[\)\]]", "", t, flags=re.I)
+    t = re.sub(r"\s+(lyrics|letras)\b.*$", "", t, flags=re.I)
+    t = re.sub(r"\s*#[a-zA-Z0-9_-]+", "", t)
+    t = re.sub(r"^[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+", "", t)
+    t = re.sub(r"[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+$", "", t)
+    t = re.sub(r"[◼💖💞]+", "", t)
+    t = re.sub(r"\s*°•[^\s•]+•°\s*", " ", t)
+    t = re.sub(r"\s*[\(\[]\s*[\)\]]", "", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    if t and t[0].islower():
+        t = t[0].upper() + t[1:]
+    return t or str(name or "Canción").strip()
+
+
 def extract_metadata(filepath: Path, covers_cache_dir: Path) -> TrackMetadata:
     """Extrae etiquetas ID3/Vorbis/MP4 y portada incrustada mediante ffprobe y ffmpeg."""
     filepath = filepath.resolve()
@@ -138,7 +162,7 @@ def extract_metadata(filepath: Path, covers_cache_dir: Path) -> TrackMetadata:
     covers_cache_dir.mkdir(parents=True, exist_ok=True)
     cached_cover = covers_cache_dir / f"{track_id}.jpg"
 
-    title = filepath.stem.replace("_", " ").strip()
+    title = clean_track_title(filepath.name)
     artist = "Artista desconocido"
     album = "Archivos locales"
     genre = ""
@@ -172,7 +196,7 @@ def extract_metadata(filepath: Path, covers_cache_dir: Path) -> TrackMetadata:
             for k, v in (fmt.get("tags") or {}).items():
                 raw_tags[k.lower()] = str(v)
 
-            title = raw_tags.get("title") or title
+            title = clean_track_title(raw_tags.get("title") or title)
             artist = raw_tags.get("artist") or raw_tags.get("album_artist") or raw_tags.get("performer") or artist
             album = raw_tags.get("album") or album
             genre = raw_tags.get("genre") or ""

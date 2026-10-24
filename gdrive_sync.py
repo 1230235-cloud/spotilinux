@@ -72,13 +72,38 @@ def canonical_drive_track_id(file_id: str) -> str:
     return f"gd_{clean}"
 
 
+def clean_track_title(name: str) -> str:
+    """Limpia el título de la canción eliminando prefijos de y2mate, sufijos ruidosos y extensiones."""
+    t = str(name or "").strip()
+    t = re.sub(r"\.(mp3|flac|wav|m4a|ogg|opus|aac|webm|mp4)$", "", t, flags=re.I)
+    t = re.sub(r"^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*", "", t, flags=re.I)
+    t = re.sub(r"\by2mate(\.com)?\s*[-_–—:]*\s*", "", t, flags=re.I)
+    t = t.replace("⧸", " / ").replace("_", " ")
+    t = re.sub(r"^[「\[]Nightcore[」\]]\s*[➼♡–—\-]*\s*", "Nightcore - ", t, flags=re.I)
+    t = re.sub(r"\s*/\s*(lyrics|letras)\b", "", t, flags=re.I)
+    t = re.sub(r"\s*[\(\[]\s*(video\s*oficial|official\s*(music\s*)?video|video|lyrics|letras|letra|official|audio\s*oficial|audio|amv)\s*[\)\]]", "", t, flags=re.I)
+    t = re.sub(r"\s+(lyrics|letras)\b.*$", "", t, flags=re.I)
+    t = re.sub(r"\s*#[a-zA-Z0-9_-]+", "", t)
+    t = re.sub(r"^[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+", "", t)
+    t = re.sub(r"[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+$", "", t)
+    t = re.sub(r"[◼💖💞]+", "", t)
+    t = re.sub(r"\s*°•[^\s•]+•°\s*", " ", t)
+    t = re.sub(r"\s*[\(\[]\s*[\)\]]", "", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    if t and t[0].islower():
+        t = t[0].upper() + t[1:]
+    return t or str(name or "Canción").strip()
+
+
 def normalize_track_key(text: str) -> str:
-    """Normaliza un título o nombre de archivo para la verificación de duplicados."""
-    s = Path(str(text or "")).stem.lower().strip()
-    s = re.sub(r"^gd_[a-z0-9_-]{6,}[_\s-]*", "", s)
-    s = re.sub(r"^\d+[\s._-]+", "", s)
+    """Normaliza un título o nombre de archivo para la verificación de duplicados de título completo."""
+    clean = clean_track_title(text)
+    if clean.startswith("gd_") and "__" in clean:
+        clean = clean.split("__", 1)[1]
+    elif clean.startswith("gd_"):
+        clean = clean[3:]
     s = "".join(
-        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+        c for c in unicodedata.normalize("NFD", clean.lower()) if unicodedata.category(c) != "Mn"
     )
     s = re.sub(r"[^a-z0-9]+", " ", s).strip()
     return s
