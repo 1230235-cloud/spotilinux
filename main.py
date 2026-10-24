@@ -216,10 +216,17 @@ class HeroBannerWidget(QFrame):
         self.btn_delete_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_delete_playlist.setVisible(False)
 
+        self.btn_download_playlist = QPushButton("⬇️ Descargar Playlist")
+        self.btn_download_playlist.setObjectName("ActionChipButton")
+        self.btn_download_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_download_playlist.setToolTip("Descarga las canciones de Google Drive de esta playlist")
+        self.btn_download_playlist.setVisible(False)
+
         actions_row.addWidget(self.btn_play_banner)
         actions_row.addWidget(self.btn_shuffle_banner)
         actions_row.addWidget(self.btn_cloud_sync_banner)
         actions_row.addWidget(self.btn_add_tracks)
+        actions_row.addWidget(self.btn_download_playlist)
         actions_row.addWidget(self.btn_edit_playlist)
         actions_row.addWidget(self.btn_delete_playlist)
         actions_row.addStretch()
@@ -242,6 +249,7 @@ class HeroBannerWidget(QFrame):
         pixmap: QPixmap,
         rgb: tuple[int, int, int],
         is_custom_playlist: bool = False,
+        show_download: bool = False,
     ) -> None:
         self.lbl_badge.setText(badge.upper())
         self.lbl_title.setText(title)
@@ -252,6 +260,7 @@ class HeroBannerWidget(QFrame):
         self.btn_add_tracks.setVisible(is_custom_playlist)
         self.btn_edit_playlist.setVisible(is_custom_playlist)
         self.btn_delete_playlist.setVisible(is_custom_playlist)
+        self.btn_download_playlist.setVisible(is_custom_playlist or show_download)
         self.update()
 
     def paintEvent(self, _event) -> None:
@@ -1698,6 +1707,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.hero_banner.btn_add_tracks.clicked.connect(self._open_multi_track_picker_for_current_playlist)
         self.hero_banner.btn_edit_playlist.clicked.connect(self.edit_current_playlist)
         self.hero_banner.btn_delete_playlist.clicked.connect(self.delete_current_playlist)
+        self.hero_banner.btn_download_playlist.clicked.connect(lambda: self._download_entire_playlist())
 
         self.track_table.cellDoubleClicked.connect(self._on_table_double_clicked)
         self.track_table.cellClicked.connect(self._on_table_cell_clicked)
@@ -2198,10 +2208,14 @@ class SpotiLinuxWindow(QMainWindow):
         btn_open.setObjectName("ActionChipButton")
         btn_open.setToolTip("Abrir la playlist completa (editar, quitar o agregar canciones)")
         btn_open.clicked.connect(lambda _c=False, k=key: self.switch_view(k))
+        btn_dl = QPushButton("⬇️ Descargar")
+        btn_dl.setObjectName("ActionChipButton")
+        btn_dl.setToolTip("Descargar canciones de Google Drive de esta playlist a music_library/")
+        btn_dl.clicked.connect(lambda _c=False, k=key: self._download_entire_playlist(k))
         btn_collapse = QPushButton("➕ Mostrar lista" if self.home_preview_collapsed else "➖ Reducir lista")
         btn_collapse.setObjectName("ActionChipButton")
         btn_collapse.clicked.connect(self._toggle_home_preview_collapsed)
-        for b in (btn_play, btn_shuffle, btn_open, btn_collapse):
+        for b in (btn_play, btn_shuffle, btn_open, btn_dl, btn_collapse):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             buttons_row.addWidget(b)
         buttons_row.addStretch()
@@ -2359,7 +2373,8 @@ class SpotiLinuxWindow(QMainWindow):
             banner_pix = make_liked_cover_pixmap(138, radius=10)
             banner_rgb = (29, 115, 72)
 
-        self.hero_banner.set_banner_data(badge, title, subtitle, stats_text, banner_pix, banner_rgb, is_custom_pl)
+        show_dl = is_custom_pl or self.current_view in ("gdrive", "liked") or any(t.filepath.startswith("gdrive://") for t in tracks)
+        self.hero_banner.set_banner_data(badge, title, subtitle, stats_text, banner_pix, banner_rgb, is_custom_pl, show_download=show_dl)
 
         self.track_table.setRowCount(len(tracks))
         active_id = self.engine.current_track.id if self.engine.current_track else None
@@ -2687,6 +2702,50 @@ class SpotiLinuxWindow(QMainWindow):
                 "Aviso de Sincronización Cloud",
                 f"No se pudo sincronizar con Google Drive:\n{err}",
             )
+
+    def _download_entire_playlist(self, key: Optional[str] = None) -> None:
+        """Descarga todas las pistas de Google Drive de una playlist a music_library/ verificando duplicados."""
+        target_key = key or self.current_view
+        if target_key == "home":
+            target_key = self.home_preview_key
+
+        name, pl_tracks = self._get_home_preview_tracks(target_key)
+        if not pl_tracks and target_key.startswith("playlist:"):
+            pid = target_key.split(":", 1)[1]
+            pl = self.store.playlists.get(pid)
+            if pl:
+                name = pl.name
+                pl_tracks = [self.store.tracks[t] for t in pl.track_ids if t in self.store.tracks]
+        elif not pl_tracks and target_key in ("gdrive", "library"):
+            name = "Google Drive (Musica)"
+            pl_tracks = [t for t in self.store.tracks.values() if t.filepath.startswith("gdrive://") or "Drive" in t.album or Path(t.filepath).name.startswith("gd_")]
+
+        if not pl_tracks:
+            QMessageBox.information(self, "Descargar Playlist", "No hay canciones disponibles en esta lista para descargar.")
+            return
+
+        cloud_pending = [t for t in pl_tracks if t.filepath.startswith("gdrive://")]
+        if not cloud_pending:
+            QMessageBox.information(
+                self,
+                "Descargar Playlist",
+                f"Todas las canciones de «{name}» ya están disponibles localmente sin duplicados.",
+            )
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Descargar Playlist Completa",
+            f"¿Deseas descargar las {len(cloud_pending)} canciones de Google Drive de «{name}» a tu carpeta local?\n\n"
+            "Se verificarán duplicados automáticamente para evitar archivos repetidos.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        self.hero_banner.lbl_subtitle.setText(f"⬇️ Descargando {len(cloud_pending)} canciones de «{name}»...")
+        for t in cloud_pending:
+            self._download_cloud_track_to_app_folder(t)
 
     def _download_cloud_track_to_app_folder(self, track: TrackMetadata) -> None:
         """Descarga explícitamente una pista de Google Drive a music_library/ verificando duplicados primero."""

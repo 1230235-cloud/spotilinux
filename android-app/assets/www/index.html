@@ -434,6 +434,7 @@
         <div class="section-title">
           <span>🎵 Tus Playlists Disponibles</span>
           <div style="display:flex; gap:5px;">
+            <button class="btn-chip" style="font-size:10px; padding:4px 9px;" onclick="refreshDriveCatalog()" title="Actualizar canciones de Drive">🔄 Actualizar Drive</button>
             <button class="btn-chip active" style="font-size:10px; padding:4px 9px;" onclick="openCreatePlaylistModal()">＋ Playlist</button>
             <button class="btn-chip" id="btnShuffleChip" style="font-size:10px; padding:4px 9px;" onclick="toggleShuffle(true)">🔀 Aleatorio</button>
           </div>
@@ -460,8 +461,9 @@
             </div>
           </div>
 
-          <div style="display:flex; gap:6px; margin: 8px 0 6px;">
-            <button class="btn-chip active" style="flex:1; font-size:11px; padding:7px 10px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir varias canciones</button>
+          <div style="display:flex; gap:6px; margin: 8px 0 6px; flex-wrap:wrap;">
+            <button class="btn-chip active" style="flex:1; font-size:11px; padding:7px 10px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir canciones</button>
+            <button class="btn-chip" id="btnDownloadCurrentPl" style="font-size:11px; padding:7px 10px; background:rgba(29, 185, 84, 0.22); border-color:var(--green-bright); color:var(--green-bright);" onclick="downloadCurrentPlaylistTracks()">⬇️ Descargar Playlist</button>
             <button class="btn-chip" style="font-size:11px; padding:7px 10px;" onclick="shufflePlaySelectedPlaylist()">🔀 Aleatorio</button>
           </div>
 
@@ -2851,6 +2853,40 @@ function downloadAllCloudTracks() {
   }
   document.getElementById("gdStatus").textContent = `⬇️ Verificando duplicados y descargando ${cloudPending.length} canciones a SpotiLinuxMusic...`;
   cloudPending.forEach(t => downloadSingleDriveTrack(t, null));
+}
+
+function downloadCurrentPlaylistTracks() {
+  let plTracks = [];
+  let plName = "Playlist";
+
+  if (selectedPlaylistId === "pl_liked") {
+    plTracks = tracks.filter(t => t.liked);
+    plName = "Canciones que te gustan";
+  } else if (selectedPlaylistId === "pl_cloud") {
+    plTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const curPl = playlists.find(p => p.id === selectedPlaylistId);
+    if (!curPl) return;
+    plName = curPl.name;
+    plTracks = curPl.trackIds.map(tid => tracks.find(x => x.id === tid)).filter(Boolean);
+  }
+
+  const cloudPending = plTracks.filter(t => t.cloud && !t.downloaded && t.driveId);
+  if (!cloudPending.length) {
+    showToast(`🛡️ Todas las canciones de «${plName}» ya están disponibles localmente`);
+    return;
+  }
+
+  showToast(`⬇️ Descargando ${cloudPending.length} canciones de «${plName}»...`);
+  cloudPending.forEach(t => downloadSingleDriveTrack(t, null));
+}
+
+async function refreshDriveCatalog() {
+  showToast("🔄 Consultando nuevas canciones y playlists en Drive...");
+  await pullCloudDatabaseFromDrive();
+  await autoDiscoverDriveMusic();
+  showToast("✔ Canciones y playlists actualizadas desde Google Drive");
 }
 
 window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped) {
