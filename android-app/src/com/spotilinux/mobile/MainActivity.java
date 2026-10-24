@@ -7,12 +7,16 @@ import android.content.ContentUris;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
@@ -249,6 +253,57 @@ public class MainActivity extends Activity {
                             obj.put("savedPath", f.getAbsolutePath());
                             obj.put("cloud", fromDrive);
                             obj.put("downloaded", true);
+
+                            // Extraer metadatos ID3 y carátula incrustada si existen
+                            MediaMetadataRetriever mmr = null;
+                            try {
+                                mmr = new MediaMetadataRetriever();
+                                mmr.setDataSource(f.getAbsolutePath());
+                                String mTitle = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
+                                String mArtist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
+                                String mAlbum = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
+                                String mGenre = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE);
+
+                                if (mTitle != null && !mTitle.trim().isEmpty()) {
+                                    obj.put("title", mTitle.trim());
+                                }
+                                if (mArtist != null && !mArtist.trim().isEmpty() && !mArtist.equalsIgnoreCase("<unknown>")) {
+                                    obj.put("artist", mArtist.trim());
+                                }
+                                if (mAlbum != null && !mAlbum.trim().isEmpty()) {
+                                    obj.put("album", mAlbum.trim());
+                                }
+                                if (mGenre != null && !mGenre.trim().isEmpty()) {
+                                    obj.put("genre", mGenre.trim());
+                                }
+
+                                byte[] rawArt = mmr.getEmbeddedPicture();
+                                if (rawArt != null && rawArt.length > 0) {
+                                    BitmapFactory.Options opts = new BitmapFactory.Options();
+                                    opts.inJustDecodeBounds = true;
+                                    BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length, opts);
+                                    int sample = 1;
+                                    while ((opts.outWidth / sample) > 256 || (opts.outHeight / sample) > 256) {
+                                        sample *= 2;
+                                    }
+                                    opts.inJustDecodeBounds = false;
+                                    opts.inSampleSize = sample;
+                                    Bitmap bmp = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length, opts);
+                                    if (bmp != null) {
+                                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                        bmp.compress(Bitmap.CompressFormat.JPEG, 75, baos);
+                                        byte[] jpegBytes = baos.toByteArray();
+                                        String b64 = Base64.encodeToString(jpegBytes, Base64.NO_WRAP);
+                                        obj.put("cover", "data:image/jpeg;base64," + b64);
+                                        bmp.recycle();
+                                    }
+                                }
+                            } catch (Throwable ignored) {
+                            } finally {
+                                if (mmr != null) {
+                                    try { mmr.release(); } catch (Throwable ignored) {}
+                                }
+                            }
                             arr.put(obj);
                         } catch (Exception ignored) {
                         }
