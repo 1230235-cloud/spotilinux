@@ -371,7 +371,10 @@
     position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82);
     display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px;
   }
-  .modal-backdrop.open { display: flex; }
+  .modal-backdrop.open,
+  .modal-backdrop.active {
+    display: flex !important;
+  }
   .modal-card {
     background: #181820; border: 1px solid #303040; border-radius: 20px;
     width: 100%; max-width: 400px; padding: 18px; box-shadow: 0 12px 36px rgba(0,0,0,0.85);
@@ -1390,6 +1393,36 @@
     -webkit-backdrop-filter: blur(4px);
     z-index: 2;
   }
+  .vinyl-bg-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .vinyl-toggle-video-btn {
+    position: absolute;
+    top: max(16px, env(safe-area-inset-top, 16px));
+    right: 68px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+  }
+  .vinyl-toggle-video-btn:active {
+    transform: scale(0.92);
+    background: rgba(30, 215, 96, 0.35);
+  }
 
   .vinyl-exit-btn {
     position: absolute;
@@ -2170,7 +2203,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.6.0 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.6.1 (GitHub)</div>
         </div>
       </button>
     </div>
@@ -2203,6 +2236,10 @@
           <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" id="searchInput" class="search-input" placeholder="Buscar canciones o playlists..." oninput="renderTracks()" />
         </div>
+        <button class="btn-chip" onclick="openYouTubeSearchModal()" style="padding:0 12px; height:40px; font-size:12px; font-weight:700; color:#ff5566; background:rgba(255, 51, 75, 0.12); border:1px solid rgba(255, 51, 75, 0.35); border-radius:12px; display:inline-flex; align-items:center; gap:6px; flex-shrink:0;" title="Buscar y descargar música de YouTube">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          <span>YouTube</span>
+        </button>
         <input type="file" id="filePicker" accept="audio/*" multiple style="display:none" onchange="importLocalFiles(event)" />
       </div>
 
@@ -2915,10 +2952,14 @@
   <div id="vinylStandbyOverlay" class="vinyl-standby-overlay" onclick="exitVinylStandbyMode()">
     <!-- Video de fondo cinematográfico opcional detrás del disco de vinilo -->
     <div class="vinyl-video-bg-container" id="vinylVideoBgContainer">
+      <canvas class="vinyl-bg-canvas" id="vinylAmbientCanvas"></canvas>
       <video class="vinyl-bg-video" id="vinylBgVideo" muted loop playsinline preload="auto"></video>
       <iframe class="vinyl-bg-iframe" id="vinylBgIframe" allow="autoplay" style="display:none;" frameborder="0"></iframe>
       <div class="vinyl-video-scrim"></div>
     </div>
+
+    <!-- Botón para alternar video/animación de fondo directamente en pantalla -->
+    <button class="vinyl-toggle-video-btn" onclick="toggleSleepVinylVideoSetting(event)" title="Alternar video de fondo (ON/OFF)">🎬</button>
 
     <!-- Botón discreto para salir en la esquina -->
     <button class="vinyl-exit-btn" onclick="exitVinylStandbyMode(event)" title="Salir del modo reposo">
@@ -4233,13 +4274,92 @@ function toggleSleepVinylSetting() {
   }
 }
 
-function toggleSleepVinylVideoSetting() {
+let trackVideoCache = {};
+try {
+  trackVideoCache = JSON.parse(localStorage.getItem("spotilinux_track_videos") || "{}");
+} catch(e){}
+
+let vinylAmbientAnimationId = null;
+
+function startVinylAmbientCanvas(t) {
+  const canvas = document.getElementById("vinylAmbientCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  canvas.width = window.innerWidth || 360;
+  canvas.height = window.innerHeight || 640;
+
+  if (vinylAmbientAnimationId) cancelAnimationFrame(vinylAmbientAnimationId);
+
+  let angle = 0;
+  const stars = [];
+  for (let i = 0; i < 45; i++) {
+    stars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      radius: Math.random() * 2 + 1,
+      speed: Math.random() * 0.45 + 0.15,
+      alpha: Math.random() * 0.6 + 0.25
+    });
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const grad = ctx.createRadialGradient(
+      canvas.width / 2, canvas.height / 2, 50,
+      canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.75
+    );
+    const pulse = isPlaying ? (Math.sin(angle) * 0.09 + 0.22) : 0.12;
+    grad.addColorStop(0, `rgba(30, 215, 96, ${pulse})`);
+    grad.addColorStop(0.45, "rgba(20, 24, 32, 0.72)");
+    grad.addColorStop(1, "rgba(8, 8, 14, 0.96)");
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    stars.forEach(s => {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180, 255, 210, ${s.alpha})`;
+      ctx.fill();
+      if (isPlaying) {
+        s.y -= s.speed;
+        if (s.y < 0) { s.y = canvas.height; s.x = Math.random() * canvas.width; }
+      }
+    });
+
+    angle += isPlaying ? 0.03 : 0.008;
+    vinylAmbientAnimationId = requestAnimationFrame(render);
+  }
+  render();
+}
+
+function stopVinylAmbientCanvas() {
+  if (vinylAmbientAnimationId) {
+    cancelAnimationFrame(vinylAmbientAnimationId);
+    vinylAmbientAnimationId = null;
+  }
+  const canvas = document.getElementById("vinylAmbientCanvas");
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function toggleSleepVinylVideoSetting(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
   const chk = document.getElementById("chkSleepVinylVideo");
-  if (!chk) return;
-  sleepVinylVideoEnabled = chk.checked;
+  if (chk && e && e.target === chk) {
+    sleepVinylVideoEnabled = chk.checked;
+  } else {
+    sleepVinylVideoEnabled = !sleepVinylVideoEnabled;
+    if (chk) chk.checked = sleepVinylVideoEnabled;
+  }
   savePersistentState();
   if (sleepVinylVideoEnabled) {
-    showToast("Video de fondo en reposo: ACTIVADO 🎬");
+    showToast("🎬 Video de fondo en reposo: ACTIVADO");
     updateVinylStandbyVideo();
   } else {
     showToast("Video de fondo en reposo: Desactivado");
@@ -4248,6 +4368,7 @@ function toggleSleepVinylVideoSetting() {
 }
 
 function stopVinylStandbyVideo() {
+  stopVinylAmbientCanvas();
   const container = document.getElementById("vinylVideoBgContainer");
   const videoEl = document.getElementById("vinylBgVideo");
   const iframeEl = document.getElementById("vinylBgIframe");
@@ -4281,6 +4402,8 @@ function updateVinylStandbyVideo() {
     return;
   }
 
+  container.classList.add("active");
+
   let videoSrc = t.videoSrc || "";
   if (!videoSrc && t.filePath) {
     const candidateMp4 = t.filePath.replace(/\.(mp3|flac|wav|m4a|ogg|opus)$/i, ".mp4");
@@ -4292,6 +4415,7 @@ function updateVinylStandbyVideo() {
   const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
 
   if (videoSrc) {
+    stopVinylAmbientCanvas();
     if (iframeEl) { iframeEl.style.display = "none"; iframeEl.src = "about:blank"; }
     if (videoEl) {
       videoEl.style.display = "block";
@@ -4308,23 +4432,58 @@ function updateVinylStandbyVideo() {
       } else {
         videoEl.pause();
       }
-      container.classList.add("active");
     }
-  } else if (t.youtubeId) {
+    return;
+  }
+
+  const cacheKey = (t.id || (t.title + "-" + t.artist)).trim();
+  if (!t.youtubeId && trackVideoCache[cacheKey]) {
+    t.youtubeId = trackVideoCache[cacheKey];
+  }
+
+  if (t.youtubeId) {
+    stopVinylAmbientCanvas();
     if (videoEl) { videoEl.style.display = "none"; }
     if (iframeEl) {
       iframeEl.style.display = "block";
-      const targetSrc = `https://www.youtube-nocookie.com/embed/${t.youtubeId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${t.youtubeId}&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&start=${Math.floor(curSec)}`;
+      const targetSrc = `https://www.youtube-nocookie.com/embed/${t.youtubeId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${t.youtubeId}&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&start=${Math.floor(curSec)}`;
       if (currentPlayingVideoSource !== t.youtubeId) {
         currentPlayingVideoSource = t.youtubeId;
         iframeEl.src = targetSrc;
       }
-      container.classList.add("active");
     }
   } else {
-    stopVinylStandbyVideo();
+    startVinylAmbientCanvas(t);
+    if (videoEl) videoEl.style.display = "none";
+    if (iframeEl) iframeEl.style.display = "none";
+
+    const queryStr = `${t.title || ""} ${t.artist || ""}`.trim();
+    if (queryStr && !t._resolvingVideo) {
+      t._resolvingVideo = true;
+      if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.resolveTrackVideoAsync) {
+        window.AndroidMedia.resolveTrackVideoAsync(queryStr, cacheKey);
+      }
+    }
   }
 }
+
+window.onTrackVideoResolved = function(trackKey, videoId) {
+  if (!trackKey || !videoId) return;
+  trackVideoCache[trackKey] = videoId;
+  try {
+    localStorage.setItem("spotilinux_track_videos", JSON.stringify(trackVideoCache));
+  } catch(e){}
+
+  const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  const curKey = curTrack ? (curTrack.id || (curTrack.title + "-" + curTrack.artist)).trim() : "";
+  if (curTrack && curKey === trackKey) {
+    curTrack.youtubeId = videoId;
+    const overlay = document.getElementById("vinylStandbyOverlay");
+    if (overlay && overlay.classList.contains("active")) {
+      updateVinylStandbyVideo();
+    }
+  }
+};
 
 function resetSleepVinylIdleTimer() {
   if (sleepVinylTimeout) clearTimeout(sleepVinylTimeout);
@@ -4448,20 +4607,20 @@ window.onNativeMediaCommand = function(cmd) {
 function openYouTubeSearchModal() {
   const modal = document.getElementById("youtubeSearchModal");
   if (!modal) return;
-  modal.classList.add("active");
+  modal.classList.add("open", "active");
   const input = document.getElementById("ytSearchInput");
   if (input) {
     input.focus();
     const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
     if (curTrack && !input.value.trim()) {
-      input.value = curTrack.artist || "";
+      input.value = curTrack.artist ? `${curTrack.artist} ${curTrack.title || ""}` : (curTrack.title || "");
     }
   }
 }
 
 function closeYouTubeSearchModal() {
   const modal = document.getElementById("youtubeSearchModal");
-  if (modal) modal.classList.remove("active");
+  if (modal) modal.classList.remove("open", "active");
 }
 
 async function executeYouTubeSearch() {
@@ -4476,15 +4635,21 @@ async function executeYouTubeSearch() {
 
   container.innerHTML = `
     <div style="text-align:center; padding:32px 10px; color:var(--green-bright); font-size:13px; font-weight:700;">
-      🔍 Buscando en YouTube...
+      <div style="display:inline-block; font-size:22px; margin-bottom:8px;">🔄</div><br/>
+      Buscando canciones en YouTube...
     </div>
   `;
 
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.searchYouTubeAsync) {
+    window.AndroidMedia.searchYouTubeAsync(query);
+    return;
+  }
+
+  // Fallback para entorno web / navegador desktop
   const instances = [
-    `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`,
-    `https://api.invidious.io/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
-    `https://inv.tux.pizza/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
-    `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}&type=video`
+    `https://yt.lemnoslife.com/noKey/search?q=${encodeURIComponent(query)}`,
+    `https://invidious.jing.rocks/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
+    `https://pipedapi.tokhmi.xyz/search?q=${encodeURIComponent(query)}&filter=music_songs`
   ];
 
   let items = [];
@@ -4513,11 +4678,18 @@ async function executeYouTubeSearch() {
     } catch (_e) {}
   }
 
-  if (items.length === 0) {
+  window.onYouTubeSearchResults(items);
+}
+
+window.onYouTubeSearchResults = function(items) {
+  const container = document.getElementById("ytResultsContainer");
+  if (!container) return;
+
+  if (!items || items.length === 0) {
     container.innerHTML = `
-      <div style="text-align:center; padding:24px 10px; color:#aaa; font-size:12px;">
-        <div style="font-size:14px; color:#ff5566; font-weight:800; margin-bottom:6px;">No se encontraron resultados</div>
-        Verifica tu conexión a internet o intenta buscar con el nombre exacto de la canción.
+      <div style="text-align:center; padding:28px 10px; color:#aaa; font-size:12px;">
+        <div style="font-size:14px; color:#ff5566; font-weight:800; margin-bottom:6px;">No se encontraron canciones</div>
+        Verifica tu conexión a internet o busca con el nombre exacto de la canción.
       </div>
     `;
     return;
@@ -4525,22 +4697,48 @@ async function executeYouTubeSearch() {
 
   ytSearchResults = items;
   container.innerHTML = "";
-  items.slice(0, 16).forEach((item, idx) => {
+  items.slice(0, 25).forEach((item, idx) => {
     const card = document.createElement("div");
     card.className = "yt-result-card";
-    card.style.cssText = "display:flex; align-items:center; gap:10px; background:#161622; border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:8px 10px; transition:border-color 0.2s;";
+    card.style.cssText = "display:flex; align-items:center; gap:10px; background:#161622; border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:8px 10px; transition:border-color 0.2s;";
     card.innerHTML = `
-      <img src="${escapeHtml(item.thumb)}" style="width:64px; height:48px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#0e0e14;" onerror="this.src='tracks/default_art.png'" />
+      <img src="${escapeHtml(item.thumb)}" style="width:68px; height:50px; border-radius:8px; object-fit:cover; flex-shrink:0; background:#0e0e14;" onerror="this.src='tracks/default_art.png'" />
       <div style="flex:1; min-width:0;">
         <div style="font-size:12px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
         <div style="font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.artist)} • ${escapeHtml(item.durStr)}</div>
       </div>
       <div style="display:flex; gap:6px; flex-shrink:0;">
-        <button class="btn-chip active" style="padding:6px 10px; font-size:11px;" onclick="openYtTargetPicker(${idx})">⬇ Bajar</button>
+        <button class="btn-chip" style="padding:6px 9px; font-size:11px; background:rgba(30,215,96,0.15); color:var(--green-bright); border:1px solid rgba(30,215,96,0.3);" onclick="playDirectYtStream(${idx})" title="Reproducir audio en streaming">▶ Oír</button>
+        <button class="btn-chip active" style="padding:6px 10px; font-size:11px; font-weight:700;" onclick="openYtTargetPicker(${idx})" title="Descargar a celular o Drive">⬇ Bajar</button>
       </div>
     `;
     container.appendChild(card);
   });
+};
+
+function playDirectYtStream(idx) {
+  if (!ytSearchResults || !ytSearchResults[idx]) return;
+  const t = ytSearchResults[idx];
+  const streamTrack = {
+    id: "yt_" + t.id,
+    title: t.title,
+    artist: t.artist,
+    album: "YouTube Music",
+    genre: "Online",
+    cover: t.thumb,
+    youtubeId: t.id,
+    src: `https://www.youtube.com/watch?v=${t.id}`,
+    liked: false,
+    cloud: true,
+    downloaded: false,
+    color: "#ff334b"
+  };
+  tracks.unshift(streamTrack);
+  if (!masterTracksPool.some(m => m.id === streamTrack.id)) masterTracksPool.unshift(streamTrack);
+  renderTracks();
+  closeYouTubeSearchModal();
+  playTrackIndex(0);
+  showToast(`▶ Reproduciendo: "${t.title}"`);
 }
 
 function openYtTargetPicker(idx) {
@@ -4551,12 +4749,12 @@ function openYtTargetPicker(idx) {
     lbl.textContent = `🎵 ${pendingYtTargetTrack.title} (${pendingYtTargetTrack.artist})`;
   }
   const modal = document.getElementById("ytTargetPickerModal");
-  if (modal) modal.classList.add("active");
+  if (modal) modal.classList.add("open", "active");
 }
 
 function closeYtTargetPickerModal() {
   const modal = document.getElementById("ytTargetPickerModal");
-  if (modal) modal.classList.remove("active");
+  if (modal) modal.classList.remove("open", "active");
 }
 
 async function confirmYouTubeDownload(targetType) {
@@ -4564,132 +4762,42 @@ async function confirmYouTubeDownload(targetType) {
   if (!pendingYtTargetTrack) return;
   const t = pendingYtTargetTrack;
 
+  if (targetType === "stream") {
+    const idx = ytSearchResults.indexOf(t);
+    if (idx >= 0) playDirectYtStream(idx);
+    return;
+  }
+
   const box = document.getElementById("ytDownloadProgressBox");
   const pStatus = document.getElementById("ytProgressStatus");
   const pBar = document.getElementById("ytProgressBar");
   const pPct = document.getElementById("ytProgressPercent");
 
-  if (targetType === "stream") {
-    const streamTrack = {
-      id: "yt_" + t.id,
-      title: t.title,
-      artist: t.artist,
-      album: "YouTube Music",
-      genre: "Online",
-      cover: t.thumb,
-      youtubeId: t.id,
-      src: `https://www.youtube.com/watch?v=${t.id}`,
-      liked: false,
-      cloud: true,
-      downloaded: false,
-      color: "#ff334b"
-    };
-    tracks.unshift(streamTrack);
-    if (!masterTracksPool.some(m => m.id === streamTrack.id)) masterTracksPool.unshift(streamTrack);
-    renderTracks();
-    closeYouTubeSearchModal();
-    playTrackIndex(0);
-    showToast(`▶ Reproduciendo: "${t.title}"`);
-    return;
-  }
-
   if (box) box.style.display = "block";
   if (pStatus) pStatus.textContent = "Obteniendo audio de YouTube...";
-  if (pBar) pBar.style.width = "20%";
-  if (pPct) pPct.textContent = "20%";
-
-  let audioStreamUrl = "";
-  try {
-    const cobRes = await fetch("https://co.wuk.sh/api/json", {
-      method: "POST",
-      headers: { "Accept": "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: `https://www.youtube.com/watch?v=${t.id}`,
-        isAudioOnly: true,
-        aFormat: "mp3"
-      })
-    });
-    if (cobRes.ok) {
-      const cobData = await cobRes.json();
-      if (cobData.url) audioStreamUrl = cobData.url;
-    }
-  } catch (_e) {}
-
-  if (!audioStreamUrl) {
-    try {
-      const pRes = await fetch(`https://pipedapi.kavin.rocks/streams/${t.id}`);
-      if (pRes.ok) {
-        const pData = await pRes.json();
-        const audStreams = pData.audioStreams || [];
-        if (audStreams.length > 0) {
-          audioStreamUrl = audStreams[0].url;
-        }
-      }
-    } catch (_e) {}
+  if (pBar) {
+    pBar.style.background = "var(--green-bright)";
+    pBar.style.width = "15%";
   }
+  if (pPct) pPct.textContent = "15%";
 
-  if (!audioStreamUrl) {
-    if (pStatus) pStatus.textContent = "⚠️ No se pudo obtener el stream directo. Puedes escucharlo en streaming.";
-    showToast("No se pudo obtener el audio de descarga");
+  const token = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
+  const rootId = (document.getElementById("gdFolder") ? extractDriveId(document.getElementById("gdFolder").value.trim()) : "") || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+
+  if (targetType === "drive" && !token) {
+    showToast("⚠️ Ingresa tu Token de Google Drive en el Menú Lateral para subir a tu nube");
+    if (pStatus) pStatus.textContent = "⚠️ Requiere Token OAuth en el menú lateral.";
     return;
   }
 
-  if (targetType === "local") {
-    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.downloadStreamToLocal) {
-      window.AndroidMedia.downloadStreamToLocal(audioStreamUrl, t.title, t.artist, t.thumb);
-    } else {
-      const a = document.createElement("a");
-      a.href = audioStreamUrl;
-      a.download = `${t.artist} - ${t.title}.mp3`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.onYouTubeDownloadProgress("✔ Descarga iniciada en tu navegador", 100);
-    }
-  } else if (targetType === "drive") {
-    const token = document.getElementById("gdToken").value.trim();
-    const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
-    if (!token) {
-      showToast("Ingresa tu Token de Google Drive en el Menú Lateral para subir a tu nube");
-      if (pStatus) pStatus.textContent = "⚠️ Requiere Token OAuth en el menú lateral.";
-      return;
-    }
-    if (pStatus) pStatus.textContent = "Subiendo a tu carpeta «Musica» en Google Drive...";
-    if (pBar) pBar.style.width = "65%";
-    if (pPct) pPct.textContent = "65%";
-
-    try {
-      const musicaId = await resolveMusicaSubfolderId(rootId, token, "");
-      const blobRes = await fetch(audioStreamUrl);
-      const blob = await blobRes.blob();
-      const safeName = cleanTrackTitle(`${t.artist} - ${t.title}`) + ".mp3";
-
-      const upRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=media`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "audio/mpeg"
-        },
-        body: blob
-      });
-
-      if (upRes.ok) {
-        const upData = await upRes.json();
-        if (musicaId && upData.id) {
-          await fetch(`https://www.googleapis.com/drive/v3/files/${upData.id}?addParents=${musicaId}&fields=id,parents`, {
-            method: "PATCH",
-            headers: { "Authorization": `Bearer ${token}` }
-          });
-        }
-        window.onYouTubeDownloadProgress("✔ ¡Guardada con éxito en tu Google Drive!", 100);
-        showToast(`✔ "${t.title}" guardada en Google Drive ☁️`);
-        autoDiscoverDriveMusic();
-      } else {
-        window.onYouTubeDownloadProgress("Error al subir a Google Drive", -1);
-      }
-    } catch (e) {
-      window.onYouTubeDownloadProgress("Error: " + e.message, -1);
-    }
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.downloadYouTubeAudioAsync) {
+    window.AndroidMedia.downloadYouTubeAudioAsync(t.id, t.title, t.artist, t.thumb, targetType, token, rootId);
+  } else {
+    // Fallback web / desktop
+    window.onYouTubeDownloadProgress("Abriendo convertidor web...", 50);
+    const downloadUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${t.id}`;
+    window.open(downloadUrl, "_blank");
+    window.onYouTubeDownloadProgress("✔ Abierto en tu navegador", 100);
   }
 }
 
@@ -4702,22 +4810,30 @@ window.onYouTubeDownloadProgress = function(status, percent) {
   if (box) box.style.display = "block";
   if (pStatus) pStatus.textContent = status;
   if (percent >= 0) {
-    if (pBar) pBar.style.width = percent + "%";
+    if (pBar) {
+      pBar.style.background = "var(--green-bright)";
+      pBar.style.width = percent + "%";
+    }
     if (pPct) pPct.textContent = percent + "%";
     if (percent >= 100) {
       showToast(status);
-      setTimeout(() => { if (box) box.style.display = "none"; }, 4000);
+      setTimeout(() => { if (box) box.style.display = "none"; }, 3500);
     }
   } else {
-    if (pBar) pBar.style.backgroundColor = "#ff4444";
+    if (pBar) pBar.style.background = "#ff4444";
+    showToast(status);
+    setTimeout(() => {
+      if (box) box.style.display = "none";
+      if (pBar) pBar.style.background = "var(--green-bright)";
+    }, 4500);
   }
 };
 
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 8;
-const CURRENT_APP_VERSION_NAME = "2.6.0";
+const CURRENT_APP_VERSION_CODE = 9;
+const CURRENT_APP_VERSION_NAME = "2.6.1";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 

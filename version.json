@@ -1,18 +1,18 @@
 {
-  "versionCode": 8,
-  "versionName": "2.6.0",
+  "versionCode": 9,
+  "versionName": "2.6.1",
   "releaseDate": "2026-10-25",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.6.0",
+    "version": "2.6.1",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Video cinematográfico de fondo detrás del disco de vinilo en suspensión con filtro Scrim y switch OLED",
-    "Buscador y descargador directo de YouTube integrado en la aplicación",
-    "Descarga directa en almacenamiento local (SpotiLinuxMusic) o subida a Google Drive",
-    "Aura reactiva al ritmo en el contorno del vinilo y reproducción vinculada entre dispositivos"
+    "Buscador y descargador nativo de YouTube con resolución en segundo plano y descarga a celular o Drive",
+    "Fondo dinámico cinematográfico detrás del disco de vinilo en reposo con resolución automática de video y lienzo ambiental reactivo",
+    "Botón directo de YouTube en la barra de búsqueda principal y control de video en pantalla de reposo",
+    "Corrección de visualización de modales y compatibilidad con Android WebView"
   ]
 }
