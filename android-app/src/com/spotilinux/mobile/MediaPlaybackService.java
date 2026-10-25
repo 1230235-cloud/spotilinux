@@ -534,14 +534,19 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         }
     }
 
-    public void setRepeatMode(boolean loop) {
-        this.repeatOne = loop;
+    public void setRepeatMode(String mode) {
+        if (mode == null) mode = "off";
+        this.repeatOne = "one".equalsIgnoreCase(mode);
         if (mediaPlayer != null && isPrepared) {
             try {
-                mediaPlayer.setLooping(loop);
+                mediaPlayer.setLooping(this.repeatOne);
             } catch (Exception ignored) {
             }
         }
+    }
+
+    public void setRepeatMode(boolean loop) {
+        setRepeatMode(loop ? "all" : "off");
     }
 
     public void setEqBandGain(int bandIndex, float gainDb) {
@@ -599,7 +604,11 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                 seekNativePlayback(intent.getIntExtra("posMs", 0));
                 return START_STICKY;
             } else if (ACTION_SET_REPEAT.equals(action)) {
-                setRepeatMode(intent.getBooleanExtra("repeat", false));
+                if (intent.hasExtra("repeat_mode")) {
+                    setRepeatMode(intent.getStringExtra("repeat_mode"));
+                } else {
+                    setRepeatMode(intent.getBooleanExtra("repeat", false));
+                }
                 return START_STICKY;
             } else if (ACTION_SET_EQ.equals(action)) {
                 int idx = intent.getIntExtra("band", 0);

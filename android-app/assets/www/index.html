@@ -1028,8 +1028,12 @@
     z-index: 100;
   }
 
-  /* Modo Horizontal (Landscape) en Celulares */
-  @media (orientation: landscape), (max-height: 520px) and (min-width: 540px) {
+  /* ========================================================================= */
+  /* RESPONSIVE: MODO HORIZONTAL (TELÉFONOS) Y PANTALLAS GRANDES (TABLETS)    */
+  /* ========================================================================= */
+
+  /* 1. Modo Horizontal en Teléfonos (pantallas con altura reducida <= 540px) */
+  @media (orientation: landscape) and (max-height: 540px) {
     .top-header { padding: 4px 14px; }
     .logo-title { font-size: 15px; }
     .maomao-pill { padding: 3px 9px; font-size: 10px; }
@@ -1053,7 +1057,7 @@
     .bottom-nav { display: none !important; }
     .eq-col input[type=range] { height: 75px; }
 
-    /* Layout horizontal del reproductor full-screen */
+    /* Layout horizontal del reproductor full-screen en teléfonos */
     .full-player-overlay { padding: 6px 14px; overflow-y: auto; }
     .fp-header { margin-bottom: 4px; }
     .fp-segmented-tabs { margin: 2px auto 6px; }
@@ -1065,11 +1069,158 @@
     .fp-controls-row { margin-top: 6px; gap: 12px; }
     .fp-meta-card { margin-bottom: 4px; }
 
-    /* Layout horizontal de la playlist en full-screen */
+    /* Layout horizontal de la playlist en full-screen en teléfonos */
     #fpPlaylistPane { flex-direction: row; gap: 14px; align-items: flex-start; }
     .fp-pl-header-box { width: 32%; flex-direction: column; align-items: center; text-align: center; margin-bottom: 0; }
     .fp-pl-actions-row { width: 100%; justify-content: center; }
     .fp-pl-tracks-scroll { flex: 1; max-height: calc(100vh - 110px); }
+  }
+
+  /* 2. Tablets y Pantallas Grandes (ancho >= 768px) */
+  @media (min-width: 768px) {
+    .top-header { padding: 10px 24px; }
+    .logo-title { font-size: 18px; }
+    .side-menu-drawer { width: 360px; max-width: 80vw; }
+    .playlist-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+    .playlist-card { padding: 14px 16px; border-radius: 18px; }
+    .playlist-card-title { font-size: 14px; }
+    .track-item { padding: 10px 14px; gap: 12px; }
+    .track-thumb { width: 46px; height: 46px; border-radius: 10px; font-size: 18px; }
+    .track-title { font-size: 14px; }
+    .track-sub { font-size: 12px; }
+    .player-dock {
+      max-width: 860px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 48px);
+      padding: 8px 18px;
+      border-radius: 18px;
+    }
+  }
+
+  /* 3. Tablets en Orientación Horizontal (ancho >= 768px y min-height > 540px) */
+  @media (min-width: 768px) and (orientation: landscape) and (min-height: 541px) {
+    .workspace-body {
+      flex-direction: row;
+      align-items: stretch;
+      height: calc(100vh - 54px);
+      padding: 12px 24px calc(86px + env(safe-area-inset-bottom, 0px));
+      gap: 20px;
+      overflow: hidden;
+    }
+    .stage-pane {
+      width: 38%;
+      max-width: 440px;
+      min-width: 340px;
+      display: flex;
+      flex-direction: column;
+    }
+    .stage-card {
+      flex: 1;
+      min-height: 0;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-radius: 20px;
+    }
+    canvas#maomaoCanvas {
+      flex: 1;
+      height: calc(100vh - 250px);
+      min-height: 220px;
+      max-height: 380px;
+      border-radius: 14px;
+    }
+    canvas#visCanvas {
+      height: 60px;
+      margin-top: 8px;
+      flex-shrink: 0;
+      border-radius: 12px;
+    }
+    .content-pane {
+      flex: 1;
+      height: 100%;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    /* Pantalla completa en Tablets */
+    .full-player-overlay {
+      padding: 14px 32px 0;
+    }
+    .fp-scroll-body {
+      max-width: 1050px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    #fpVisualizerPane {
+      flex-direction: row;
+      gap: 32px;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+    .fp-stage-card {
+      width: 52%;
+      max-width: 520px;
+      margin-bottom: 0;
+      padding: 14px;
+      border-radius: 24px;
+    }
+    canvas#fullMaomaoCanvas {
+      height: 280px;
+      max-height: 330px;
+      border-radius: 16px;
+    }
+    canvas#fullVisCanvas {
+      height: 65px;
+      border-radius: 12px;
+    }
+    .fp-visualizer-right {
+      flex: 1;
+      max-width: 440px;
+    }
+    .fp-title {
+      font-size: 24px;
+    }
+    .fp-artist {
+      font-size: 15px;
+    }
+    #fpPlaylistPane {
+      flex-direction: row;
+      gap: 24px;
+      align-items: flex-start;
+      height: 100%;
+    }
+    .fp-pl-header-box {
+      width: 34%;
+      max-width: 350px;
+      flex-direction: column;
+      text-align: center;
+      padding: 24px 18px;
+      border-radius: 20px;
+      margin-bottom: 0;
+    }
+    .fp-pl-cover-art {
+      width: 88px;
+      height: 88px;
+      font-size: 38px;
+      border-radius: 18px;
+      margin-bottom: 8px;
+    }
+    .fp-pl-title {
+      font-size: 20px;
+    }
+    .fp-pl-tracks-scroll {
+      flex: 1;
+      max-height: calc(100vh - 180px);
+    }
+    .fp-bottom-controls-bar {
+      max-width: 860px;
+      margin: 0 auto;
+      width: 100%;
+      border-radius: 18px 18px 0 0;
+    }
   }
 </style>
 </head>
@@ -1798,7 +1949,7 @@ const playlistMaxVisibleCount = 4;
 let currentIndex = 0;
 let isPlaying = false;
 let shuffleMode = false;
-let repeatMode = false;
+let repeatMode = "off"; // "off" | "all" | "one"
 let activeFilter = "all";
 let driveImportMode = "stream"; // "stream" | "download"
 let maomaoStyle = 0;
@@ -1852,7 +2003,7 @@ audio.ontimeupdate = function() {
 
 audio.onended = function() {
   if (hasNativeAndroid) return;
-  nextTrack();
+  handleTrackPlaybackEnded();
 };
 
 function cleanTrackTitle(name) {
@@ -1988,6 +2139,7 @@ function savePersistentState() {
     cloudTracksOnly,
     userAccount,
     accountsDb,
+    repeatMode,
     gdToken: document.getElementById("gdToken").value.trim(),
     gdClientId: document.getElementById("gdClientId").value.trim(),
     gdFolder: document.getElementById("gdFolder").value.trim() || DEFAULT_DRIVE_ROOT_FOLDER_ID,
@@ -2032,6 +2184,17 @@ function loadPersistentState() {
       document.getElementById("gdFolder").value = st.gdFolder || DEFAULT_DRIVE_ROOT_FOLDER_ID;
       if (st.gdApiKey) document.getElementById("gdApiKey").value = st.gdApiKey;
       if (st.driveImportMode) setDriveImportMode(st.driveImportMode);
+      if (st.repeatMode !== undefined) {
+        if (st.repeatMode === true || st.repeatMode === "all") repeatMode = "all";
+        else if (st.repeatMode === "one") repeatMode = "one";
+        else repeatMode = "off";
+        updateRepeatUI();
+        if (hasNativeAndroid && window.AndroidMedia.setRepeat) {
+          try { window.AndroidMedia.setRepeat(repeatMode); } catch(_e){}
+        } else {
+          audio.loop = (repeatMode === "one");
+        }
+      }
       const chkDedup = document.getElementById("chkVerifyDuplicates");
       if (chkDedup && typeof st.verifyDuplicates === "boolean") chkDedup.checked = st.verifyDuplicates;
       if (st.welcomeDone) localStorage.setItem("welcome_done", "1");
@@ -2284,6 +2447,7 @@ const ICONS = {
   next: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`,
   shuffle: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17C8 17 11 7 16 7H20"/><polyline points="17 4 21 7 17 10"/><path d="M4 7C7.2 7 9.4 11.2 10.5 13"/><path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/><polyline points="17 14 21 17 17 20"/></svg>`,
   repeat: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
+  repeatOne: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><path d="M11 10.5L12.5 9V15M11 15H14" stroke-width="2"/></svg>`,
   likeOutline: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
   likeFilled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" stroke="#1ed760" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`
 };
@@ -2305,14 +2469,21 @@ function updateShuffleUI() {
 function updateRepeatUI() {
   const btn = document.getElementById("btnRepeat");
   const fpBtn = document.getElementById("fpBtnRepeat");
+  const isActive = repeatMode === "all" || repeatMode === "one";
+  const icon = repeatMode === "one" ? ICONS.repeatOne : ICONS.repeat;
+  const title = repeatMode === "one"
+    ? "Repetir canción actual"
+    : (repeatMode === "all" ? "Repetir playlist completa" : "Repetición desactivada");
+
   if (btn) {
-    btn.classList.toggle("active", repeatMode);
-    btn.setAttribute("title", repeatMode ? "Repetir activado" : "Repetir desactivado");
-    btn.innerHTML = ICONS.repeat + (repeatMode ? `<span class="active-dot"></span>` : "");
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("title", title);
+    btn.innerHTML = icon + (isActive ? `<span class="active-dot"></span>` : "");
   }
   if (fpBtn) {
-    fpBtn.classList.toggle("active", repeatMode);
-    fpBtn.innerHTML = ICONS.repeat;
+    fpBtn.classList.toggle("active", isActive);
+    fpBtn.setAttribute("title", title);
+    fpBtn.innerHTML = icon;
   }
 }
 
@@ -2326,13 +2497,59 @@ function toggleShuffle(forcePlayIfOff = false) {
 }
 
 function toggleRepeat() {
-  repeatMode = !repeatMode;
-  updateRepeatUI();
-  showToast(repeatMode ? "Repetición: ACTIVADA" : "Repetición: Desactivada");
-  if (hasNativeAndroid) {
-    window.AndroidMedia.setRepeat(repeatMode);
+  if (repeatMode === "off") {
+    repeatMode = "all";
+    showToast("Repetir: Playlist completa 🔁");
+  } else if (repeatMode === "all") {
+    repeatMode = "one";
+    showToast("Repetir: Canción actual 🔂");
   } else {
-    audio.loop = repeatMode;
+    repeatMode = "off";
+    showToast("Repetición: Desactivada");
+  }
+  updateRepeatUI();
+  savePersistentState();
+
+  if (hasNativeAndroid) {
+    if (window.AndroidMedia.setRepeat) {
+      window.AndroidMedia.setRepeat(repeatMode);
+    }
+  } else {
+    audio.loop = (repeatMode === "one");
+  }
+}
+
+function handleTrackPlaybackEnded() {
+  if (repeatMode === "one") {
+    if (!activePlaybackQueue || !activePlaybackQueue.length) return;
+    const t = activePlaybackQueue[activeQueueIndex];
+    if (t) {
+      executePlayTrack(t);
+      return;
+    }
+  }
+
+  if (repeatMode === "all") {
+    nextTrack();
+    return;
+  }
+
+  // repeatMode === "off"
+  if (shuffleMode) {
+    nextTrack();
+  } else {
+    if (activeQueueIndex + 1 < activePlaybackQueue.length) {
+      nextTrack();
+    } else {
+      isPlaying = false;
+      if (hasNativeAndroid && window.AndroidMedia.pause) {
+        try { window.AndroidMedia.pause(); } catch(e){}
+      } else {
+        audio.pause();
+      }
+      updatePlayerUI();
+      showToast("Fin de la lista de reproducción");
+    }
   }
 }
 
@@ -2371,7 +2588,9 @@ window.onNativeProgress = function(posMs, durMs, playingState) {
 };
 
 window.onNativeMediaCommand = function(cmd) {
-  if (cmd === "next" || cmd === "ended_next") {
+  if (cmd === "ended_next") {
+    handleTrackPlaybackEnded();
+  } else if (cmd === "next") {
     nextTrack();
   } else if (cmd === "prev") {
     prevTrack();
@@ -2912,11 +3131,8 @@ function updateFullPlayerUI() {
   const fpBtnPlay = document.getElementById("fpBtnPlay");
   if (fpBtnPlay) fpBtnPlay.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
 
-  const fpBtnShuffle = document.getElementById("fpBtnShuffle");
-  if (fpBtnShuffle) fpBtnShuffle.classList.toggle("active", shuffleMode);
-
-  const fpBtnRepeat = document.getElementById("fpBtnRepeat");
-  if (fpBtnRepeat) fpBtnRepeat.classList.toggle("active", repeatMode);
+  updateShuffleUI();
+  updateRepeatUI();
 
   const fpBpmBadge = document.getElementById("fpBpmBadge");
   if (fpBpmBadge) fpBpmBadge.textContent = `♩ ${Math.round(currentBpm)} BPM`;

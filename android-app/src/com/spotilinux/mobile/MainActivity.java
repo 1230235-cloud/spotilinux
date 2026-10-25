@@ -481,16 +481,22 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void setRepeat(boolean repeat) {
+        public void setRepeat(String mode) {
             MediaPlaybackService svc = MediaPlaybackService.getInstance();
             if (svc != null) {
-                svc.setRepeatMode(repeat);
+                svc.setRepeatMode(mode);
                 return;
             }
             Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
             serviceIntent.setAction(MediaPlaybackService.ACTION_SET_REPEAT);
-            serviceIntent.putExtra("repeat", repeat);
+            serviceIntent.putExtra("repeat_mode", mode);
+            serviceIntent.putExtra("repeat", !"off".equalsIgnoreCase(mode));
             startMediaServiceSafely(serviceIntent);
+        }
+
+        @JavascriptInterface
+        public void setRepeat(boolean repeat) {
+            setRepeat(repeat ? "all" : "off");
         }
 
         @JavascriptInterface
