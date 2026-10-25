@@ -69,6 +69,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     private boolean isPlaying = false;
     private boolean isPrepared = false;
     private boolean repeatOne = false;
+    private boolean resumeOnFocusGain = false;
     private float[] currentEqGains = new float[]{0f, 0f, 0f, 0f, 0f};
 
     private final Runnable progressRunnable = new Runnable() {
@@ -400,20 +401,41 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
     @Override
     public void onAudioFocusChange(int focusChange) {
-        if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-            // Pausa temporal (ej. llamada o asistente), sin perder estado
-            if (mediaPlayer != null && isPrepared && mediaPlayer.isPlaying()) {
-                mediaPlayer.pause();
+        if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT || focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+            // Pausa temporal o interrupción de otra app (Instagram, TikTok, WhatsApp, llamada, etc.)
+            if (isPlaying || (mediaPlayer != null && isPrepared && mediaPlayer.isPlaying())) {
+                resumeOnFocusGain = true;
+                if (mediaPlayer != null && isPrepared) {
+                    try {
+                        if (mediaPlayer.isPlaying()) mediaPlayer.pause();
+                    } catch (Exception ignored) {
+                    }
+                }
                 isPlaying = false;
                 syncEverything();
             }
         } else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
-            if (mediaPlayer != null && isPrepared) {
-                mediaPlayer.setVolume(1.0f, 1.0f);
+            if (resumeOnFocusGain) {
+                resumeOnFocusGain = false;
+                resumeNativePlayback();
+            } else if (mediaPlayer != null && isPrepared) {
+                try {
+                    mediaPlayer.setVolume(1.0f, 1.0f);
+                } catch (Exception ignored) {
+                }
             }
         } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
-            if (mediaPlayer != null && isPrepared) {
-                mediaPlayer.setVolume(0.25f, 0.25f);
+            // Cuando otra app emite audio breve (ej. nota de voz de WhatsApp o reel), pausamos y marcamos para reanudar al finalizar
+            if (isPlaying || (mediaPlayer != null && isPrepared && mediaPlayer.isPlaying())) {
+                resumeOnFocusGain = true;
+                if (mediaPlayer != null && isPrepared) {
+                    try {
+                        if (mediaPlayer.isPlaying()) mediaPlayer.pause();
+                    } catch (Exception ignored) {
+                    }
+                }
+                isPlaying = false;
+                syncEverything();
             }
         }
     }
@@ -489,6 +511,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     }
 
     public void resumeNativePlayback() {
+        resumeOnFocusGain = false;
         acquireLocks();
         requestAudioFocus();
         if (mediaPlayer != null && isPrepared) {
@@ -510,6 +533,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     }
 
     public void pauseNativePlayback() {
+        resumeOnFocusGain = false;
         if (mediaPlayer != null && isPrepared) {
             try {
                 if (mediaPlayer.isPlaying()) {

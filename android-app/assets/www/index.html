@@ -1222,6 +1222,352 @@
       border-radius: 18px 18px 0 0;
     }
   }
+
+  /* ========================================================================= */
+  /* SWITCH TOGGLE DARK SPOTILINUX (DISEÑO INTEGRADO)                          */
+  /* ========================================================================= */
+  .custom-switch-label {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .custom-switch-label input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .custom-switch-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #191922;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 24px;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  .custom-switch-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background: #8e8e9f;
+    border-radius: 50%;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  .custom-switch-label input:checked + .custom-switch-slider {
+    background: rgba(30, 215, 96, 0.22);
+    border-color: var(--green-bright);
+    box-shadow: 0 0 12px rgba(30, 215, 96, 0.35);
+  }
+  .custom-switch-label input:checked + .custom-switch-slider:before {
+    transform: translateX(20px);
+    background: var(--green-bright);
+    box-shadow: 0 0 10px rgba(30, 215, 96, 0.85);
+  }
+  .sm-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #14141c;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    margin-bottom: 8px;
+    gap: 12px;
+  }
+
+  /* ========================================================================= */
+  /* MODO SUSPENSIÓN / REPOSO: DISCO DE VINILO GIRATORIO OLED                 */
+  /* ========================================================================= */
+  .vinyl-standby-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #000000;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    overflow: hidden;
+    user-select: none;
+    padding: 20px;
+  }
+  .vinyl-standby-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .vinyl-exit-btn {
+    position: absolute;
+    top: max(16px, env(safe-area-inset-top, 16px));
+    right: 18px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s ease;
+  }
+  .vinyl-exit-btn:hover { background: rgba(255, 255, 255, 0.22); transform: scale(1.08); }
+  .vinyl-ambient-clock {
+    position: absolute;
+    top: max(20px, env(safe-area-inset-top, 20px));
+    left: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .vinyl-player-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 22px;
+  }
+  .vinyl-disc {
+    width: min(72vw, 300px);
+    height: min(72vw, 300px);
+    border-radius: 50%;
+    position: relative;
+    background: #0d0d12;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), 0 0 35px rgba(30, 215, 96, 0.18), inset 0 0 10px #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #1c1c24;
+    animation: spinVinyl 12s linear infinite;
+    animation-play-state: paused;
+  }
+  .vinyl-disc.playing {
+    animation-play-state: running;
+  }
+  @keyframes spinVinyl {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .vinyl-groove-lines {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    background: repeating-radial-gradient(
+      circle at center,
+      transparent 0px,
+      rgba(255, 255, 255, 0.02) 2px,
+      transparent 4px,
+      rgba(0, 0, 0, 0.4) 6px
+    );
+    pointer-events: none;
+  }
+  .vinyl-shine {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 45deg at 50% 50%,
+      rgba(255, 255, 255, 0.09) 0deg,
+      transparent 35deg,
+      transparent 145deg,
+      rgba(255, 255, 255, 0.09) 180deg,
+      transparent 215deg,
+      transparent 325deg,
+      rgba(255, 255, 255, 0.09) 360deg
+    );
+    pointer-events: none;
+  }
+  .vinyl-center-label {
+    width: 42%;
+    height: 42%;
+    border-radius: 50%;
+    background: #181924;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 4px solid #111116;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+    z-index: 2;
+  }
+  .vinyl-center-art {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .vinyl-spindle-hole {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #000;
+    border: 2px solid #333;
+    box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.3);
+    z-index: 5;
+  }
+  .vinyl-tonearm {
+    position: absolute;
+    top: -24px;
+    right: -14px;
+    width: 70px;
+    height: 140px;
+    pointer-events: none;
+    z-index: 4;
+    transform-origin: 52px 16px;
+    transform: rotate(-18deg);
+    transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .vinyl-tonearm.playing {
+    transform: rotate(14deg);
+  }
+  .tonearm-base {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #8a8a9e 0%, #3a3a46 70%, #1e1e24 100%);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+  }
+  .tonearm-arm {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 5px;
+    height: 110px;
+    background: linear-gradient(to right, #cfcfdb 0%, #7d7d8e 100%);
+    border-radius: 3px;
+    transform: rotate(12deg);
+    transform-origin: top center;
+    box-shadow: 2px 4px 8px rgba(0,0,0,0.6);
+  }
+  .tonearm-head {
+    position: absolute;
+    bottom: 0px;
+    left: 12px;
+    width: 14px;
+    height: 22px;
+    background: #111;
+    border: 1px solid #444;
+    border-radius: 2px;
+    transform: rotate(25deg);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.7);
+  }
+  .vinyl-info-box {
+    text-align: center;
+    max-width: 85vw;
+    width: 320px;
+  }
+  .vinyl-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+  }
+  .vinyl-artist {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+  }
+  .vinyl-sub-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    background: rgba(30, 215, 96, 0.12);
+    color: var(--green-bright);
+    border: 1px solid rgba(30, 215, 96, 0.25);
+    margin-bottom: 14px;
+  }
+  .vinyl-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+  .vinyl-ctrl-btn {
+    background: #14141c;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .vinyl-ctrl-btn:hover {
+    background: #20202c;
+    border-color: var(--green-bright);
+    color: var(--green-bright);
+    transform: scale(1.08);
+  }
+  .vinyl-ctrl-btn:active { transform: scale(0.92); }
+  .vinyl-ctrl-btn.play-btn {
+    width: 52px;
+    height: 52px;
+    background: var(--green-bright);
+    color: #000;
+    border-color: var(--green-bright);
+    box-shadow: 0 0 18px rgba(30, 215, 96, 0.45);
+  }
+  .vinyl-hint {
+    font-size: 10px;
+    color: #555566;
+  }
+
+  @media (orientation: landscape) {
+    .vinyl-standby-overlay {
+      flex-direction: row;
+      gap: 36px;
+      padding: 14px 28px;
+    }
+    .vinyl-player-box {
+      margin-bottom: 0;
+    }
+    .vinyl-disc {
+      width: min(65vh, 280px);
+      height: min(65vh, 280px);
+    }
+    .vinyl-info-box {
+      text-align: left;
+      max-width: 360px;
+    }
+    .vinyl-controls-row {
+      justify-content: flex-start;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1385,6 +1731,28 @@
         </div>
       </button>
 
+      <!-- Modo Suspensión y Pantalla -->
+      <div class="sm-section-label">PANTALLA Y SUSPENSIÓN</div>
+      <div class="sm-switch-row">
+        <div class="sm-item-text">
+          <div class="sm-item-title">Modo Suspensión (Disco de Vinilo)</div>
+          <div class="sm-item-sub">Disco giratorio con carátula en reposo OLED</div>
+        </div>
+        <label class="custom-switch-label" title="Activar/Desactivar disco de vinilo en reposo">
+          <input type="checkbox" id="chkSleepVinyl" checked onchange="toggleSleepVinylSetting()" />
+          <span class="custom-switch-slider"></span>
+        </label>
+      </div>
+      <button class="sm-item-btn" onclick="closeSideMenu(); enterVinylStandbyMode()">
+        <div class="sm-item-icon" style="color:var(--green-bright); background:rgba(30, 215, 96, 0.12); border:1px solid rgba(30, 215, 96, 0.28);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6" stroke-dasharray="2 2"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title" style="color:var(--green-bright); font-weight:800;">Ver Tocadiscos Ahora</div>
+          <div class="sm-item-sub">Activar pantalla de vinilo inmediatamente</div>
+        </div>
+      </button>
+
       <!-- Estilo de Baile de Maomao -->
       <div class="sm-section-label">PASO DE BAILE DE MAOMAO</div>
       <div class="sm-dance-row">
@@ -1458,16 +1826,7 @@
           <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">Descargadas</button>
           <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">Favoritos</button>
           <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">Google Drive</button>
-          <button class="btn-chip" id="flt-shuffle" onclick="startRandomPlayback()" style="display:inline-flex; align-items:center; gap:6px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green-bright);">
-              <path d="M4 17C8 17 11 7 16 7H20"/>
-              <polyline points="17 4 21 7 17 10"/>
-              <path d="M4 7C7.2 7 9.4 11.2 10.5 13"/>
-              <path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/>
-              <polyline points="17 14 21 17 17 20"/>
-            </svg>
-            <span>Aleatorio</span>
-          </button>
+          <button class="btn-chip" id="flt-shuffle" onclick="startRandomPlayback()">Aleatorio</button>
         </div>
         <div class="section-title">
           <span id="listHeading">Biblioteca de Canciones</span>
@@ -1536,10 +1895,14 @@
             </div>
           </div>
 
-          <div class="field-group" style="display:flex; align-items:center; gap:8px; margin:8px 0;">
-            <input type="checkbox" id="chkVerifyDuplicates" checked onchange="savePersistentState()" style="width:18px; height:18px; accent-color:#1ed760;" />
-            <label for="chkVerifyDuplicates" style="margin:0; color:#1ed760; font-weight:700; font-size:11px;">
-              🛡️ Activar verificación de duplicados al descargar canciones del Drive
+          <div class="sm-switch-row" style="margin: 8px 0;">
+            <div class="sm-item-text">
+              <div class="sm-item-title" style="color:var(--green-bright); font-weight:700;">🛡️ Verificación de Duplicados</div>
+              <div class="sm-item-sub">Evita descargar canciones que ya existen en el celular</div>
+            </div>
+            <label class="custom-switch-label" title="Activar/Desactivar detección de duplicados">
+              <input type="checkbox" id="chkVerifyDuplicates" checked onchange="savePersistentState()" />
+              <span class="custom-switch-slider"></span>
             </label>
           </div>
 
@@ -1761,9 +2124,14 @@
         <span class="fp-header-sub">REPRODUCIENDO DESDE</span>
         <span class="fp-header-title" id="fpHeaderPlaylist">Biblioteca</span>
       </div>
-      <button class="fp-icon-btn" id="fpBtnQueueToggle" onclick="toggleFullPlayerViewMode()" title="Alternar Playlist / Maomao">
-        <svg id="fpQueueIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.5" fill="currentColor"/><circle cx="3.5" cy="12" r="1.5" fill="currentColor"/><circle cx="3.5" cy="18" r="1.5" fill="currentColor"/></svg>
-      </button>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button class="fp-icon-btn" onclick="enterVinylStandbyMode()" title="Modo Suspensión (Disco de Vinilo)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6" stroke-dasharray="2 2"/></svg>
+        </button>
+        <button class="fp-icon-btn" id="fpBtnQueueToggle" onclick="toggleFullPlayerViewMode()" title="Alternar Playlist / Maomao">
+          <svg id="fpQueueIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.5" fill="currentColor"/><circle cx="3.5" cy="12" r="1.5" fill="currentColor"/><circle cx="3.5" cy="18" r="1.5" fill="currentColor"/></svg>
+        </button>
+      </div>
     </div>
 
     <!-- Selector de vista tipo pill: [ Visualizador Maomao ]  [ Playlist Completa ] -->
@@ -1907,6 +2275,58 @@
     </div>
   </div>
 
+  <!-- OVERLAY DE PANTALLA EN MODO SUSPENSIÓN / REPOSO (DISCO DE VINILO OLED) -->
+  <div id="vinylStandbyOverlay" class="vinyl-standby-overlay" onclick="exitVinylStandbyMode()">
+    <!-- Botón discreto para salir en la esquina -->
+    <button class="vinyl-exit-btn" onclick="exitVinylStandbyMode(event)" title="Salir del modo reposo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+
+    <div class="vinyl-ambient-clock" id="vinylClock">00:00</div>
+
+    <div class="vinyl-player-box" onclick="event.stopPropagation()">
+      <!-- Brazo de tocadiscos estilizado -->
+      <div class="vinyl-tonearm" id="vinylTonearm">
+        <div class="tonearm-base"></div>
+        <div class="tonearm-arm"></div>
+        <div class="tonearm-head"></div>
+      </div>
+
+      <!-- Disco de Vinilo Giratorio -->
+      <div class="vinyl-disc" id="vinylDisc" onclick="togglePlay()">
+        <div class="vinyl-groove-lines"></div>
+        <div class="vinyl-shine"></div>
+        <!-- Centro del vinilo con carátula -->
+        <div class="vinyl-center-label" id="vinylCenterLabel">
+          <div class="vinyl-center-art" id="vinylCenterArt"></div>
+          <div class="vinyl-spindle-hole"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detalles de la canción y controles discretos -->
+    <div class="vinyl-info-box" onclick="event.stopPropagation()">
+      <div class="vinyl-title" id="vinylTrackTitle">SpotiLinux</div>
+      <div class="vinyl-artist" id="vinylTrackArtist">Modo Reposo</div>
+      <div class="vinyl-sub-badge">REPOSO OLED • TOCADISCOS ACTIVO</div>
+
+      <!-- Controles de transporte sutiles -->
+      <div class="vinyl-controls-row">
+        <button class="vinyl-ctrl-btn" onclick="prevTrack()" title="Anterior">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+        </button>
+        <button class="vinyl-ctrl-btn play-btn" id="vinylBtnPlay" onclick="togglePlay()" title="Reproducir / Pausa">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </button>
+        <button class="vinyl-ctrl-btn" onclick="nextTrack()" title="Siguiente">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        </button>
+      </div>
+      <div class="vinyl-hint">Toca en cualquier parte para volver</div>
+    </div>
+  </div>
 
   <!-- Respaldo WebAudio solo cuando se abre fuera de Android -->
   <audio id="audioPlayer" crossorigin="anonymous"></audio>
@@ -1950,6 +2370,11 @@ let currentIndex = 0;
 let isPlaying = false;
 let shuffleMode = false;
 let repeatMode = "off"; // "off" | "all" | "one"
+let shufflePlayedStack = [];
+let shuffleUnplayedPool = [];
+let sleepVinylEnabled = true;
+let sleepVinylTimeout = null;
+const SLEEP_IDLE_DELAY_MS = 50000;
 let activeFilter = "all";
 let driveImportMode = "stream"; // "stream" | "download"
 let maomaoStyle = 0;
@@ -1999,6 +2424,13 @@ audio.ontimeupdate = function() {
   if (fpSeek) fpSeek.value = progressRatio;
   const fpPlay = document.getElementById("fpBtnPlay");
   if (fpPlay) fpPlay.innerHTML = playSvg;
+
+  const vinylBtnPlay = document.getElementById("vinylBtnPlay");
+  if (vinylBtnPlay) vinylBtnPlay.innerHTML = playSvg;
+  const vinylDisc = document.getElementById("vinylDisc");
+  if (vinylDisc) vinylDisc.classList.toggle("playing", isPlaying);
+  const vinylTonearm = document.getElementById("vinylTonearm");
+  if (vinylTonearm) vinylTonearm.classList.toggle("playing", isPlaying);
 };
 
 audio.onended = function() {
@@ -2140,6 +2572,7 @@ function savePersistentState() {
     userAccount,
     accountsDb,
     repeatMode,
+    sleepVinylEnabled,
     gdToken: document.getElementById("gdToken").value.trim(),
     gdClientId: document.getElementById("gdClientId").value.trim(),
     gdFolder: document.getElementById("gdFolder").value.trim() || DEFAULT_DRIVE_ROOT_FOLDER_ID,
@@ -2195,6 +2628,12 @@ function loadPersistentState() {
           audio.loop = (repeatMode === "one");
         }
       }
+      if (typeof st.sleepVinylEnabled === "boolean") {
+        sleepVinylEnabled = st.sleepVinylEnabled;
+      }
+      const chkVinyl = document.getElementById("chkSleepVinyl");
+      if (chkVinyl) chkVinyl.checked = sleepVinylEnabled;
+
       const chkDedup = document.getElementById("chkVerifyDuplicates");
       if (chkDedup && typeof st.verifyDuplicates === "boolean") chkDedup.checked = st.verifyDuplicates;
       if (st.welcomeDone) localStorage.setItem("welcome_done", "1");
@@ -2320,6 +2759,7 @@ function playTrackFromQueue(queueList, indexInQueue, contextName) {
   activePlaybackQueue = [...queueList];
   activeQueueIndex = Math.max(0, Math.min(indexInQueue, activePlaybackQueue.length - 1));
   activeQueueName = contextName || "Playlist";
+  initOrSyncShufflePool(activeQueueIndex);
   const t = activePlaybackQueue[activeQueueIndex];
   currentIndex = tracks.indexOf(t);
   if (currentIndex < 0) currentIndex = 0;
@@ -2337,6 +2777,7 @@ function playTrackIndex(idx) {
     activeQueueIndex = idx;
     activeQueueName = "Biblioteca";
   }
+  initOrSyncShufflePool(activeQueueIndex);
   currentIndex = idx;
   executePlayTrack(t);
 }
@@ -2344,8 +2785,9 @@ function playTrackIndex(idx) {
 function executePlayTrack(t) {
   const token = document.getElementById("gdToken").value.trim();
   onTrackChangedForRhythm(t);
+  isPlaying = true;
+  resetSleepVinylIdleTimer();
   if (hasNativeAndroid) {
-    isPlaying = true;
     updatePlayerUI();
     window.AndroidMedia.playSource(t.src, t.title, t.artist, t.album, t.authToken || token);
   } else {
@@ -2387,6 +2829,25 @@ function togglePlay() {
   updatePlayerUI();
 }
 
+function initOrSyncShufflePool(forcedCurrentIdx = activeQueueIndex) {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    shufflePlayedStack = [];
+    shuffleUnplayedPool = [];
+    return;
+  }
+  const total = activePlaybackQueue.length;
+  if (forcedCurrentIdx >= 0 && forcedCurrentIdx < total) {
+    shufflePlayedStack = [forcedCurrentIdx];
+    shuffleUnplayedPool = [];
+    for (let i = 0; i < total; i++) {
+      if (i !== forcedCurrentIdx) shuffleUnplayedPool.push(i);
+    }
+  } else {
+    shufflePlayedStack = [];
+    shuffleUnplayedPool = Array.from({ length: total }, (_, i) => i);
+  }
+}
+
 function nextTrack() {
   if (!activePlaybackQueue || !activePlaybackQueue.length) {
     activePlaybackQueue = [...tracks];
@@ -2394,12 +2855,33 @@ function nextTrack() {
   if (!activePlaybackQueue.length) return;
 
   if (shuffleMode && activePlaybackQueue.length > 1) {
-    let nxt = Math.floor(Math.random() * activePlaybackQueue.length);
-    if (nxt === activeQueueIndex) nxt = (nxt + 1) % activePlaybackQueue.length;
-    activeQueueIndex = nxt;
+    if (!Array.isArray(shuffleUnplayedPool) || shuffleUnplayedPool.length === 0) {
+      if (repeatMode === "off") {
+        isPlaying = false;
+        if (hasNativeAndroid && window.AndroidMedia.pause) {
+          try { window.AndroidMedia.pause(); } catch(e){}
+        } else {
+          audio.pause();
+        }
+        updatePlayerUI();
+        showToast("Todas las canciones del aleatorio fueron reproducidas ✔");
+        return;
+      }
+      initOrSyncShufflePool(activeQueueIndex);
+      showToast("Ciclo aleatorio completado. Reiniciando lista 🔀");
+    }
+
+    const randomPoolPos = Math.floor(Math.random() * shuffleUnplayedPool.length);
+    const chosenIdx = shuffleUnplayedPool.splice(randomPoolPos, 1)[0];
+    shufflePlayedStack.push(chosenIdx);
+    activeQueueIndex = chosenIdx;
   } else {
     activeQueueIndex = (activeQueueIndex + 1) % activePlaybackQueue.length;
+    if (shufflePlayedStack[shufflePlayedStack.length - 1] !== activeQueueIndex) {
+      shufflePlayedStack.push(activeQueueIndex);
+    }
   }
+
   const t = activePlaybackQueue[activeQueueIndex];
   currentIndex = tracks.indexOf(t);
   if (currentIndex < 0) currentIndex = 0;
@@ -2411,7 +2893,17 @@ function prevTrack() {
     activePlaybackQueue = [...tracks];
   }
   if (!activePlaybackQueue.length) return;
-  activeQueueIndex = (activeQueueIndex - 1 + activePlaybackQueue.length) % activePlaybackQueue.length;
+
+  if (shuffleMode && Array.isArray(shufflePlayedStack) && shufflePlayedStack.length > 1) {
+    const current = shufflePlayedStack.pop();
+    if (!shuffleUnplayedPool.includes(current)) {
+      shuffleUnplayedPool.push(current);
+    }
+    activeQueueIndex = shufflePlayedStack[shufflePlayedStack.length - 1];
+  } else {
+    activeQueueIndex = (activeQueueIndex - 1 + activePlaybackQueue.length) % activePlaybackQueue.length;
+  }
+
   const t = activePlaybackQueue[activeQueueIndex];
   currentIndex = tracks.indexOf(t);
   if (currentIndex < 0) currentIndex = 0;
@@ -2489,8 +2981,11 @@ function updateRepeatUI() {
 
 function toggleShuffle(forcePlayIfOff = false) {
   shuffleMode = !shuffleMode;
+  if (shuffleMode) {
+    initOrSyncShufflePool(activeQueueIndex);
+  }
   updateShuffleUI();
-  showToast(shuffleMode ? "Modo aleatorio: ACTIVADO" : "Modo aleatorio: Desactivado");
+  showToast(shuffleMode ? "Aleatorio sin repetición: ACTIVADO 🔀" : "Modo aleatorio: Desactivado");
   if (shuffleMode && forcePlayIfOff && !isPlaying && tracks.length > 0) {
     nextTrack();
   }
@@ -2536,7 +3031,18 @@ function handleTrackPlaybackEnded() {
 
   // repeatMode === "off"
   if (shuffleMode) {
-    nextTrack();
+    if (shuffleUnplayedPool.length > 0) {
+      nextTrack();
+    } else {
+      isPlaying = false;
+      if (hasNativeAndroid && window.AndroidMedia.pause) {
+        try { window.AndroidMedia.pause(); } catch(e){}
+      } else {
+        audio.pause();
+      }
+      updatePlayerUI();
+      showToast("Fin de la lista (todas las canciones reproducidas)");
+    }
   } else {
     if (activeQueueIndex + 1 < activePlaybackQueue.length) {
       nextTrack();
@@ -2555,10 +3061,112 @@ function handleTrackPlaybackEnded() {
 
 function shufflePlayAll() {
   shuffleMode = true;
+  initOrSyncShufflePool(activeQueueIndex);
   updateShuffleUI();
-  showToast("Modo aleatorio: ACTIVADO");
+  showToast("Modo aleatorio sin repetición: ACTIVADO");
   nextTrack();
 }
+
+/* ========================================================================= */
+/* CONTROLADOR DE MODO SUSPENSIÓN / REPOSO (DISCO DE VINILO OLED)            */
+/* ========================================================================= */
+function enterVinylStandbyMode() {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  if (!overlay) return;
+  overlay.classList.add("active");
+  updateVinylStandbyUI();
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.setKeepScreenOn) {
+    try { window.AndroidMedia.setKeepScreenOn(true); } catch(e){}
+  }
+}
+
+function exitVinylStandbyMode(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  if (!overlay) return;
+  overlay.classList.remove("active");
+  resetSleepVinylIdleTimer();
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.setKeepScreenOn) {
+    try { window.AndroidMedia.setKeepScreenOn(false); } catch(e){}
+  }
+}
+
+function toggleSleepVinylSetting() {
+  const chk = document.getElementById("chkSleepVinyl");
+  if (!chk) return;
+  sleepVinylEnabled = chk.checked;
+  savePersistentState();
+  if (sleepVinylEnabled) {
+    showToast("Modo Suspensión (Vinilo): ACTIVADO 💿");
+    resetSleepVinylIdleTimer();
+  } else {
+    showToast("Modo Suspensión: Desactivado");
+    if (sleepVinylTimeout) clearTimeout(sleepVinylTimeout);
+    exitVinylStandbyMode();
+  }
+}
+
+function resetSleepVinylIdleTimer() {
+  if (sleepVinylTimeout) clearTimeout(sleepVinylTimeout);
+  if (!sleepVinylEnabled || !isPlaying) return;
+  sleepVinylTimeout = setTimeout(() => {
+    if (isPlaying && sleepVinylEnabled) {
+      enterVinylStandbyMode();
+    }
+  }, SLEEP_IDLE_DELAY_MS);
+}
+
+function updateVinylStandbyUI() {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  if (!overlay) return;
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (t) {
+    const titleEl = document.getElementById("vinylTrackTitle");
+    if (titleEl) titleEl.textContent = t.title || "SpotiLinux";
+    const artEl = document.getElementById("vinylTrackArtist");
+    if (artEl) artEl.textContent = t.artist || "SpotiLinux Mobile";
+    
+    const centerArt = document.getElementById("vinylCenterArt");
+    if (centerArt) {
+      if (t.cover) {
+        centerArt.style.backgroundImage = `url("${t.cover}")`;
+        centerArt.innerHTML = "";
+      } else {
+        centerArt.style.backgroundImage = "none";
+        centerArt.innerHTML = `<span style="font-size:32px;">🎵</span>`;
+      }
+    }
+  }
+
+  const disc = document.getElementById("vinylDisc");
+  if (disc) disc.classList.toggle("playing", isPlaying);
+
+  const tonearm = document.getElementById("vinylTonearm");
+  if (tonearm) tonearm.classList.toggle("playing", isPlaying);
+
+  const btnPlay = document.getElementById("vinylBtnPlay");
+  if (btnPlay) {
+    btnPlay.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
+  }
+
+  const clock = document.getElementById("vinylClock");
+  if (clock) {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    clock.textContent = `${hh}:${mm}`;
+  }
+}
+
+// Monitoreo de toques para posponer reposo cuando el usuario interactúa
+["touchstart", "pointerdown", "mousedown", "keydown"].forEach(evtName => {
+  window.addEventListener(evtName, () => {
+    const overlay = document.getElementById("vinylStandbyOverlay");
+    if (!overlay || !overlay.classList.contains("active")) {
+      resetSleepVinylIdleTimer();
+    }
+  }, { passive: true });
+});
 
 /* Callbacks desde MediaPlaybackService nativo de Android */
 window.onNativeProgress = function(posMs, durMs, playingState) {
@@ -2585,6 +3193,13 @@ window.onNativeProgress = function(posMs, durMs, playingState) {
   if (fpSeek) fpSeek.value = progressRatio;
   const fpPlay = document.getElementById("fpBtnPlay");
   if (fpPlay) fpPlay.innerHTML = playSvg;
+
+  const vinylBtnPlay = document.getElementById("vinylBtnPlay");
+  if (vinylBtnPlay) vinylBtnPlay.innerHTML = playSvg;
+  const vinylDisc = document.getElementById("vinylDisc");
+  if (vinylDisc) vinylDisc.classList.toggle("playing", isPlaying);
+  const vinylTonearm = document.getElementById("vinylTonearm");
+  if (vinylTonearm) vinylTonearm.classList.toggle("playing", isPlaying);
 };
 
 window.onNativeMediaCommand = function(cmd) {
@@ -2725,12 +3340,13 @@ function startRandomPlayback() {
   activePlaybackQueue = shuffled;
   activeQueueIndex = 0;
   activeQueueName = "Modo Aleatorio";
+  initOrSyncShufflePool(0);
   executePlayTrack(shuffled[0]);
   updatePlayerUI();
   updateFullPlayerUI();
   setFullPlayerTab("visualizer");
   openFullPlayer();
-  showToast("Modo aleatorio iniciado");
+  showToast(`Modo aleatorio sin repetición (${shuffled.length} canciones)`);
 }
 
 function playPlaylistShuffle(plId) {
@@ -2759,12 +3375,13 @@ function playPlaylistShuffle(plId) {
   activePlaybackQueue = shuffled;
   activeQueueIndex = 0;
   activeQueueName = plName;
+  initOrSyncShufflePool(0);
   executePlayTrack(shuffled[0]);
   updatePlayerUI();
   updateFullPlayerUI();
   setFullPlayerTab("visualizer");
   openFullPlayer();
-  showToast(`Reproduciendo «${plName}» en aleatorio`);
+  showToast(`Reproduciendo «${plName}» en aleatorio sin repetición`);
 }
 
 function handleProfilePhotoPicked(ev) {
@@ -2918,6 +3535,7 @@ function updatePlayerUI() {
   renderTracks();
   highlightPlayingTracks();
   updateFullPlayerUI();
+  updateVinylStandbyUI();
 }
 
 /* ---------------- MENÚ DESPLEGABLE ÚNICO (CUENTA + ACCIONES) ---------------- */
@@ -3229,8 +3847,9 @@ function playCurrentFullPlaylistShuffle() {
   shuffleMode = true;
   updateShuffleUI();
   const randIdx = Math.floor(Math.random() * activePlaybackQueue.length);
+  initOrSyncShufflePool(randIdx);
   playActiveQueueIndex(randIdx);
-  showToast("Modo aleatorio activado");
+  showToast("Modo aleatorio sin repetición activado");
 }
 
 function highlightPlayingTracks() {
