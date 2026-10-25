@@ -277,6 +277,45 @@ def resolve_musica_subfolder_id(config: GoogleDriveConfig) -> tuple[str, str]:
     return DEFAULT_MUSICA_FOLDER_ID, "Musica"
 
 
+def resolve_videos_subfolder_id(config: GoogleDriveConfig) -> Optional[tuple[str, str]]:
+    """
+    Busca la subcarpeta 'videos' (o 'video' / 'Videos') dentro de la carpeta raíz de SpotiLinux en Drive.
+    Retorna (videos_folder_id, nombre_carpeta) o None.
+    """
+    root_id = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
+    if config.access_token or config.api_key:
+        headers = {"Authorization": f"Bearer {config.access_token}"} if config.access_token else {}
+        q = (
+            f"'{root_id}' in parents and trashed = false and "
+            "mimeType = 'application/vnd.google-apps.folder'"
+        )
+        params: dict[str, str] = {
+            "q": q,
+            "pageSize": "50",
+            "fields": "files(id, name)",
+            "supportsAllDrives": "true",
+            "includeItemsFromAllDrives": "true",
+        }
+        if config.api_key and not config.access_token:
+            params["key"] = config.api_key
+        try:
+            r = requests.get(
+                "https://www.googleapis.com/drive/v3/files",
+                headers=headers,
+                params=params,
+                timeout=10,
+            )
+            if r.status_code == 200:
+                folders = r.json().get("files", [])
+                for f in folders:
+                    fname = f.get("name", "").lower()
+                    if "video" in fname:
+                        return f["id"], f["name"]
+        except Exception:
+            pass
+    return None
+
+
 class GDriveOAuthLoopbackWorker(QThread):
     """Ejecuta el flujo OAuth 2.0 oficial en el navegador local y captura el token automáticamente."""
 

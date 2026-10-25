@@ -27,8 +27,13 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.util.Base64;
 import android.view.KeyEvent;
 
+import java.io.File;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -71,6 +76,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     private boolean repeatOne = false;
     private boolean resumeOnFocusGain = false;
     private float[] currentEqGains = new float[]{0f, 0f, 0f, 0f, 0f};
+    private Bitmap currentCoverBitmap = null;
 
     private final Runnable progressRunnable = new Runnable() {
         @Override
@@ -452,12 +458,82 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         }
     }
 
+    private void updateCoverBitmap(final String coverUrl) {
+        if (coverUrl == null || coverUrl.isEmpty()) {
+            currentCoverBitmap = null;
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Bitmap bmp = null;
+                try {
+                    if (coverUrl.startsWith("data:image/")) {
+                        int comma = coverUrl.indexOf(',');
+                        if (comma > 0) {
+                            String b64 = coverUrl.substring(comma + 1);
+                            byte[] bytes = Base64.decode(b64, Base64.DEFAULT);
+                            bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                        }
+                    } else if (coverUrl.startsWith("http://") || coverUrl.startsWith("https://")) {
+                        HttpURLConnection conn = (HttpURLConnection) new URL(coverUrl).openConnection();
+                        conn.setConnectTimeout(6000);
+                        conn.setReadTimeout(8000);
+                        try (InputStream in = conn.getInputStream()) {
+                            bmp = BitmapFactory.decodeStream(in);
+                        }
+                    } else if (coverUrl.startsWith("content://")) {
+                        try (InputStream in = getContentResolver().openInputStream(Uri.parse(coverUrl))) {
+                            bmp = BitmapFactory.decodeStream(in);
+                        }
+                    } else if (coverUrl.startsWith("file://")) {
+                        bmp = BitmapFactory.decodeFile(Uri.parse(coverUrl).getPath());
+                    } else if (coverUrl.startsWith("tracks/")) {
+                        try (InputStream in = getAssets().open("www/" + coverUrl)) {
+                            bmp = BitmapFactory.decodeStream(in);
+                        }
+                    } else {
+                        File f = new File(coverUrl);
+                        if (f.exists()) {
+                            bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+
+                if (bmp != null) {
+                    int maxDim = 512;
+                    if (bmp.getWidth() > maxDim || bmp.getHeight() > maxDim) {
+                        float ratio = Math.min((float) maxDim / bmp.getWidth(), (float) maxDim / bmp.getHeight());
+                        int w = Math.max(1, Math.round(bmp.getWidth() * ratio));
+                        int h = Math.max(1, Math.round(bmp.getHeight() * ratio));
+                        bmp = Bitmap.createScaledBitmap(bmp, w, h, true);
+                    }
+                    currentCoverBitmap = bmp;
+                    if (uiSyncHandler != null) {
+                        uiSyncHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                syncEverything();
+                            }
+                        });
+                    }
+                }
+            }
+        }).start();
+    }
+
     public void loadAndPlaySource(String src, String title, String artist, String album, String authToken) {
+        loadAndPlaySource(src, title, artist, album, authToken, "");
+    }
+
+    public void loadAndPlaySource(String src, String title, String artist, String album, String authToken, String coverUrl) {
         this.currentSource = src != null ? src : "";
         this.currentTitle = title != null ? title : "SpotiLinux";
         this.currentArtist = artist != null ? artist : "SpotiLinux Mobile";
         this.currentAlbum = album != null ? album : "SpotiLinux";
         this.currentAuthToken = authToken != null ? authToken : "";
+        updateCoverBitmap(coverUrl);
 
         acquireLocks();
         if (mediaPlayer == null) {
@@ -602,7 +678,8 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                         intent.getStringExtra("title"),
                         intent.getStringExtra("artist"),
                         intent.getStringExtra("album"),
-                        intent.getStringExtra("authToken")
+                        intent.getStringExtra("authToken"),
+                        intent.getStringExtra("coverUrl")
                 );
                 return START_STICKY;
             } else if (ACTION_PLAY_PAUSE.equals(action)) {
@@ -691,7 +768,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
     private void updateMediaSessionState(long posMs, long durMs) {
         if (mediaSession == null) return;
-        Bitmap art = BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
+        Bitmap art = currentCoverBitmap != null ? currentCoverBitmap : BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
 
         MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, currentTitle)
@@ -701,6 +778,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
         if (art != null) {
             metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, art);
+            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ART, art);
             metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON, art);
         }
         mediaSession.setMetadata(metaBuilder.build());
@@ -745,7 +823,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         Notification.Action nextAction = new Notification.Action.Builder(
                 android.R.drawable.ic_media_next, "Siguiente", nextPending).build();
 
-        Bitmap largeIcon = BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
+        Bitmap largeIcon = currentCoverBitmap != null ? currentCoverBitmap : BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
 
         Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

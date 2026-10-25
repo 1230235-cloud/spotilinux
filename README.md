@@ -36,6 +36,11 @@
 - **Analizador de Espectro Musical (dB + Tilt + AGC) y Ecualizador de 5 Bandas**:
   - Espectro logarítmico (`45 Hz – 9 kHz`) con conversión a decibelios (`dB`), compensación de agudos (`+3.5 dB/octava`), control automático de ganancia lento (`AGC`) y ataque/decaimiento musical para que las barras, la onda neón y el modo radial se muevan con suavidad profesional al ritmo del beat.
   - Bandas de ecualización en `60 Hz`, `230 Hz`, `910 Hz`, `3.6 kHz` y `14 kHz` con presets (*Plano, Bass Boost, Synthwave, Lo-Fi Chill, Vocal, Rock, Club*).
+- **Pantalla de Reposo / Suspensión OLED con Disco de Vinilo y Subcarpeta `videos` de Google Drive**:
+  - Al activarse el reposo (automático por inactividad o manual), la app proyecta un tocadiscos giratorio con brazo de aguja y aura reactiva al ritmo en verde esmeralda sobre fondo negro OLED puro.
+  - **Soporte de Subcarpeta `videos` en Google Drive**: Los videos de las canciones se almacenan en la subcarpeta `videos/` dentro del Drive de SpotiLinux (o localmente como `.mp4`). Si la canción cuenta con video coincidente, se reproduce en bucle y silenciado detrás del disco de vinilo. **Si no hay video para dicha canción, no se proyecta nada**, manteniendo la pantalla en reposo OLED puro sin elementos distractores ni errores.
+- **Carátula Real del Álbum en la Notificación Desplegable y Pantalla de Bloqueo al Minimizar (Android)**:
+  - Al minimizar la aplicación o apagar la pantalla, el servicio nativo `MediaPlaybackService.java` extrae y procesa la carátula real del álbum/canción en alta definición (`METADATA_KEY_ALBUM_ART`, `METADATA_KEY_ART` y `setLargeIcon`), mostrándola en el reproductor de la barra de notificaciones del sistema y coloreando el fondo del widget en vez de mostrar el icono genérico de la aplicación.
 - **Diseño Visual y Botonera Profesional**:
   - Conserva la paleta oficial (negro `#000000`, grafito `#121212`, verde esmeralda `#1DB954`/`#1ED760`, carmesí `#A22044` y jade `#2A7666`) con botones rediseñados (`NavButton`, `ActionChipButton`, `SpotifyGreenPlayBig`, `TransportPlayButton`, `TransportIconBtn`, `GhostSmallButton`) con gradientes sutiles, bordes iluminados, estados `:hover`/`:pressed` y jerarquía tipográfica limpia.
 

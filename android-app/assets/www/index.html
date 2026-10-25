@@ -2080,16 +2080,6 @@
         </div>
       </button>
 
-      <button class="sm-item-btn" onclick="closeSideMenu(); openYouTubeSearchModal()">
-        <div class="sm-item-icon" style="color:#ff334b; background:rgba(255,51,75,0.12); border:1px solid rgba(255,51,75,0.28);">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-        </div>
-        <div class="sm-item-text">
-          <div class="sm-item-title" style="color:#ff5566; font-weight:800;">Descargar de YouTube</div>
-          <div class="sm-item-sub">Buscar música y guardar en celular o Drive</div>
-        </div>
-      </button>
-
       <button class="sm-item-btn" onclick="closeSideMenu(); document.getElementById('filePicker').click()">
         <div class="sm-item-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -2203,7 +2193,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.6.1 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.0 (GitHub)</div>
         </div>
       </button>
     </div>
@@ -2236,10 +2226,6 @@
           <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" id="searchInput" class="search-input" placeholder="Buscar canciones o playlists..." oninput="renderTracks()" />
         </div>
-        <button class="btn-chip" onclick="openYouTubeSearchModal()" style="padding:0 12px; height:40px; font-size:12px; font-weight:700; color:#ff5566; background:rgba(255, 51, 75, 0.12); border:1px solid rgba(255, 51, 75, 0.35); border-radius:12px; display:inline-flex; align-items:center; gap:6px; flex-shrink:0;" title="Buscar y descargar música de YouTube">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-          <span>YouTube</span>
-        </button>
         <input type="file" id="filePicker" accept="audio/*" multiple style="display:none" onchange="importLocalFiles(event)" />
       </div>
 
@@ -2646,89 +2632,6 @@
     </div>
   </div>
 
-  <!-- MODAL: BÚSQUEDA Y DESCARGA DE YOUTUBE -->
-  <div id="youtubeSearchModal" class="modal-backdrop">
-    <div class="modal-card" style="max-width:520px; max-height:88vh; display:flex; flex-direction:column; text-align:left;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <div style="width:38px; height:38px; border-radius:50%; background:rgba(255, 51, 75, 0.15); border:1px solid rgba(255, 51, 75, 0.35); display:flex; align-items:center; justify-content:center; color:#ff334b; flex-shrink:0;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-          </div>
-          <div>
-            <h3 style="margin:0; font-size:16px;">Buscar y Descargar de YouTube</h3>
-            <div style="font-size:11px; color:#a0a0b0;">Descarga música directamente al celular o a Google Drive</div>
-          </div>
-        </div>
-        <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closeYouTubeSearchModal()">✕</button>
-      </div>
-
-      <!-- Barra de Búsqueda -->
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <input type="text" id="ytSearchInput" class="search-input" placeholder="🔍 Canción, artista o video de YouTube..." onkeydown="if(event.key==='Enter')executeYouTubeSearch()" style="margin-bottom:0;" />
-        <button class="btn-chip active" style="padding:8px 16px; font-size:12px; font-weight:800;" onclick="executeYouTubeSearch()">Buscar</button>
-      </div>
-
-      <!-- Estado y progreso de descarga -->
-      <div id="ytDownloadProgressBox" style="display:none; background:#14141e; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px; margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;">
-          <span id="ytProgressStatus" style="color:var(--green-bright); font-weight:700;">Descargando...</span>
-          <span id="ytProgressPercent" style="color:#aaa;">0%</span>
-        </div>
-        <div style="width:100%; height:6px; background:#1c1c28; border-radius:999px; overflow:hidden;">
-          <div id="ytProgressBar" style="width:0%; height:100%; background:var(--green-bright); transition:width 0.2s ease;"></div>
-        </div>
-      </div>
-
-      <!-- Lista de Resultados -->
-      <div id="ytResultsContainer" style="flex:1; overflow-y:auto; max-height:48vh; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
-        <div style="text-align:center; padding:30px 10px; color:#777; font-size:12px;">
-          Escribe el nombre de una canción o artista y presiona Buscar.
-        </div>
-      </div>
-
-      <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-        <button class="btn-chip" style="padding:8px 16px; font-size:12px;" onclick="closeYouTubeSearchModal()">Cerrar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: SELECCIÓN DE DESTINO DE DESCARGA -->
-  <div id="ytTargetPickerModal" class="modal-backdrop">
-    <div class="modal-card" style="max-width:400px; text-align:left;">
-      <h3 style="margin-top:0; margin-bottom:6px; font-size:15px;">¿Dónde deseas guardar esta canción?</h3>
-      <p id="ytTargetTrackLabel" style="font-size:12px; color:var(--green-bright); margin-bottom:14px; font-weight:700;">Canción seleccionada</p>
-      
-      <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
-        <button class="btn-chip" style="padding:12px 14px; display:flex; align-items:center; gap:12px; justify-content:flex-start; text-align:left; background:#181824;" onclick="confirmYouTubeDownload('local')">
-          <div style="font-size:20px;">📱</div>
-          <div>
-            <div style="font-weight:800; font-size:13px; color:#fff;">Descargar en este Celular</div>
-            <div style="font-size:11px; color:#999;">Guardar en SpotiLinuxMusic para escuchar sin internet</div>
-          </div>
-        </button>
-
-        <button class="btn-chip" style="padding:12px 14px; display:flex; align-items:center; gap:12px; justify-content:flex-start; text-align:left; background:#181824;" onclick="confirmYouTubeDownload('drive')">
-          <div style="font-size:20px;">☁️</div>
-          <div>
-            <div style="font-weight:800; font-size:13px; color:#fff;">Guardar en Google Drive</div>
-            <div style="font-size:11px; color:#999;">Subir a la carpeta «Musica» de tu cuenta</div>
-          </div>
-        </button>
-
-        <button class="btn-chip" style="padding:10px 14px; display:flex; align-items:center; gap:12px; justify-content:flex-start; text-align:left; background:#14141e;" onclick="confirmYouTubeDownload('stream')">
-          <div style="font-size:20px;">🎧</div>
-          <div>
-            <div style="font-weight:800; font-size:13px; color:#fff;">Escuchar Ahora en Streaming</div>
-            <div style="font-size:11px; color:#999;">Reproducir al instante sin descargar</div>
-          </div>
-        </button>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end;">
-        <button class="btn-chip" style="padding:7px 14px; font-size:12px;" onclick="closeYtTargetPickerModal()">Cancelar</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Barra Flotante de Selección Múltiple -->
   <div id="multiSelectBar" class="multi-select-bar">
@@ -2952,9 +2855,7 @@
   <div id="vinylStandbyOverlay" class="vinyl-standby-overlay" onclick="exitVinylStandbyMode()">
     <!-- Video de fondo cinematográfico opcional detrás del disco de vinilo -->
     <div class="vinyl-video-bg-container" id="vinylVideoBgContainer">
-      <canvas class="vinyl-bg-canvas" id="vinylAmbientCanvas"></canvas>
       <video class="vinyl-bg-video" id="vinylBgVideo" muted loop playsinline preload="auto"></video>
-      <iframe class="vinyl-bg-iframe" id="vinylBgIframe" allow="autoplay" style="display:none;" frameborder="0"></iframe>
       <div class="vinyl-video-scrim"></div>
     </div>
 
@@ -3953,7 +3854,7 @@ function executePlayTrack(t) {
   resetSleepVinylIdleTimer();
   if (hasNativeAndroid) {
     updatePlayerUI();
-    window.AndroidMedia.playSource(t.src, t.title, t.artist, t.album, t.authToken || token);
+    window.AndroidMedia.playSource(t.src, t.title, t.artist, t.album, t.authToken || token, t.cover || "");
   } else {
     audio.src = t.src;
     audio.play().then(() => {
@@ -4274,79 +4175,31 @@ function toggleSleepVinylSetting() {
   }
 }
 
-let trackVideoCache = {};
-try {
-  trackVideoCache = JSON.parse(localStorage.getItem("spotilinux_track_videos") || "{}");
-} catch(e){}
+let cloudDriveVideos = {};
 
-let vinylAmbientAnimationId = null;
-
-function startVinylAmbientCanvas(t) {
-  const canvas = document.getElementById("vinylAmbientCanvas");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  canvas.width = window.innerWidth || 360;
-  canvas.height = window.innerHeight || 640;
-
-  if (vinylAmbientAnimationId) cancelAnimationFrame(vinylAmbientAnimationId);
-
-  let angle = 0;
-  const stars = [];
-  for (let i = 0; i < 45; i++) {
-    stars.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      radius: Math.random() * 2 + 1,
-      speed: Math.random() * 0.45 + 0.15,
-      alpha: Math.random() * 0.6 + 0.25
-    });
-  }
-
-  function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const grad = ctx.createRadialGradient(
-      canvas.width / 2, canvas.height / 2, 50,
-      canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.75
-    );
-    const pulse = isPlaying ? (Math.sin(angle) * 0.09 + 0.22) : 0.12;
-    grad.addColorStop(0, `rgba(30, 215, 96, ${pulse})`);
-    grad.addColorStop(0.45, "rgba(20, 24, 32, 0.72)");
-    grad.addColorStop(1, "rgba(8, 8, 14, 0.96)");
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    stars.forEach(s => {
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(180, 255, 210, ${s.alpha})`;
-      ctx.fill();
-      if (isPlaying) {
-        s.y -= s.speed;
-        if (s.y < 0) { s.y = canvas.height; s.x = Math.random() * canvas.width; }
-      }
-    });
-
-    angle += isPlaying ? 0.03 : 0.008;
-    vinylAmbientAnimationId = requestAnimationFrame(render);
-  }
-  render();
+function normalizeTrackKey(str) {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "")
+    .replace(/[^a-z0-9áéíóúñ]/g, "")
+    .trim();
 }
 
-function stopVinylAmbientCanvas() {
-  if (vinylAmbientAnimationId) {
-    cancelAnimationFrame(vinylAmbientAnimationId);
-    vinylAmbientAnimationId = null;
-  }
-  const canvas = document.getElementById("vinylAmbientCanvas");
-  if (canvas) {
-    const ctx = canvas.getContext("2d");
-    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-}
+window.onPublicDriveVideosFetched = function(videoList) {
+  if (!Array.isArray(videoList)) return;
+  videoList.forEach(v => {
+    if (!v || !v.id) return;
+    const key = normalizeTrackKey(v.name || v.id);
+    if (key) {
+      cloudDriveVideos[key] = {
+        id: v.id,
+        name: v.name || "Video",
+        src: `https://drive.google.com/uc?export=download&id=${v.id}`
+      };
+    }
+  });
+};
 
 function toggleSleepVinylVideoSetting(e) {
   if (e && e.stopPropagation) e.stopPropagation();
@@ -4368,18 +4221,12 @@ function toggleSleepVinylVideoSetting(e) {
 }
 
 function stopVinylStandbyVideo() {
-  stopVinylAmbientCanvas();
   const container = document.getElementById("vinylVideoBgContainer");
   const videoEl = document.getElementById("vinylBgVideo");
-  const iframeEl = document.getElementById("vinylBgIframe");
   if (container) container.classList.remove("active");
   if (videoEl) {
     try { videoEl.pause(); videoEl.removeAttribute("src"); videoEl.load(); } catch(_e){}
     videoEl.style.display = "none";
-  }
-  if (iframeEl) {
-    iframeEl.src = "about:blank";
-    iframeEl.style.display = "none";
   }
   currentPlayingVideoSource = "";
 }
@@ -4388,8 +4235,7 @@ function updateVinylStandbyVideo() {
   const overlay = document.getElementById("vinylStandbyOverlay");
   const container = document.getElementById("vinylVideoBgContainer");
   const videoEl = document.getElementById("vinylBgVideo");
-  const iframeEl = document.getElementById("vinylBgIframe");
-  if (!overlay || !overlay.classList.contains("active") || !container) return;
+  if (!overlay || !overlay.classList.contains("active") || !container || !videoEl) return;
 
   if (!sleepVinylVideoEnabled) {
     stopVinylStandbyVideo();
@@ -4402,88 +4248,57 @@ function updateVinylStandbyVideo() {
     return;
   }
 
-  container.classList.add("active");
-
+  // 1. Video asignado explícitamente o video local mp4
   let videoSrc = t.videoSrc || "";
   if (!videoSrc && t.filePath) {
-    const candidateMp4 = t.filePath.replace(/\.(mp3|flac|wav|m4a|ogg|opus)$/i, ".mp4");
+    const candidateMp4 = t.filePath.replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i, ".mp4");
     if (candidateMp4 !== t.filePath) {
       videoSrc = candidateMp4;
     }
   }
 
-  const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
-
-  if (videoSrc) {
-    stopVinylAmbientCanvas();
-    if (iframeEl) { iframeEl.style.display = "none"; iframeEl.src = "about:blank"; }
-    if (videoEl) {
-      videoEl.style.display = "block";
-      if (currentPlayingVideoSource !== videoSrc) {
-        currentPlayingVideoSource = videoSrc;
-        videoEl.src = videoSrc;
-        videoEl.muted = true;
-      }
-      if (isPlaying) {
-        videoEl.play().catch(() => {});
-        if (Math.abs(videoEl.currentTime - curSec) > 2) {
-          try { videoEl.currentTime = curSec; } catch(_e){}
+  // 2. Buscar en la subcarpeta 'videos' de Google Drive
+  if (!videoSrc) {
+    const normTitle = normalizeTrackKey(t.title || "");
+    const normFull = normalizeTrackKey((t.artist || "") + " " + (t.title || ""));
+    if (normTitle && cloudDriveVideos[normTitle]) {
+      videoSrc = cloudDriveVideos[normTitle].src;
+    } else if (normFull && cloudDriveVideos[normFull]) {
+      videoSrc = cloudDriveVideos[normFull].src;
+    } else if (normTitle) {
+      for (const [k, v] of Object.entries(cloudDriveVideos)) {
+        if (k === normTitle || k.includes(normTitle) || normTitle.includes(k)) {
+          videoSrc = v.src;
+          break;
         }
-      } else {
-        videoEl.pause();
       }
     }
+  }
+
+  // SI NO HAY VIDEO EN LA SUBCARPETA VIDEOS O LOCAL, NO SE PONE NADA
+  if (!videoSrc) {
+    stopVinylStandbyVideo();
     return;
   }
 
-  const cacheKey = (t.id || (t.title + "-" + t.artist)).trim();
-  if (!t.youtubeId && trackVideoCache[cacheKey]) {
-    t.youtubeId = trackVideoCache[cacheKey];
+  const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
+  videoEl.style.display = "block";
+  if (currentPlayingVideoSource !== videoSrc) {
+    currentPlayingVideoSource = videoSrc;
+    videoEl.src = videoSrc;
+    videoEl.muted = true;
   }
 
-  if (t.youtubeId) {
-    stopVinylAmbientCanvas();
-    if (videoEl) { videoEl.style.display = "none"; }
-    if (iframeEl) {
-      iframeEl.style.display = "block";
-      const targetSrc = `https://www.youtube-nocookie.com/embed/${t.youtubeId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${t.youtubeId}&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&start=${Math.floor(curSec)}`;
-      if (currentPlayingVideoSource !== t.youtubeId) {
-        currentPlayingVideoSource = t.youtubeId;
-        iframeEl.src = targetSrc;
-      }
+  if (isPlaying) {
+    videoEl.play().catch(() => {});
+    if (Math.abs(videoEl.currentTime - curSec) > 2) {
+      try { videoEl.currentTime = curSec; } catch(_e){}
     }
   } else {
-    startVinylAmbientCanvas(t);
-    if (videoEl) videoEl.style.display = "none";
-    if (iframeEl) iframeEl.style.display = "none";
-
-    const queryStr = `${t.title || ""} ${t.artist || ""}`.trim();
-    if (queryStr && !t._resolvingVideo) {
-      t._resolvingVideo = true;
-      if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.resolveTrackVideoAsync) {
-        window.AndroidMedia.resolveTrackVideoAsync(queryStr, cacheKey);
-      }
-    }
+    videoEl.pause();
   }
+  container.classList.add("active");
 }
-
-window.onTrackVideoResolved = function(trackKey, videoId) {
-  if (!trackKey || !videoId) return;
-  trackVideoCache[trackKey] = videoId;
-  try {
-    localStorage.setItem("spotilinux_track_videos", JSON.stringify(trackVideoCache));
-  } catch(e){}
-
-  const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
-  const curKey = curTrack ? (curTrack.id || (curTrack.title + "-" + curTrack.artist)).trim() : "";
-  if (curTrack && curKey === trackKey) {
-    curTrack.youtubeId = videoId;
-    const overlay = document.getElementById("vinylStandbyOverlay");
-    if (overlay && overlay.classList.contains("active")) {
-      updateVinylStandbyVideo();
-    }
-  }
-};
 
 function resetSleepVinylIdleTimer() {
   if (sleepVinylTimeout) clearTimeout(sleepVinylTimeout);
@@ -4602,238 +4417,10 @@ window.onNativeMediaCommand = function(cmd) {
 };
 
 /* ========================================================================= */
-/* BUSCADOR Y DESCARGADOR DE YOUTUBE DIRECTO A LOCAL O GOOGLE DRIVE          */
-/* ========================================================================= */
-function openYouTubeSearchModal() {
-  const modal = document.getElementById("youtubeSearchModal");
-  if (!modal) return;
-  modal.classList.add("open", "active");
-  const input = document.getElementById("ytSearchInput");
-  if (input) {
-    input.focus();
-    const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
-    if (curTrack && !input.value.trim()) {
-      input.value = curTrack.artist ? `${curTrack.artist} ${curTrack.title || ""}` : (curTrack.title || "");
-    }
-  }
-}
-
-function closeYouTubeSearchModal() {
-  const modal = document.getElementById("youtubeSearchModal");
-  if (modal) modal.classList.remove("open", "active");
-}
-
-async function executeYouTubeSearch() {
-  const input = document.getElementById("ytSearchInput");
-  const container = document.getElementById("ytResultsContainer");
-  if (!input || !container) return;
-  const query = input.value.trim();
-  if (!query) {
-    showToast("Escribe el nombre de una canción o artista");
-    return;
-  }
-
-  container.innerHTML = `
-    <div style="text-align:center; padding:32px 10px; color:var(--green-bright); font-size:13px; font-weight:700;">
-      <div style="display:inline-block; font-size:22px; margin-bottom:8px;">🔄</div><br/>
-      Buscando canciones en YouTube...
-    </div>
-  `;
-
-  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.searchYouTubeAsync) {
-    window.AndroidMedia.searchYouTubeAsync(query);
-    return;
-  }
-
-  // Fallback para entorno web / navegador desktop
-  const instances = [
-    `https://yt.lemnoslife.com/noKey/search?q=${encodeURIComponent(query)}`,
-    `https://invidious.jing.rocks/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
-    `https://pipedapi.tokhmi.xyz/search?q=${encodeURIComponent(query)}&filter=music_songs`
-  ];
-
-  let items = [];
-  for (const url of instances) {
-    try {
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 4500);
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(tid);
-      if (res.ok) {
-        const data = await res.json();
-        const rawList = Array.isArray(data) ? data : (data.items || []);
-        if (rawList.length > 0) {
-          items = rawList.map(it => {
-            const id = it.videoId || it.id || (typeof it.url === "string" ? it.url.replace("/watch?v=", "") : "");
-            const title = it.title || "Canción";
-            const artist = it.uploaderName || it.author || it.channelTitle || "YouTube";
-            const thumb = it.thumbnail || (it.videoThumbnails && it.videoThumbnails[0] ? it.videoThumbnails[0].url : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`);
-            const sec = it.duration || it.lengthSeconds || 0;
-            const durStr = typeof sec === "number" ? fmtTime(sec) : (it.duration || "3:30");
-            return { id, title, artist, thumb, durStr, sec };
-          }).filter(x => x.id);
-          if (items.length > 0) break;
-        }
-      }
-    } catch (_e) {}
-  }
-
-  window.onYouTubeSearchResults(items);
-}
-
-window.onYouTubeSearchResults = function(items) {
-  const container = document.getElementById("ytResultsContainer");
-  if (!container) return;
-
-  if (!items || items.length === 0) {
-    container.innerHTML = `
-      <div style="text-align:center; padding:28px 10px; color:#aaa; font-size:12px;">
-        <div style="font-size:14px; color:#ff5566; font-weight:800; margin-bottom:6px;">No se encontraron canciones</div>
-        Verifica tu conexión a internet o busca con el nombre exacto de la canción.
-      </div>
-    `;
-    return;
-  }
-
-  ytSearchResults = items;
-  container.innerHTML = "";
-  items.slice(0, 25).forEach((item, idx) => {
-    const card = document.createElement("div");
-    card.className = "yt-result-card";
-    card.style.cssText = "display:flex; align-items:center; gap:10px; background:#161622; border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:8px 10px; transition:border-color 0.2s;";
-    card.innerHTML = `
-      <img src="${escapeHtml(item.thumb)}" style="width:68px; height:50px; border-radius:8px; object-fit:cover; flex-shrink:0; background:#0e0e14;" onerror="this.src='tracks/default_art.png'" />
-      <div style="flex:1; min-width:0;">
-        <div style="font-size:12px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
-        <div style="font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.artist)} • ${escapeHtml(item.durStr)}</div>
-      </div>
-      <div style="display:flex; gap:6px; flex-shrink:0;">
-        <button class="btn-chip" style="padding:6px 9px; font-size:11px; background:rgba(30,215,96,0.15); color:var(--green-bright); border:1px solid rgba(30,215,96,0.3);" onclick="playDirectYtStream(${idx})" title="Reproducir audio en streaming">▶ Oír</button>
-        <button class="btn-chip active" style="padding:6px 10px; font-size:11px; font-weight:700;" onclick="openYtTargetPicker(${idx})" title="Descargar a celular o Drive">⬇ Bajar</button>
-      </div>
-    `;
-    container.appendChild(card);
-  });
-};
-
-function playDirectYtStream(idx) {
-  if (!ytSearchResults || !ytSearchResults[idx]) return;
-  const t = ytSearchResults[idx];
-  const streamTrack = {
-    id: "yt_" + t.id,
-    title: t.title,
-    artist: t.artist,
-    album: "YouTube Music",
-    genre: "Online",
-    cover: t.thumb,
-    youtubeId: t.id,
-    src: `https://www.youtube.com/watch?v=${t.id}`,
-    liked: false,
-    cloud: true,
-    downloaded: false,
-    color: "#ff334b"
-  };
-  tracks.unshift(streamTrack);
-  if (!masterTracksPool.some(m => m.id === streamTrack.id)) masterTracksPool.unshift(streamTrack);
-  renderTracks();
-  closeYouTubeSearchModal();
-  playTrackIndex(0);
-  showToast(`▶ Reproduciendo: "${t.title}"`);
-}
-
-function openYtTargetPicker(idx) {
-  if (!ytSearchResults || !ytSearchResults[idx]) return;
-  pendingYtTargetTrack = ytSearchResults[idx];
-  const lbl = document.getElementById("ytTargetTrackLabel");
-  if (lbl) {
-    lbl.textContent = `🎵 ${pendingYtTargetTrack.title} (${pendingYtTargetTrack.artist})`;
-  }
-  const modal = document.getElementById("ytTargetPickerModal");
-  if (modal) modal.classList.add("open", "active");
-}
-
-function closeYtTargetPickerModal() {
-  const modal = document.getElementById("ytTargetPickerModal");
-  if (modal) modal.classList.remove("open", "active");
-}
-
-async function confirmYouTubeDownload(targetType) {
-  closeYtTargetPickerModal();
-  if (!pendingYtTargetTrack) return;
-  const t = pendingYtTargetTrack;
-
-  if (targetType === "stream") {
-    const idx = ytSearchResults.indexOf(t);
-    if (idx >= 0) playDirectYtStream(idx);
-    return;
-  }
-
-  const box = document.getElementById("ytDownloadProgressBox");
-  const pStatus = document.getElementById("ytProgressStatus");
-  const pBar = document.getElementById("ytProgressBar");
-  const pPct = document.getElementById("ytProgressPercent");
-
-  if (box) box.style.display = "block";
-  if (pStatus) pStatus.textContent = "Obteniendo audio de YouTube...";
-  if (pBar) {
-    pBar.style.background = "var(--green-bright)";
-    pBar.style.width = "15%";
-  }
-  if (pPct) pPct.textContent = "15%";
-
-  const token = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
-  const rootId = (document.getElementById("gdFolder") ? extractDriveId(document.getElementById("gdFolder").value.trim()) : "") || DEFAULT_DRIVE_ROOT_FOLDER_ID;
-
-  if (targetType === "drive" && !token) {
-    showToast("⚠️ Ingresa tu Token de Google Drive en el Menú Lateral para subir a tu nube");
-    if (pStatus) pStatus.textContent = "⚠️ Requiere Token OAuth en el menú lateral.";
-    return;
-  }
-
-  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.downloadYouTubeAudioAsync) {
-    window.AndroidMedia.downloadYouTubeAudioAsync(t.id, t.title, t.artist, t.thumb, targetType, token, rootId);
-  } else {
-    // Fallback web / desktop
-    window.onYouTubeDownloadProgress("Abriendo convertidor web...", 50);
-    const downloadUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${t.id}`;
-    window.open(downloadUrl, "_blank");
-    window.onYouTubeDownloadProgress("✔ Abierto en tu navegador", 100);
-  }
-}
-
-window.onYouTubeDownloadProgress = function(status, percent) {
-  const box = document.getElementById("ytDownloadProgressBox");
-  const pStatus = document.getElementById("ytProgressStatus");
-  const pBar = document.getElementById("ytProgressBar");
-  const pPct = document.getElementById("ytProgressPercent");
-
-  if (box) box.style.display = "block";
-  if (pStatus) pStatus.textContent = status;
-  if (percent >= 0) {
-    if (pBar) {
-      pBar.style.background = "var(--green-bright)";
-      pBar.style.width = percent + "%";
-    }
-    if (pPct) pPct.textContent = percent + "%";
-    if (percent >= 100) {
-      showToast(status);
-      setTimeout(() => { if (box) box.style.display = "none"; }, 3500);
-    }
-  } else {
-    if (pBar) pBar.style.background = "#ff4444";
-    showToast(status);
-    setTimeout(() => {
-      if (box) box.style.display = "none";
-      if (pBar) pBar.style.background = "var(--green-bright)";
-    }, 4500);
-  }
-};
-
-/* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 9;
-const CURRENT_APP_VERSION_NAME = "2.6.1";
+const CURRENT_APP_VERSION_CODE = 10;
+const CURRENT_APP_VERSION_NAME = "2.7.0";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -7003,6 +6590,32 @@ async function resolveMusicaSubfolderId(rootFolderId, token, apiKey) {
   return DEFAULT_MUSICA_FOLDER_ID;
 }
 
+let cachedVideosFolderId = "";
+async function resolveVideosSubfolderId(rootFolderId, token, apiKey) {
+  if (cachedVideosFolderId) return cachedVideosFolderId;
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+  if (token || apiKey) {
+    try {
+      const q = `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      let url = `https://www.googleapis.com/drive/v3/files?pageSize=25&fields=files(id,name)&q=${encodeURIComponent(q)}`;
+      if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const sub = (data.files || []).find(f => {
+          const low = (f.name || "").trim().toLowerCase();
+          return low === "videos" || low === "video" || low === "vídeos" || low.includes("video");
+        });
+        if (sub) {
+          cachedVideosFolderId = sub.id;
+          return sub.id;
+        }
+      }
+    } catch (_e) {}
+  }
+  return "";
+}
+
 function triggerDriveUploadPicker() {
   const token = document.getElementById("gdToken").value.trim();
   if (!token) {
@@ -7236,6 +6849,28 @@ async function autoDiscoverDriveMusic() {
             downloadSingleDriveTrack(trackObj, null);
           }
         }
+
+        // Escanear también la subcarpeta 'videos' de Google Drive
+        try {
+          const vFolderId = await resolveVideosSubfolderId(rootFolderId, token, apiKey);
+          if (vFolderId) {
+            const vQuery = `'${vFolderId}' in parents and trashed = false`;
+            let vUrl = `https://www.googleapis.com/drive/v3/files?pageSize=100&fields=files(id,name,mimeType)&q=${encodeURIComponent(vQuery)}`;
+            if (apiKey && !token) vUrl += `&key=${encodeURIComponent(apiKey)}`;
+            const vResp = await fetch(vUrl, { headers });
+            if (vResp.ok) {
+              const vData = await vResp.json();
+              (vData.files || []).forEach(vf => {
+                const vk = normalizeTrackKey(vf.name);
+                if (vk) {
+                  let vSrc = `https://drive.google.com/uc?export=download&id=${vf.id}`;
+                  if (apiKey && !token) vSrc += `&key=${apiKey}`;
+                  cloudDriveVideos[vk] = { id: vf.id, name: vf.name, src: vSrc };
+                }
+              });
+            }
+          }
+        } catch (_ve) {}
       } else if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
         window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
         return;

@@ -1,18 +1,18 @@
 {
-  "versionCode": 9,
-  "versionName": "2.6.1",
+  "versionCode": 10,
+  "versionName": "2.7.0",
   "releaseDate": "2026-10-25",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.6.1",
+    "version": "2.7.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Buscador y descargador nativo de YouTube con resolución en segundo plano y descarga a celular o Drive",
-    "Fondo dinámico cinematográfico detrás del disco de vinilo en reposo con resolución automática de video y lienzo ambiental reactivo",
-    "Botón directo de YouTube en la barra de búsqueda principal y control de video en pantalla de reposo",
-    "Corrección de visualización de modales y compatibilidad con Android WebView"
+    "Soporte de subcarpeta 'videos' en Google Drive para reproducción de clips correspondientes detrás del disco de vinilo en suspensión (si no hay video, permanece en reposo puro OLED)",
+    "Visualización de la carátula real del álbum en la notificación desplegable y pantalla de bloqueo al minimizar la app en Android",
+    "Eliminación del buscador externo de YouTube para garantizar máxima fluidez y estabilidad sin errores",
+    "Compatibilidad y sincronización de metadatos adaptada para la versión de Linux Desktop"
   ]
 }

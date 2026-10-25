@@ -446,7 +446,7 @@ public class MainActivity extends Activity {
 
     public class AndroidMediaBridge {
         @JavascriptInterface
-        public void playSource(String src, String title, String artist, String album, String authToken) {
+        public void playSource(String src, String title, String artist, String album, String authToken, String coverUrl) {
             Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
             serviceIntent.setAction(MediaPlaybackService.ACTION_PLAY_SOURCE);
             serviceIntent.putExtra("src", src);
@@ -454,7 +454,13 @@ public class MainActivity extends Activity {
             serviceIntent.putExtra("artist", artist);
             serviceIntent.putExtra("album", album);
             serviceIntent.putExtra("authToken", authToken != null ? authToken : "");
+            serviceIntent.putExtra("coverUrl", coverUrl != null ? coverUrl : "");
             startMediaServiceSafely(serviceIntent);
+        }
+
+        @JavascriptInterface
+        public void playSource(String src, String title, String artist, String album, String authToken) {
+            playSource(src, title, artist, album, authToken, "");
         }
 
         @JavascriptInterface
@@ -715,423 +721,6 @@ public class MainActivity extends Activity {
             }).start();
         }
 
-        @JavascriptInterface
-        public void searchYouTubeAsync(final String query) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        String encoded = URLEncoder.encode(query, "UTF-8");
-                        String urlStr = "https://www.youtube.com/results?search_query=" + encoded;
-                        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
-                        conn.setRequestProperty("Accept-Language", "es-419,es;q=0.9,en;q=0.8");
-                        conn.setConnectTimeout(9000);
-                        conn.setReadTimeout(12000);
-
-                        String html = "";
-                        try (InputStream in = conn.getInputStream();
-                             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-                            byte[] buf = new byte[16384];
-                            int r;
-                            while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
-                            html = new String(bos.toByteArray(), StandardCharsets.UTF_8);
-                        }
-
-                        JSONArray list = new JSONArray();
-                        Pattern pat = Pattern.compile("\"videoRenderer\":\\{\"videoId\":\"([a-zA-Z0-9_-]{11})\".*?\"title\":\\{\"runs\":\\[\\{\"text\":\"(.*?)\"\\}\\].*?\"(?:longBylineText|ownerText|shortBylineText)\":\\{\"runs\":\\[\\{\"text\":\"(.*?)\"\\}\\].*?\"lengthText\":\\{\"simpleText\":\"(.*?)\"");
-                        Matcher m = pat.matcher(html);
-                        int count = 0;
-                        while (m.find() && count < 25) {
-                            String vId = m.group(1);
-                            String title = m.group(2).replace("\\\"", "\"").replace("\\\\", "\\");
-                            String artist = m.group(3).replace("\\\"", "\"").replace("\\\\", "\\");
-                            String dur = m.group(4);
-                            JSONObject item = new JSONObject();
-                            item.put("id", vId);
-                            item.put("title", title);
-                            item.put("artist", artist);
-                            item.put("thumb", "https://i.ytimg.com/vi/" + vId + "/mqdefault.jpg");
-                            item.put("durStr", dur);
-                            list.put(item);
-                            count++;
-                        }
-
-                        if (list.length() == 0) {
-                            Pattern p2 = Pattern.compile("\"videoRenderer\":\\{\"videoId\":\"([a-zA-Z0-9_-]{11})\".*?\"title\":\\{\"runs\":\\[\\{\"text\":\"(.*?)\"\\}\\]");
-                            Matcher m2 = p2.matcher(html);
-                            while (m2.find() && count < 20) {
-                                String vId = m2.group(1);
-                                String title = m2.group(2).replace("\\\"", "\"");
-                                JSONObject item = new JSONObject();
-                                item.put("id", vId);
-                                item.put("title", title);
-                                item.put("artist", "YouTube");
-                                item.put("thumb", "https://i.ytimg.com/vi/" + vId + "/mqdefault.jpg");
-                                item.put("durStr", "3:30");
-                                list.put(item);
-                                count++;
-                            }
-                        }
-
-                        if (list.length() == 0) {
-                            list = fetchFallbackYtSearch(query);
-                        }
-
-                        final String jsonStr = list.toString().replace("\\", "\\\\").replace("'", "\\'");
-                        dispatchJs("if (window.onYouTubeSearchResults) window.onYouTubeSearchResults(JSON.parse('" + jsonStr + "'));");
-                    } catch (Exception e) {
-                        try {
-                            JSONArray fallback = fetchFallbackYtSearch(query);
-                            final String jsonStr = fallback.toString().replace("\\", "\\\\").replace("'", "\\'");
-                            dispatchJs("if (window.onYouTubeSearchResults) window.onYouTubeSearchResults(JSON.parse('" + jsonStr + "'));");
-                        } catch (Exception ignored) {
-                            dispatchJs("if (window.onYouTubeSearchResults) window.onYouTubeSearchResults([]);");
-                        }
-                    }
-                }
-            }).start();
-        }
-
-        @JavascriptInterface
-        public void resolveTrackVideoAsync(final String query, final String trackId) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        String encoded = URLEncoder.encode(query, "UTF-8");
-                        String urlStr = "https://www.youtube.com/results?search_query=" + encoded;
-                        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                        conn.setRequestProperty("Accept-Language", "es-419,es;q=0.9,en;q=0.8");
-                        conn.setConnectTimeout(8000);
-                        conn.setReadTimeout(9000);
-                        String html = "";
-                        try (InputStream in = conn.getInputStream();
-                             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-                            byte[] buf = new byte[16384];
-                            int r;
-                            while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
-                            html = new String(bos.toByteArray(), StandardCharsets.UTF_8);
-                        }
-                        Pattern pat = Pattern.compile("\"videoRenderer\":\\{\"videoId\":\"([a-zA-Z0-9_-]{11})\"");
-                        Matcher m = pat.matcher(html);
-                        if (m.find()) {
-                            String vId = m.group(1);
-                            dispatchJs("if (window.onTrackVideoResolved) window.onTrackVideoResolved('" + trackId.replace("'", "\\'") + "', '" + vId + "');");
-                            return;
-                        }
-                    } catch (Exception ignored) {}
-                    dispatchJs("if (window.onTrackVideoResolved) window.onTrackVideoResolved('" + trackId.replace("'", "\\'") + "', '');");
-                }
-            }).start();
-        }
-
-        private JSONArray fetchFallbackYtSearch(String query) {
-            JSONArray list = new JSONArray();
-            try {
-                String[] endpoints = new String[]{
-                    "https://yt.lemnoslife.com/noKey/search?q=" + URLEncoder.encode(query, "UTF-8"),
-                    "https://invidious.jing.rocks/api/v1/search?q=" + URLEncoder.encode(query, "UTF-8") + "&type=video"
-                };
-                for (String ep : endpoints) {
-                    try {
-                        HttpURLConnection conn = (HttpURLConnection) new URL(ep).openConnection();
-                        conn.setConnectTimeout(5000);
-                        conn.setReadTimeout(6000);
-                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 SpotiLinux");
-                        if (conn.getResponseCode() == 200) {
-                            try (InputStream in = conn.getInputStream(); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-                                byte[] buf = new byte[8192];
-                                int r;
-                                while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
-                                String body = new String(bos.toByteArray(), StandardCharsets.UTF_8);
-                                if (body.trim().startsWith("[")) {
-                                    JSONArray arr = new JSONArray(body);
-                                    for (int i = 0; i < Math.min(arr.length(), 15); i++) {
-                                        JSONObject o = arr.getJSONObject(i);
-                                        String vId = o.optString("videoId", o.optString("id", ""));
-                                        if (!vId.isEmpty()) {
-                                            JSONObject item = new JSONObject();
-                                            item.put("id", vId);
-                                            item.put("title", o.optString("title", "Canción"));
-                                            item.put("artist", o.optString("author", "YouTube"));
-                                            item.put("thumb", "https://i.ytimg.com/vi/" + vId + "/mqdefault.jpg");
-                                            item.put("durStr", "3:30");
-                                            list.put(item);
-                                        }
-                                    }
-                                } else if (body.trim().startsWith("{")) {
-                                    JSONObject root = new JSONObject(body);
-                                    JSONArray items = root.optJSONArray("items");
-                                    if (items != null) {
-                                        for (int i = 0; i < Math.min(items.length(), 15); i++) {
-                                            JSONObject it = items.getJSONObject(i);
-                                            JSONObject idObj = it.optJSONObject("id");
-                                            String vId = idObj != null ? idObj.optString("videoId") : it.optString("videoId", "");
-                                            if (!vId.isEmpty()) {
-                                                JSONObject snip = it.optJSONObject("snippet");
-                                                JSONObject item = new JSONObject();
-                                                item.put("id", vId);
-                                                item.put("title", snip != null ? snip.optString("title", "Canción") : "Canción");
-                                                item.put("artist", snip != null ? snip.optString("channelTitle", "YouTube") : "YouTube");
-                                                item.put("thumb", "https://i.ytimg.com/vi/" + vId + "/mqdefault.jpg");
-                                                item.put("durStr", "3:30");
-                                                list.put(item);
-                                            }
-                                        }
-                                    }
-                                }
-                                if (list.length() > 0) return list;
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                }
-            } catch (Exception ignored) {}
-            return list;
-        }
-
-        @JavascriptInterface
-        public void downloadYouTubeAudioAsync(final String videoId, final String title, final String artist, final String coverUrl, final String destination, final String driveToken, final String driveFolderId) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Resolviendo audio de YouTube...', 10);");
-
-                        String audioStreamUrl = "";
-                        // 1. Cobalt API
-                        try {
-                            String[] cobaltEndpoints = new String[]{
-                                "https://api.cobalt.tools/api/json",
-                                "https://cobalt-api.kwiatekm.me/api/json",
-                                "https://co.wuk.sh/api/json"
-                            };
-                            for (String cUrl : cobaltEndpoints) {
-                                try {
-                                    HttpURLConnection cConn = (HttpURLConnection) new URL(cUrl).openConnection();
-                                    cConn.setRequestMethod("POST");
-                                    cConn.setRequestProperty("Content-Type", "application/json");
-                                    cConn.setRequestProperty("Accept", "application/json");
-                                    cConn.setRequestProperty("User-Agent", "SpotiLinux/2.6.1");
-                                    cConn.setConnectTimeout(6000);
-                                    cConn.setReadTimeout(10000);
-                                    cConn.setDoOutput(true);
-
-                                    JSONObject req = new JSONObject();
-                                    req.put("url", "https://www.youtube.com/watch?v=" + videoId);
-                                    req.put("isAudioOnly", true);
-                                    req.put("aFormat", "mp3");
-                                    try (OutputStream out = cConn.getOutputStream()) {
-                                        out.write(req.toString().getBytes(StandardCharsets.UTF_8));
-                                    }
-                                    if (cConn.getResponseCode() == 200) {
-                                        try (InputStream in = cConn.getInputStream(); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-                                            byte[] b = new byte[4096];
-                                            int r;
-                                            while ((r = in.read(b)) > 0) bos.write(b, 0, r);
-                                            JSONObject resObj = new JSONObject(new String(bos.toByteArray(), StandardCharsets.UTF_8));
-                                            if (resObj.has("url")) {
-                                                audioStreamUrl = resObj.getString("url");
-                                                break;
-                                            }
-                                        }
-                                    }
-                                } catch (Exception ignored) {}
-                            }
-                        } catch (Exception ignored) {}
-
-                        // 2. Invidious / Piped fallback
-                        if (audioStreamUrl.isEmpty()) {
-                            try {
-                                String[] invStreams = new String[]{
-                                    "https://invidious.jing.rocks/api/v1/videos/" + videoId,
-                                    "https://inv.nadeko.net/api/v1/videos/" + videoId
-                                };
-                                for (String invUrl : invStreams) {
-                                    try {
-                                        HttpURLConnection conn = (HttpURLConnection) new URL(invUrl).openConnection();
-                                        conn.setConnectTimeout(6000);
-                                        conn.setReadTimeout(8000);
-                                        conn.setRequestProperty("User-Agent", "SpotiLinux/2.6.1");
-                                        if (conn.getResponseCode() == 200) {
-                                            try (InputStream in = conn.getInputStream(); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-                                                byte[] b = new byte[8192];
-                                                int r;
-                                                while ((r = in.read(b)) > 0) bos.write(b, 0, r);
-                                                JSONObject vid = new JSONObject(new String(bos.toByteArray(), StandardCharsets.UTF_8));
-                                                JSONArray formats = vid.optJSONArray("adaptiveFormats");
-                                                if (formats != null) {
-                                                    for (int i = 0; i < formats.length(); i++) {
-                                                        JSONObject fmt = formats.getJSONObject(i);
-                                                        String type = fmt.optString("type", "");
-                                                        if (type.contains("audio")) {
-                                                            audioStreamUrl = fmt.optString("url");
-                                                            if (!audioStreamUrl.isEmpty()) break;
-                                                        }
-                                                    }
-                                                }
-                                                if (!audioStreamUrl.isEmpty()) break;
-                                            }
-                                        }
-                                    } catch (Exception ignored) {}
-                                }
-                            } catch (Exception ignored) {}
-                        }
-
-                        if (audioStreamUrl.isEmpty()) {
-                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('No se pudo extraer el audio automáticamente. Usa la opción Escuchar Streaming o abre cobalt.tools', -1);");
-                            return;
-                        }
-
-                        dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Descargando archivo de audio...', 30);");
-
-                        File folder = getAppMusicFolder();
-                        String cleanName = sanitizeFilename(artist + " - " + title + ".mp3");
-                        File tempFile = new File(folder, cleanName);
-
-                        HttpURLConnection dConn = (HttpURLConnection) new URL(audioStreamUrl).openConnection();
-                        dConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile)");
-                        dConn.setConnectTimeout(15000);
-                        dConn.setReadTimeout(40000);
-                        int totalSize = dConn.getContentLength();
-
-                        try (InputStream in = dConn.getInputStream();
-                             FileOutputStream out = new FileOutputStream(tempFile)) {
-                            byte[] buf = new byte[65536];
-                            int r;
-                            long downloaded = 0;
-                            while ((r = in.read(buf)) > 0) {
-                                out.write(buf, 0, r);
-                                downloaded += r;
-                                if (totalSize > 0) {
-                                    int pct = 30 + (int)((downloaded * 60) / totalSize);
-                                    dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Guardando: " + (downloaded / (1024*1024)) + " MB...', " + pct + ");");
-                                }
-                            }
-                        }
-
-                        if (!tempFile.exists() || tempFile.length() < 5120) {
-                            if (tempFile.exists()) tempFile.delete();
-                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Error: Archivo incompleto', -1);");
-                            return;
-                        }
-
-                        if (coverUrl != null && !coverUrl.isEmpty()) {
-                            try {
-                                File coversDir = new File(getCacheDir(), "covers");
-                                if (!coversDir.exists()) coversDir.mkdirs();
-                                File cFile = new File(coversDir, tempFile.getName().hashCode() + ".jpg");
-                                HttpURLConnection cConn = (HttpURLConnection) new URL(coverUrl).openConnection();
-                                cConn.setConnectTimeout(6000);
-                                try (InputStream cin = cConn.getInputStream(); FileOutputStream cout = new FileOutputStream(cFile)) {
-                                    byte[] cbuf = new byte[8192];
-                                    int cr;
-                                    while ((cr = cin.read(cbuf)) > 0) cout.write(cbuf, 0, cr);
-                                }
-                            } catch (Throwable ignored) {}
-                        }
-
-                        if ("drive".equalsIgnoreCase(destination) && driveToken != null && !driveToken.isEmpty()) {
-                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Subiendo a Google Drive...', 92);");
-                            try {
-                                String parentFolderId = (driveFolderId != null && !driveFolderId.isEmpty()) ? driveFolderId : "";
-                                String uploadUrl = "https://www.googleapis.com/upload/drive/v3/files?uploadType=media";
-                                HttpURLConnection upConn = (HttpURLConnection) new URL(uploadUrl).openConnection();
-                                upConn.setRequestMethod("POST");
-                                upConn.setRequestProperty("Authorization", "Bearer " + driveToken);
-                                upConn.setRequestProperty("Content-Type", "audio/mpeg");
-                                upConn.setDoOutput(true);
-                                try (FileInputStream fin = new FileInputStream(tempFile);
-                                     OutputStream fout = upConn.getOutputStream()) {
-                                    byte[] ub = new byte[32768];
-                                    int ur;
-                                    while ((ur = fin.read(ub)) > 0) fout.write(ub, 0, ur);
-                                }
-                                int upCode = upConn.getResponseCode();
-                                if (upCode >= 200 && upCode < 300) {
-                                    dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('✔ Subido a Google Drive y guardado local', 100);");
-                                } else {
-                                    dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('✔ Guardado en tu celular', 100);");
-                                }
-                            } catch (Exception ex) {
-                                dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('✔ Guardado en tu celular', 100);");
-                            }
-                        } else {
-                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('✔ ¡Canción descargada exitosamente en el celular!', 100);");
-                        }
-
-                        final String json = buildSavedTracksJson();
-                        dispatchJs("if(window.onDeviceMusicScanned) window.onDeviceMusicScanned(" + json + ");");
-                    } catch (Exception e) {
-                        dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Error: " + e.getMessage() + "', -1);");
-                    }
-                }
-            }).start();
-        }
-
-        @JavascriptInterface
-        public void downloadStreamToLocal(final String streamUrl, final String title, final String artist, final String coverUrl) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        File folder = getAppMusicFolder();
-                        String cleanName = sanitizeFilename(artist + " - " + title + ".mp3");
-                        File outFile = new File(folder, cleanName);
-
-                        dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Iniciando descarga...', 15);");
-
-                        HttpURLConnection conn = (HttpURLConnection) new URL(streamUrl).openConnection();
-                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile)");
-                        conn.setConnectTimeout(15000);
-                        conn.setReadTimeout(40000);
-                        int totalSize = conn.getContentLength();
-
-                        try (InputStream in = conn.getInputStream();
-                             FileOutputStream out = new FileOutputStream(outFile)) {
-                            byte[] buf = new byte[65536];
-                            int r;
-                            long downloaded = 0;
-                            while ((r = in.read(buf)) > 0) {
-                                out.write(buf, 0, r);
-                                downloaded += r;
-                                if (totalSize > 0) {
-                                    int pct = 15 + (int)((downloaded * 75) / totalSize);
-                                    dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Guardando: " + (downloaded / (1024*1024)) + " MB...', " + pct + ");");
-                                }
-                            }
-                        }
-
-                        if (outFile.exists() && outFile.length() > 5120) {
-                            if (coverUrl != null && !coverUrl.isEmpty()) {
-                                try {
-                                    File coversDir = new File(getCacheDir(), "covers");
-                                    if (!coversDir.exists()) coversDir.mkdirs();
-                                    File cFile = new File(coversDir, outFile.getName().hashCode() + ".jpg");
-                                    HttpURLConnection cConn = (HttpURLConnection) new URL(coverUrl).openConnection();
-                                    cConn.setConnectTimeout(8000);
-                                    try (InputStream cin = cConn.getInputStream(); FileOutputStream cout = new FileOutputStream(cFile)) {
-                                        byte[] cbuf = new byte[8192];
-                                        int cr;
-                                        while ((cr = cin.read(cbuf)) > 0) cout.write(cbuf, 0, cr);
-                                    }
-                                } catch (Throwable ignored) {}
-                            }
-                            final String json = buildSavedTracksJson();
-                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('✔ Canción descargada exitosamente', 100);");
-                            dispatchJs("if(window.onDeviceMusicScanned) window.onDeviceMusicScanned(" + json + ");");
-                        } else {
-                            if (outFile.exists()) outFile.delete();
-                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Error al descargar stream de audio', -1);");
-                        }
-                    } catch (Exception e) {
-                        dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Error: " + e.getMessage() + "', -1);");
-                    }
-                }
-            }).start();
-        }
-
         private String fetchUrlText(String urlStr) {
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
@@ -1152,7 +741,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        private void parseEmbeddedFolderHtml(String html, JSONArray outFiles, List<String> musicaSubfolders) {
+        private void parseEmbeddedFolderHtml(String html, JSONArray outFiles, List<String> musicaSubfolders, List<String> videoSubfolders) {
             if (html == null || html.isEmpty()) return;
             try {
                 Pattern folderPat = Pattern.compile("href=\"https://drive\\.google\\.com/drive/(?:u/\\d+/)?folders/([A-Za-z0-9_-]{15,})\"[^>]*>([\\s\\S]*?)</a>");
@@ -1164,7 +753,9 @@ public class MainActivity extends Activity {
                     String name = tm.find() ? tm.group(1).trim() : "Carpeta";
                     String low = name.toLowerCase();
                     if (low.equals("musica") || low.equals("música") || low.equals("music") || low.contains("musica")) {
-                        if (!musicaSubfolders.contains(fid)) musicaSubfolders.add(fid);
+                        if (musicaSubfolders != null && !musicaSubfolders.contains(fid)) musicaSubfolders.add(fid);
+                    } else if (low.equals("videos") || low.equals("video") || low.equals("vídeos") || low.contains("video")) {
+                        if (videoSubfolders != null && !videoSubfolders.contains(fid)) videoSubfolders.add(fid);
                     }
                 }
 
@@ -1174,10 +765,10 @@ public class MainActivity extends Activity {
                     String fid = fileM.group(1);
                     String inner = fileM.group(2);
                     Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<").matcher(inner);
-                    String name = tm.find() ? tm.group(1).trim() : ("Drive_Track_" + fid.substring(0, 6) + ".mp3");
+                    String name = tm.find() ? tm.group(1).trim() : ("Drive_File_" + fid.substring(0, 6));
                     JSONObject obj = new JSONObject();
                     obj.put("id", fid);
-                    obj.put("name", cleanTrackTitle(name));
+                    obj.put("name", name);
                     outFiles.put(obj);
                 }
             } catch (Exception ignored) {
@@ -1190,6 +781,7 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     JSONArray filesArr = new JSONArray();
+                    JSONArray videoFilesArr = new JSONArray();
                     try {
                         String apiUrl = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec?action=list_music";
                         String res = fetchUrlText(apiUrl);
@@ -1209,14 +801,22 @@ public class MainActivity extends Activity {
                     if (!musicaFolders.contains("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T")) {
                         musicaFolders.add("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T");
                     }
+                    List<String> videoFolders = new ArrayList<>();
                     String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + folderId + "#list");
-                    parseEmbeddedFolderHtml(htmlRoot, filesArr, musicaFolders);
+                    parseEmbeddedFolderHtml(htmlRoot, filesArr, musicaFolders, videoFolders);
                     for (String subId : musicaFolders) {
                         String htmlSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + subId + "#list");
-                        parseEmbeddedFolderHtml(htmlSub, filesArr, new ArrayList<String>());
+                        parseEmbeddedFolderHtml(htmlSub, filesArr, null, null);
+                    }
+                    for (String vSubId : videoFolders) {
+                        String htmlVSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + vSubId + "#list");
+                        parseEmbeddedFolderHtml(htmlVSub, videoFilesArr, null, null);
                     }
                     String json = filesArr.toString();
                     dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + json + ");");
+                    if (videoFilesArr.length() > 0) {
+                        dispatchJs("if(window.onPublicDriveVideosFetched) window.onPublicDriveVideosFetched(" + videoFilesArr.toString() + ");");
+                    }
                 }
             }).start();
         }
