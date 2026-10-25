@@ -33,14 +33,13 @@ echo "[2/6] Enlazando recursos y AndroidManifest.xml..."
     -o "$BUILD_DIR/unaligned.apk" \
     "$BUILD_DIR/resources.zip"
 
-echo "[3/6] Compilando código Java (MainActivity.java + MediaPlaybackService.java + R.java)..."
+echo "[3/6] Compilando código Java (MainActivity.java + MediaPlaybackService.java + GenericFileProvider.java + R.java)..."
+JAVA_SOURCES=$(find "$BUILD_DIR/gen" "$ANDROID_DIR/src" -name "*.java")
 "$JAVA_HOME/bin/javac" \
     --release 11 \
     -cp "$PLATFORM_JAR" \
     -d "$BUILD_DIR/obj" \
-    "$BUILD_DIR/gen/com/spotilinux/mobile/R.java" \
-    "$ANDROID_DIR/src/com/spotilinux/mobile/MainActivity.java" \
-    "$ANDROID_DIR/src/com/spotilinux/mobile/MediaPlaybackService.java"
+    $JAVA_SOURCES
 
 echo "[4/6] Convirtiendo clases Java a bytecode Dalvik (classes.dex) con d8..."
 CLASS_FILES=$(find "$BUILD_DIR/obj" -name "*.class")

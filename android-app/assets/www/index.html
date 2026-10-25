@@ -1760,6 +1760,18 @@
         <button class="sm-dance-chip" id="btnDance1" onclick="setMaomaoDanceStyle(1)">Hierbas 🌿</button>
         <button class="sm-dance-chip" id="btnDance2" onclick="setMaomaoDanceStyle(2)">Neko :3 🐾</button>
       </div>
+
+      <!-- Sistema y Actualizaciones -->
+      <div class="sm-section-label">SISTEMA Y ACTUALIZACIONES</div>
+      <button class="sm-item-btn" onclick="closeSideMenu(); checkForAppUpdates(true)">
+        <div class="sm-item-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Buscar Actualizaciones</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.2.0 (GitHub)</div>
+        </div>
+      </button>
     </div>
   </div>
 
@@ -2053,6 +2065,43 @@
       <div style="display:flex; gap:8px; margin-top:10px;">
         <button class="btn-chip active" style="flex:1; padding:9px;" onclick="confirmMultiPickerAdd()">✔ Añadir Canciones</button>
         <button class="btn-chip" style="padding:9px;" onclick="closeMultiTrackPickerModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ACTUALIZACIÓN AUTOMÁTICA DISPONIBLE (OTA GITHUB) -->
+  <div id="appUpdateModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:390px; text-align:left;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <div style="width:38px; height:38px; border-radius:50%; background:rgba(30, 215, 96, 0.15); border:1px solid rgba(30, 215, 96, 0.35); display:flex; align-items:center; justify-content:center; color:var(--green-bright); flex-shrink:0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:16px;">Actualización Disponible</h3>
+          <div id="updateVersionBadge" style="font-size:11px; color:var(--green-bright); font-weight:700;">v2.2.0 • Nueva Versión</div>
+        </div>
+      </div>
+
+      <p style="font-size:12px; color:#c0c0d0; margin-bottom:10px;">Se ha publicado una nueva versión oficial de SpotiLinux en GitHub con las siguientes mejoras:</p>
+
+      <div id="updateChangelogBox" style="background:#14141d; border:1px solid rgba(255, 255, 255, 0.08); border-radius:12px; padding:10px 12px; max-height:160px; overflow-y:auto; font-size:11px; line-height:1.6; margin-bottom:14px; color:#e0e0ee;">
+      </div>
+
+      <!-- Barra de Progreso de Descarga (inicialmente oculta) -->
+      <div id="updateProgressBox" style="display:none; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;">
+          <span id="updateProgressStatus" style="color:var(--green-bright); font-weight:700;">Descargando actualización...</span>
+          <span id="updateProgressPercent" style="color:#aaa;">0%</span>
+        </div>
+        <div style="width:100%; height:8px; background:#1c1c28; border-radius:9999px; overflow:hidden; border:1px solid rgba(255, 255, 255, 0.1);">
+          <div id="updateProgressBar" style="width:0%; height:100%; background:var(--green-bright); border-radius:9999px; transition:width 0.15s ease; box-shadow:0 0 8px rgba(30, 215, 96, 0.5);"></div>
+        </div>
+        <div id="updateProgressDetail" style="font-size:10px; color:#777; margin-top:4px; text-align:right;">0 MB / 0 MB</div>
+      </div>
+
+      <div id="updateActionsRow" style="display:flex; gap:8px;">
+        <button class="btn-chip active" id="btnConfirmUpdate" style="flex:1; padding:10px; font-size:12px;" onclick="startAppUpdateDownload()">🚀 Actualizar Ahora</button>
+        <button class="btn-chip" id="btnDismissUpdate" style="padding:10px 14px; font-size:12px;" onclick="closeAppUpdateModal()">Más tarde</button>
       </div>
     </div>
   </div>
@@ -3213,6 +3262,164 @@ window.onNativeMediaCommand = function(cmd) {
     playTrackIndex(currentIndex);
   } else if (cmd === "toggle") {
     togglePlay();
+  }
+};
+
+/* ========================================================================= */
+/* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
+/* ========================================================================= */
+const CURRENT_APP_VERSION_CODE = 4;
+const CURRENT_APP_VERSION_NAME = "2.2.0";
+const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
+let pendingRemoteUpdate = null;
+
+function getInstalledAppVersionCode() {
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.getAppVersionCode) {
+    try {
+      const code = window.AndroidMedia.getAppVersionCode();
+      if (typeof code === "number" && code > 0) return code;
+    } catch (e) {}
+  }
+  return CURRENT_APP_VERSION_CODE;
+}
+
+function getInstalledAppVersionName() {
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.getAppVersionName) {
+    try {
+      const name = window.AndroidMedia.getAppVersionName();
+      if (name) return name;
+    } catch (e) {}
+  }
+  return CURRENT_APP_VERSION_NAME;
+}
+
+async function checkForAppUpdates(manualUserClick = false) {
+  if (manualUserClick) {
+    showToast("Buscando actualizaciones en GitHub...");
+  }
+  try {
+    const url = `${GITHUB_VERSION_URL}?_t=${Date.now()}`;
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) {
+      if (manualUserClick) showToast("No se pudo conectar a GitHub para verificar versiones");
+      return;
+    }
+    const info = await resp.json();
+    const localCode = getInstalledAppVersionCode();
+    const isNewer = info.versionCode > localCode;
+
+    if (isNewer) {
+      pendingRemoteUpdate = info;
+      showAppUpdateModal(info);
+    } else {
+      if (manualUserClick) {
+        showToast(`✔ SpotiLinux ya está al día (v${getInstalledAppVersionName()})`);
+      }
+    }
+  } catch (err) {
+    if (manualUserClick) {
+      showToast("Error al verificar actualizaciones");
+    }
+  }
+}
+
+function showAppUpdateModal(info) {
+  const modal = document.getElementById("appUpdateModal");
+  if (!modal) return;
+  const badge = document.getElementById("updateVersionBadge");
+  if (badge) badge.textContent = `v${info.versionName || "Nueva"} • Publicada el ${info.releaseDate || ""}`;
+  
+  const box = document.getElementById("updateChangelogBox");
+  if (box) {
+    let html = "";
+    if (Array.isArray(info.changelog) && info.changelog.length > 0) {
+      html = `<ul style="margin:0; padding-left:18px;">` +
+        info.changelog.map(item => `<li style="margin-bottom:4px;">${escapeHtml(item)}</li>`).join("") +
+        `</ul>`;
+    } else {
+      html = "Mejoras de rendimiento y corrección de errores.";
+    }
+    box.innerHTML = html;
+  }
+
+  const pBox = document.getElementById("updateProgressBox");
+  if (pBox) pBox.style.display = "none";
+  const actions = document.getElementById("updateActionsRow");
+  if (actions) actions.style.display = "flex";
+
+  modal.classList.add("open");
+}
+
+function closeAppUpdateModal() {
+  const modal = document.getElementById("appUpdateModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function startAppUpdateDownload() {
+  if (!pendingRemoteUpdate || !pendingRemoteUpdate.apkUrl) {
+    showToast("URL de actualización no disponible");
+    return;
+  }
+
+  const pBox = document.getElementById("updateProgressBox");
+  if (pBox) pBox.style.display = "block";
+  const pBar = document.getElementById("updateProgressBar");
+  if (pBar) pBar.style.width = "0%";
+  const pStatus = document.getElementById("updateProgressStatus");
+  if (pStatus) pStatus.textContent = "Conectando con GitHub...";
+  const actions = document.getElementById("updateActionsRow");
+  if (actions) actions.style.display = "none";
+
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.downloadAndInstallUpdate) {
+    try {
+      window.AndroidMedia.downloadAndInstallUpdate(pendingRemoteUpdate.apkUrl);
+    } catch (e) {
+      showToast("Error al iniciar descarga nativa: " + e.message);
+      if (actions) actions.style.display = "flex";
+      if (pBox) pBox.style.display = "none";
+    }
+  } else {
+    // Si se ejecuta en navegador o escritorio
+    window.open(pendingRemoteUpdate.apkUrl, "_blank");
+    showToast("Descargando archivo desde GitHub...");
+    setTimeout(() => {
+      closeAppUpdateModal();
+    }, 2000);
+  }
+}
+
+window.onNativeUpdateProgress = function(status, percent, downloaded, total, error) {
+  const pBox = document.getElementById("updateProgressBox");
+  const pBar = document.getElementById("updateProgressBar");
+  const pStatus = document.getElementById("updateProgressStatus");
+  const pPercent = document.getElementById("updateProgressPercent");
+  const pDetail = document.getElementById("updateProgressDetail");
+  const actions = document.getElementById("updateActionsRow");
+
+  if (status === "downloading") {
+    if (pBox) pBox.style.display = "block";
+    if (pStatus) pStatus.textContent = "Descargando actualización...";
+    if (percent >= 0) {
+      if (pBar) pBar.style.width = percent + "%";
+      if (pPercent) pPercent.textContent = percent + "%";
+    }
+    if (pDetail) {
+      const downMb = (downloaded / (1024 * 1024)).toFixed(1);
+      const totMb = total > 0 ? (total / (1024 * 1024)).toFixed(1) + " MB" : "...";
+      pDetail.textContent = `${downMb} MB / ${totMb}`;
+    }
+  } else if (status === "completed") {
+    if (pStatus) pStatus.textContent = "✔ Descarga completa. Abriendo instalador...";
+    if (pBar) pBar.style.width = "100%";
+    if (pPercent) pPercent.textContent = "100%";
+    showToast("Iniciando instalador de paquetes de Android...");
+    setTimeout(() => {
+      closeAppUpdateModal();
+    }, 1500);
+  } else if (status === "error") {
+    if (pStatus) pStatus.textContent = "❌ Error: " + (error || "Descarga fallida");
+    if (actions) actions.style.display = "flex";
+    showToast("Error de actualización: " + error);
   }
 };
 
@@ -6398,6 +6605,14 @@ window.addEventListener("DOMContentLoaded", () => {
       autoDiscoverDriveMusic();
     }
   }, 550);
+
+  const vLbl = document.getElementById("smAppVersionLabel");
+  if (vLbl) vLbl.textContent = `Versión actual: v${getInstalledAppVersionName()} (GitHub)`;
+
+  // Comprobar automáticamente actualizaciones en segundo plano vía GitHub
+  setTimeout(() => {
+    checkForAppUpdates(false);
+  }, 2200);
 
   const hasToken = Boolean(document.getElementById("gdToken").value.trim());
   const welcomeDone = localStorage.getItem("welcome_done") === "1";

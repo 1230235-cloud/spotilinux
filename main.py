@@ -19,8 +19,9 @@ import time
 import uuid
 from pathlib import Path
 from typing import Optional
+import urllib.request
 
-from PyQt6.QtCore import Qt, QSize, QRectF, QTimer
+from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
     QColor,
@@ -1096,6 +1097,24 @@ class AccountDialog(QDialog):
             self.accept()
 
 
+class GitHubDesktopUpdateWorker(QThread):
+    update_available = pyqtSignal(dict)
+
+    def run(self) -> None:
+        try:
+            url = f"https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json?_t={int(time.time())}"
+            req = urllib.request.Request(url, headers={"User-Agent": "SpotiLinux-Desktop"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    remote_code = data.get("versionCode", 0)
+                    local_code = 4  # v2.2.0
+                    if remote_code > local_code:
+                        self.update_available.emit(data)
+        except Exception:
+            pass
+
+
 class SpotiLinuxWindow(QMainWindow):
     HOME_PREVIEW_LIMIT = 4  # canciones visibles en la vista previa reducida del Inicio
 
@@ -1160,6 +1179,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         # Solicitar acceso a Google Drive o rastreo automático desde el inicio
         QTimer.singleShot(450, self._check_first_run_welcome)
+        QTimer.singleShot(2500, self._check_github_updates)
 
     def _check_first_run_welcome(self) -> None:
         # Sincronizar automáticamente la carpeta compartida 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT / Musica al iniciar
@@ -1195,6 +1215,35 @@ class SpotiLinuxWindow(QMainWindow):
             self.open_google_drive_dialog()
         elif msg.clickedButton() == btn_scan:
             self.auto_scan_pc_music()
+
+    def _check_github_updates(self, manual: bool = False) -> None:
+        self._updater_worker = GitHubDesktopUpdateWorker(self)
+        self._updater_worker.update_available.connect(self._on_update_available)
+        self._updater_worker.start()
+
+    def _on_update_available(self, info: dict) -> None:
+        v_name = info.get("versionName", "Nueva")
+        changelog_items = info.get("changelog", [])
+        cl_text = "\n".join(f"• {x}" for x in changelog_items) if changelog_items else "Mejoras de rendimiento y corrección de errores."
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("🚀 Actualización de SpotiLinux Disponible")
+        msg.setText(f"<b>Se ha publicado una nueva versión oficial de SpotiLinux (v{v_name}) en GitHub.</b>")
+        msg.setInformativeText(f"Novedades:\n{cl_text}\n\n¿Deseas actualizar el código automáticamente con git pull?")
+        btn_update = msg.addButton("Actualizar ahora (git pull)", QMessageBox.ButtonRole.AcceptRole)
+        msg.addButton("Más tarde", QMessageBox.ButtonRole.RejectRole)
+        msg.exec()
+
+        if msg.clickedButton() == btn_update:
+            try:
+                import subprocess
+                res = subprocess.run(["git", "pull", "origin", "main"], cwd=str(self.base_dir), capture_output=True, text=True, timeout=30)
+                if res.returncode == 0:
+                    QMessageBox.information(self, "Actualización Completada", "✔ SpotiLinux se actualizó exitosamente desde GitHub.\nPor favor reinicia la aplicación para disfrutar de las novedades.")
+                else:
+                    QMessageBox.warning(self, "Aviso de Git", f"No se pudo completar el pull automáticamente:\n{res.stderr or res.stdout}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Fallo al ejecutar actualización: {e}")
 
     # ================================================================== #
     #                       CONSTRUCCIÓN DE LA UI                        #

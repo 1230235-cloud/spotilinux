@@ -517,6 +517,93 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public int getAppVersionCode() {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    return (int) getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
+                } else {
+                    return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+                }
+            } catch (Exception e) {
+                return 4;
+            }
+        }
+
+        @JavascriptInterface
+        public String getAppVersionName() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception e) {
+                return "2.2.0";
+            }
+        }
+
+        @JavascriptInterface
+        public void downloadAndInstallUpdate(final String apkUrl) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    HttpURLConnection conn = null;
+                    InputStream input = null;
+                    FileOutputStream output = null;
+                    try {
+                        dispatchUpdateStatusToWeb("downloading", 0, 0, 0, "");
+                        URL url = new URL(apkUrl);
+                        conn = (HttpURLConnection) url.openConnection();
+                        conn.setInstanceFollowRedirects(true);
+                        conn.setConnectTimeout(20000);
+                        conn.setReadTimeout(45000);
+                        conn.connect();
+
+                        int responseCode = conn.getResponseCode();
+                        if (responseCode != HttpURLConnection.HTTP_OK) {
+                            dispatchUpdateStatusToWeb("error", 0, 0, 0, "HTTP " + responseCode);
+                            return;
+                        }
+
+                        int fileLength = conn.getContentLength();
+                        File cacheDir = getExternalCacheDir();
+                        if (cacheDir == null) cacheDir = getCacheDir();
+                        File updateApk = new File(cacheDir, "update.apk");
+                        if (updateApk.exists()) {
+                            updateApk.delete();
+                        }
+
+                        input = conn.getInputStream();
+                        output = new FileOutputStream(updateApk);
+
+                        byte[] data = new byte[8192];
+                        long total = 0;
+                        int count;
+                        long lastTime = System.currentTimeMillis();
+
+                        while ((count = input.read(data)) != -1) {
+                            total += count;
+                            output.write(data, 0, count);
+
+                            long now = System.currentTimeMillis();
+                            if (now - lastTime > 150) {
+                                int percent = fileLength > 0 ? (int) ((total * 100) / fileLength) : -1;
+                                dispatchUpdateStatusToWeb("downloading", percent, total, fileLength, "");
+                                lastTime = now;
+                            }
+                        }
+
+                        output.flush();
+                        dispatchUpdateStatusToWeb("completed", 100, total, total, "");
+                        launchApkInstaller(updateApk);
+                    } catch (final Exception e) {
+                        dispatchUpdateStatusToWeb("error", 0, 0, 0, e.getMessage() != null ? e.getMessage() : "Error de descarga");
+                    } finally {
+                        try { if (output != null) output.close(); } catch (Exception ignored) {}
+                        try { if (input != null) input.close(); } catch (Exception ignored) {}
+                        try { if (conn != null) conn.disconnect(); } catch (Exception ignored) {}
+                    }
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
         public void setEqBand(int band, float gainDb) {
             MediaPlaybackService svc = MediaPlaybackService.getInstance();
             if (svc != null) {
@@ -958,6 +1045,38 @@ public class MainActivity extends Activity {
 
     public static void notifyWebProgress(final long posMs, final long durMs, final boolean playing) {
         dispatchJs("if (window.onNativeProgress) { window.onNativeProgress(" + posMs + ", " + durMs + ", " + playing + "); }");
+    }
+
+    public static void dispatchUpdateStatusToWeb(final String status, final int percent, final long downloaded, final long total, final String error) {
+        String safeErr = error == null ? "" : error.replace("'", "\\'");
+        dispatchJs("if (window.onNativeUpdateProgress) { window.onNativeUpdateProgress('" + status + "', " + percent + ", " + downloaded + ", " + total + ", '" + safeErr + "'); }");
+    }
+
+    private void launchApkInstaller(final File apkFile) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        if (!getPackageManager().canRequestPackageInstalls()) {
+                            Intent reqIntent = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                            reqIntent.setData(Uri.parse("package:" + getPackageName()));
+                            reqIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(reqIntent);
+                        }
+                    }
+
+                    Uri contentUri = Uri.parse("content://" + GenericFileProvider.AUTHORITY + "/" + apkFile.getName());
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setDataAndType(contentUri, "application/vnd.android.package-archive");
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                } catch (Exception e) {
+                    dispatchUpdateStatusToWeb("error", 0, 0, 0, "No se pudo iniciar el instalador: " + e.getMessage());
+                }
+            }
+        });
     }
 
     @Override

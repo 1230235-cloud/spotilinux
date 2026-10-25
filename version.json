@@ -1,0 +1,18 @@
+{
+  "versionCode": 4,
+  "versionName": "2.2.0",
+  "releaseDate": "2026-10-24",
+  "minAndroidSdk": 24,
+  "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
+  "desktop": {
+    "version": "2.2.0",
+    "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
+    "updateCommand": "git pull origin main"
+  },
+  "changelog": [
+    "Reanudación automática de música tras audios de WhatsApp, Instagram y TikTok",
+    "Modo aleatorio real sin repetición con pila de historial",
+    "Modo suspensión OLED con tocadiscos de vinilo giratorio y carátula",
+    "Control de versiones y actualizaciones automáticas vía GitHub"
+  ]
+}

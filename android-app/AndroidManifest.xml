@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.spotilinux.mobile"
-    android:versionCode="3"
-    android:versionName="1.2.0">
+    android:versionCode="4"
+    android:versionName="2.2.0">
 
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
 
     <!-- Permisos para streaming desde Google Drive, escaneo local y notificación multimedia en 2do plano -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -46,5 +47,12 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </service>
+
+        <!-- Proveedor para instalación automática de actualizaciones APK -->
+        <provider
+            android:name=".GenericFileProvider"
+            android:authorities="com.spotilinux.mobile.provider"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
