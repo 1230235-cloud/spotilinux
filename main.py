@@ -1108,7 +1108,7 @@ class GitHubDesktopUpdateWorker(QThread):
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     remote_code = data.get("versionCode", 0)
-                    local_code = 7  # v2.5.0
+                    local_code = 8  # v2.6.0
                     if remote_code > local_code:
                         self.update_available.emit(data)
         except Exception:

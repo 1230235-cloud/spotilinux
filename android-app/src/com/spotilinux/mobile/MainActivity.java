@@ -525,7 +525,7 @@ public class MainActivity extends Activity {
                     return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
                 }
             } catch (Exception e) {
-                return 7;
+                return 8;
             }
         }
 
@@ -534,7 +534,7 @@ public class MainActivity extends Activity {
             try {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             } catch (Exception e) {
-                return "2.5.0";
+                return "2.6.0";
             }
         }
 
@@ -708,6 +708,68 @@ public class MainActivity extends Activity {
                         }
                     } catch (Exception e) {
                         dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false, false);");
+                    }
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void downloadStreamToLocal(final String streamUrl, final String title, final String artist, final String coverUrl) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        File folder = getAppMusicFolder();
+                        String cleanName = sanitizeFilename(artist + " - " + title + ".mp3");
+                        File outFile = new File(folder, cleanName);
+
+                        dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Iniciando descarga...', 15);");
+
+                        HttpURLConnection conn = (HttpURLConnection) new URL(streamUrl).openConnection();
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile)");
+                        conn.setConnectTimeout(15000);
+                        conn.setReadTimeout(40000);
+                        int totalSize = conn.getContentLength();
+
+                        try (InputStream in = conn.getInputStream();
+                             FileOutputStream out = new FileOutputStream(outFile)) {
+                            byte[] buf = new byte[65536];
+                            int r;
+                            long downloaded = 0;
+                            while ((r = in.read(buf)) > 0) {
+                                out.write(buf, 0, r);
+                                downloaded += r;
+                                if (totalSize > 0) {
+                                    int pct = 15 + (int)((downloaded * 75) / totalSize);
+                                    dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Guardando: " + (downloaded / (1024*1024)) + " MB...', " + pct + ");");
+                                }
+                            }
+                        }
+
+                        if (outFile.exists() && outFile.length() > 5120) {
+                            if (coverUrl != null && !coverUrl.isEmpty()) {
+                                try {
+                                    File coversDir = new File(getCacheDir(), "covers");
+                                    if (!coversDir.exists()) coversDir.mkdirs();
+                                    File cFile = new File(coversDir, outFile.getName().hashCode() + ".jpg");
+                                    HttpURLConnection cConn = (HttpURLConnection) new URL(coverUrl).openConnection();
+                                    cConn.setConnectTimeout(8000);
+                                    try (InputStream cin = cConn.getInputStream(); FileOutputStream cout = new FileOutputStream(cFile)) {
+                                        byte[] cbuf = new byte[8192];
+                                        int cr;
+                                        while ((cr = cin.read(cbuf)) > 0) cout.write(cbuf, 0, cr);
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
+                            final String json = buildSavedTracksJson();
+                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('✔ Canción descargada exitosamente', 100);");
+                            dispatchJs("if(window.onDeviceMusicScanned) window.onDeviceMusicScanned(" + json + ");");
+                        } else {
+                            if (outFile.exists()) outFile.delete();
+                            dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Error al descargar stream de audio', -1);");
+                        }
+                    } catch (Exception e) {
+                        dispatchJs("if(window.onYouTubeDownloadProgress) window.onYouTubeDownloadProgress('Error: " + e.getMessage() + "', -1);");
                     }
                 }
             }).start();

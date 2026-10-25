@@ -1349,6 +1349,48 @@
     opacity: 1;
     pointer-events: auto;
   }
+
+  /* VIDEO DE FONDO CINEMATOGRÁFICO EN MODO REPOSO */
+  .vinyl-video-bg-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .vinyl-video-bg-container.active {
+    opacity: 1;
+  }
+  .vinyl-bg-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0; left: 0;
+    filter: brightness(0.68) saturate(1.22);
+  }
+  .vinyl-bg-iframe {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    transform: scale(1.36);
+    filter: brightness(0.65) saturate(1.25);
+  }
+  .vinyl-video-scrim {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at center, rgba(0, 0, 0, 0.40) 15%, rgba(0, 0, 0, 0.78) 85%);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 2;
+  }
+
   .vinyl-exit-btn {
     position: absolute;
     top: max(16px, env(safe-area-inset-top, 16px));
@@ -1382,6 +1424,7 @@
     align-items: center;
     justify-content: center;
     margin-bottom: 22px;
+    z-index: 5;
   }
   .vinyl-aura {
     position: absolute;
@@ -1532,6 +1575,8 @@
     text-align: center;
     max-width: 85vw;
     width: 320px;
+    position: relative;
+    z-index: 5;
   }
   .vinyl-title {
     font-size: 17px;
@@ -2002,6 +2047,16 @@
         </div>
       </button>
 
+      <button class="sm-item-btn" onclick="closeSideMenu(); openYouTubeSearchModal()">
+        <div class="sm-item-icon" style="color:#ff334b; background:rgba(255,51,75,0.12); border:1px solid rgba(255,51,75,0.28);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title" style="color:#ff5566; font-weight:800;">Descargar de YouTube</div>
+          <div class="sm-item-sub">Buscar música y guardar en celular o Drive</div>
+        </div>
+      </button>
+
       <button class="sm-item-btn" onclick="closeSideMenu(); document.getElementById('filePicker').click()">
         <div class="sm-item-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -2066,6 +2121,16 @@
           <span class="custom-switch-slider"></span>
         </label>
       </div>
+      <div class="sm-switch-row">
+        <div class="sm-item-text">
+          <div class="sm-item-title">Video de Fondo en Reposo</div>
+          <div class="sm-item-sub">Reproducir video o clip detrás del vinilo</div>
+        </div>
+        <label class="custom-switch-label" title="Activar/Desactivar video de fondo en reposo">
+          <input type="checkbox" id="chkSleepVinylVideo" checked onchange="toggleSleepVinylVideoSetting()" />
+          <span class="custom-switch-slider"></span>
+        </label>
+      </div>
       <button class="sm-item-btn" onclick="closeSideMenu(); enterVinylStandbyMode()">
         <div class="sm-item-icon" style="color:var(--green-bright); background:rgba(30, 215, 96, 0.12); border:1px solid rgba(30, 215, 96, 0.28);">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6" stroke-dasharray="2 2"/></svg>
@@ -2105,7 +2170,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.5.0 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.6.0 (GitHub)</div>
         </div>
       </button>
     </div>
@@ -2544,6 +2609,90 @@
     </div>
   </div>
 
+  <!-- MODAL: BÚSQUEDA Y DESCARGA DE YOUTUBE -->
+  <div id="youtubeSearchModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:520px; max-height:88vh; display:flex; flex-direction:column; text-align:left;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:38px; height:38px; border-radius:50%; background:rgba(255, 51, 75, 0.15); border:1px solid rgba(255, 51, 75, 0.35); display:flex; align-items:center; justify-content:center; color:#ff334b; flex-shrink:0;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:16px;">Buscar y Descargar de YouTube</h3>
+            <div style="font-size:11px; color:#a0a0b0;">Descarga música directamente al celular o a Google Drive</div>
+          </div>
+        </div>
+        <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closeYouTubeSearchModal()">✕</button>
+      </div>
+
+      <!-- Barra de Búsqueda -->
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <input type="text" id="ytSearchInput" class="search-input" placeholder="🔍 Canción, artista o video de YouTube..." onkeydown="if(event.key==='Enter')executeYouTubeSearch()" style="margin-bottom:0;" />
+        <button class="btn-chip active" style="padding:8px 16px; font-size:12px; font-weight:800;" onclick="executeYouTubeSearch()">Buscar</button>
+      </div>
+
+      <!-- Estado y progreso de descarga -->
+      <div id="ytDownloadProgressBox" style="display:none; background:#14141e; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;">
+          <span id="ytProgressStatus" style="color:var(--green-bright); font-weight:700;">Descargando...</span>
+          <span id="ytProgressPercent" style="color:#aaa;">0%</span>
+        </div>
+        <div style="width:100%; height:6px; background:#1c1c28; border-radius:999px; overflow:hidden;">
+          <div id="ytProgressBar" style="width:0%; height:100%; background:var(--green-bright); transition:width 0.2s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Lista de Resultados -->
+      <div id="ytResultsContainer" style="flex:1; overflow-y:auto; max-height:48vh; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+        <div style="text-align:center; padding:30px 10px; color:#777; font-size:12px;">
+          Escribe el nombre de una canción o artista y presiona Buscar.
+        </div>
+      </div>
+
+      <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+        <button class="btn-chip" style="padding:8px 16px; font-size:12px;" onclick="closeYouTubeSearchModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SELECCIÓN DE DESTINO DE DESCARGA -->
+  <div id="ytTargetPickerModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:400px; text-align:left;">
+      <h3 style="margin-top:0; margin-bottom:6px; font-size:15px;">¿Dónde deseas guardar esta canción?</h3>
+      <p id="ytTargetTrackLabel" style="font-size:12px; color:var(--green-bright); margin-bottom:14px; font-weight:700;">Canción seleccionada</p>
+      
+      <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+        <button class="btn-chip" style="padding:12px 14px; display:flex; align-items:center; gap:12px; justify-content:flex-start; text-align:left; background:#181824;" onclick="confirmYouTubeDownload('local')">
+          <div style="font-size:20px;">📱</div>
+          <div>
+            <div style="font-weight:800; font-size:13px; color:#fff;">Descargar en este Celular</div>
+            <div style="font-size:11px; color:#999;">Guardar en SpotiLinuxMusic para escuchar sin internet</div>
+          </div>
+        </button>
+
+        <button class="btn-chip" style="padding:12px 14px; display:flex; align-items:center; gap:12px; justify-content:flex-start; text-align:left; background:#181824;" onclick="confirmYouTubeDownload('drive')">
+          <div style="font-size:20px;">☁️</div>
+          <div>
+            <div style="font-weight:800; font-size:13px; color:#fff;">Guardar en Google Drive</div>
+            <div style="font-size:11px; color:#999;">Subir a la carpeta «Musica» de tu cuenta</div>
+          </div>
+        </button>
+
+        <button class="btn-chip" style="padding:10px 14px; display:flex; align-items:center; gap:12px; justify-content:flex-start; text-align:left; background:#14141e;" onclick="confirmYouTubeDownload('stream')">
+          <div style="font-size:20px;">🎧</div>
+          <div>
+            <div style="font-weight:800; font-size:13px; color:#fff;">Escuchar Ahora en Streaming</div>
+            <div style="font-size:11px; color:#999;">Reproducir al instante sin descargar</div>
+          </div>
+        </button>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="btn-chip" style="padding:7px 14px; font-size:12px;" onclick="closeYtTargetPickerModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Barra Flotante de Selección Múltiple -->
   <div id="multiSelectBar" class="multi-select-bar">
     <span id="multiSelectCount" style="font-size:12px; font-weight:800; color:#fff;">0 seleccionadas</span>
@@ -2764,6 +2913,13 @@
 
   <!-- OVERLAY DE PANTALLA EN MODO SUSPENSIÓN / REPOSO (DISCO DE VINILO OLED) -->
   <div id="vinylStandbyOverlay" class="vinyl-standby-overlay" onclick="exitVinylStandbyMode()">
+    <!-- Video de fondo cinematográfico opcional detrás del disco de vinilo -->
+    <div class="vinyl-video-bg-container" id="vinylVideoBgContainer">
+      <video class="vinyl-bg-video" id="vinylBgVideo" muted loop playsinline preload="auto"></video>
+      <iframe class="vinyl-bg-iframe" id="vinylBgIframe" allow="autoplay" style="display:none;" frameborder="0"></iframe>
+      <div class="vinyl-video-scrim"></div>
+    </div>
+
     <!-- Botón discreto para salir en la esquina -->
     <button class="vinyl-exit-btn" onclick="exitVinylStandbyMode(event)" title="Salir del modo reposo">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -2877,6 +3033,10 @@ let repeatMode = "off"; // "off" | "all" | "one"
 let shufflePlayedStack = [];
 let shuffleUnplayedPool = [];
 let sleepVinylEnabled = true;
+let sleepVinylVideoEnabled = true;
+let currentPlayingVideoSource = "";
+let ytSearchResults = [];
+let pendingYtTargetTrack = null;
 let sleepVinylTimeout = null;
 const SLEEP_IDLE_DELAY_MS = 50000;
 let activeFilter = "all";
@@ -3490,6 +3650,7 @@ function savePersistentState() {
     accountsDb,
     repeatMode,
     sleepVinylEnabled,
+    sleepVinylVideoEnabled,
     crossDeviceSyncEnabled,
     deviceFilterConfig,
     rawDeviceTracksList,
@@ -3553,6 +3714,12 @@ function loadPersistentState() {
       }
       const chkVinyl = document.getElementById("chkSleepVinyl");
       if (chkVinyl) chkVinyl.checked = sleepVinylEnabled;
+
+      if (typeof st.sleepVinylVideoEnabled === "boolean") {
+        sleepVinylVideoEnabled = st.sleepVinylVideoEnabled;
+      }
+      const chkVideo = document.getElementById("chkSleepVinylVideo");
+      if (chkVideo) chkVideo.checked = sleepVinylVideoEnabled;
 
       if (typeof st.crossDeviceSyncEnabled === "boolean") {
         crossDeviceSyncEnabled = st.crossDeviceSyncEnabled;
@@ -4044,6 +4211,7 @@ function exitVinylStandbyMode(e) {
   const overlay = document.getElementById("vinylStandbyOverlay");
   if (!overlay) return;
   overlay.classList.remove("active");
+  stopVinylStandbyVideo();
   resetSleepVinylIdleTimer();
   if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.setKeepScreenOn) {
     try { window.AndroidMedia.setKeepScreenOn(false); } catch(e){}
@@ -4062,6 +4230,99 @@ function toggleSleepVinylSetting() {
     showToast("Modo Suspensión: Desactivado");
     if (sleepVinylTimeout) clearTimeout(sleepVinylTimeout);
     exitVinylStandbyMode();
+  }
+}
+
+function toggleSleepVinylVideoSetting() {
+  const chk = document.getElementById("chkSleepVinylVideo");
+  if (!chk) return;
+  sleepVinylVideoEnabled = chk.checked;
+  savePersistentState();
+  if (sleepVinylVideoEnabled) {
+    showToast("Video de fondo en reposo: ACTIVADO 🎬");
+    updateVinylStandbyVideo();
+  } else {
+    showToast("Video de fondo en reposo: Desactivado");
+    stopVinylStandbyVideo();
+  }
+}
+
+function stopVinylStandbyVideo() {
+  const container = document.getElementById("vinylVideoBgContainer");
+  const videoEl = document.getElementById("vinylBgVideo");
+  const iframeEl = document.getElementById("vinylBgIframe");
+  if (container) container.classList.remove("active");
+  if (videoEl) {
+    try { videoEl.pause(); videoEl.removeAttribute("src"); videoEl.load(); } catch(_e){}
+    videoEl.style.display = "none";
+  }
+  if (iframeEl) {
+    iframeEl.src = "about:blank";
+    iframeEl.style.display = "none";
+  }
+  currentPlayingVideoSource = "";
+}
+
+function updateVinylStandbyVideo() {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  const container = document.getElementById("vinylVideoBgContainer");
+  const videoEl = document.getElementById("vinylBgVideo");
+  const iframeEl = document.getElementById("vinylBgIframe");
+  if (!overlay || !overlay.classList.contains("active") || !container) return;
+
+  if (!sleepVinylVideoEnabled) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (!t) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  let videoSrc = t.videoSrc || "";
+  if (!videoSrc && t.filePath) {
+    const candidateMp4 = t.filePath.replace(/\.(mp3|flac|wav|m4a|ogg|opus)$/i, ".mp4");
+    if (candidateMp4 !== t.filePath) {
+      videoSrc = candidateMp4;
+    }
+  }
+
+  const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
+
+  if (videoSrc) {
+    if (iframeEl) { iframeEl.style.display = "none"; iframeEl.src = "about:blank"; }
+    if (videoEl) {
+      videoEl.style.display = "block";
+      if (currentPlayingVideoSource !== videoSrc) {
+        currentPlayingVideoSource = videoSrc;
+        videoEl.src = videoSrc;
+        videoEl.muted = true;
+      }
+      if (isPlaying) {
+        videoEl.play().catch(() => {});
+        if (Math.abs(videoEl.currentTime - curSec) > 2) {
+          try { videoEl.currentTime = curSec; } catch(_e){}
+        }
+      } else {
+        videoEl.pause();
+      }
+      container.classList.add("active");
+    }
+  } else if (t.youtubeId) {
+    if (videoEl) { videoEl.style.display = "none"; }
+    if (iframeEl) {
+      iframeEl.style.display = "block";
+      const targetSrc = `https://www.youtube-nocookie.com/embed/${t.youtubeId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${t.youtubeId}&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&start=${Math.floor(curSec)}`;
+      if (currentPlayingVideoSource !== t.youtubeId) {
+        currentPlayingVideoSource = t.youtubeId;
+        iframeEl.src = targetSrc;
+      }
+      container.classList.add("active");
+    }
+  } else {
+    stopVinylStandbyVideo();
   }
 }
 
@@ -4115,6 +4376,8 @@ function updateVinylStandbyUI() {
     const mm = String(d.getMinutes()).padStart(2, "0");
     clock.textContent = `${hh}:${mm}`;
   }
+
+  updateVinylStandbyVideo();
 }
 
 // Monitoreo de toques para posponer reposo cuando el usuario interactúa
@@ -4180,10 +4443,281 @@ window.onNativeMediaCommand = function(cmd) {
 };
 
 /* ========================================================================= */
+/* BUSCADOR Y DESCARGADOR DE YOUTUBE DIRECTO A LOCAL O GOOGLE DRIVE          */
+/* ========================================================================= */
+function openYouTubeSearchModal() {
+  const modal = document.getElementById("youtubeSearchModal");
+  if (!modal) return;
+  modal.classList.add("active");
+  const input = document.getElementById("ytSearchInput");
+  if (input) {
+    input.focus();
+    const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+    if (curTrack && !input.value.trim()) {
+      input.value = curTrack.artist || "";
+    }
+  }
+}
+
+function closeYouTubeSearchModal() {
+  const modal = document.getElementById("youtubeSearchModal");
+  if (modal) modal.classList.remove("active");
+}
+
+async function executeYouTubeSearch() {
+  const input = document.getElementById("ytSearchInput");
+  const container = document.getElementById("ytResultsContainer");
+  if (!input || !container) return;
+  const query = input.value.trim();
+  if (!query) {
+    showToast("Escribe el nombre de una canción o artista");
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="text-align:center; padding:32px 10px; color:var(--green-bright); font-size:13px; font-weight:700;">
+      🔍 Buscando en YouTube...
+    </div>
+  `;
+
+  const instances = [
+    `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`,
+    `https://api.invidious.io/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
+    `https://inv.tux.pizza/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
+    `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}&type=video`
+  ];
+
+  let items = [];
+  for (const url of instances) {
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 4500);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const data = await res.json();
+        const rawList = Array.isArray(data) ? data : (data.items || []);
+        if (rawList.length > 0) {
+          items = rawList.map(it => {
+            const id = it.videoId || it.id || (typeof it.url === "string" ? it.url.replace("/watch?v=", "") : "");
+            const title = it.title || "Canción";
+            const artist = it.uploaderName || it.author || it.channelTitle || "YouTube";
+            const thumb = it.thumbnail || (it.videoThumbnails && it.videoThumbnails[0] ? it.videoThumbnails[0].url : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`);
+            const sec = it.duration || it.lengthSeconds || 0;
+            const durStr = typeof sec === "number" ? fmtTime(sec) : (it.duration || "3:30");
+            return { id, title, artist, thumb, durStr, sec };
+          }).filter(x => x.id);
+          if (items.length > 0) break;
+        }
+      }
+    } catch (_e) {}
+  }
+
+  if (items.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:24px 10px; color:#aaa; font-size:12px;">
+        <div style="font-size:14px; color:#ff5566; font-weight:800; margin-bottom:6px;">No se encontraron resultados</div>
+        Verifica tu conexión a internet o intenta buscar con el nombre exacto de la canción.
+      </div>
+    `;
+    return;
+  }
+
+  ytSearchResults = items;
+  container.innerHTML = "";
+  items.slice(0, 16).forEach((item, idx) => {
+    const card = document.createElement("div");
+    card.className = "yt-result-card";
+    card.style.cssText = "display:flex; align-items:center; gap:10px; background:#161622; border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:8px 10px; transition:border-color 0.2s;";
+    card.innerHTML = `
+      <img src="${escapeHtml(item.thumb)}" style="width:64px; height:48px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#0e0e14;" onerror="this.src='tracks/default_art.png'" />
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
+        <div style="font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.artist)} • ${escapeHtml(item.durStr)}</div>
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button class="btn-chip active" style="padding:6px 10px; font-size:11px;" onclick="openYtTargetPicker(${idx})">⬇ Bajar</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function openYtTargetPicker(idx) {
+  if (!ytSearchResults || !ytSearchResults[idx]) return;
+  pendingYtTargetTrack = ytSearchResults[idx];
+  const lbl = document.getElementById("ytTargetTrackLabel");
+  if (lbl) {
+    lbl.textContent = `🎵 ${pendingYtTargetTrack.title} (${pendingYtTargetTrack.artist})`;
+  }
+  const modal = document.getElementById("ytTargetPickerModal");
+  if (modal) modal.classList.add("active");
+}
+
+function closeYtTargetPickerModal() {
+  const modal = document.getElementById("ytTargetPickerModal");
+  if (modal) modal.classList.remove("active");
+}
+
+async function confirmYouTubeDownload(targetType) {
+  closeYtTargetPickerModal();
+  if (!pendingYtTargetTrack) return;
+  const t = pendingYtTargetTrack;
+
+  const box = document.getElementById("ytDownloadProgressBox");
+  const pStatus = document.getElementById("ytProgressStatus");
+  const pBar = document.getElementById("ytProgressBar");
+  const pPct = document.getElementById("ytProgressPercent");
+
+  if (targetType === "stream") {
+    const streamTrack = {
+      id: "yt_" + t.id,
+      title: t.title,
+      artist: t.artist,
+      album: "YouTube Music",
+      genre: "Online",
+      cover: t.thumb,
+      youtubeId: t.id,
+      src: `https://www.youtube.com/watch?v=${t.id}`,
+      liked: false,
+      cloud: true,
+      downloaded: false,
+      color: "#ff334b"
+    };
+    tracks.unshift(streamTrack);
+    if (!masterTracksPool.some(m => m.id === streamTrack.id)) masterTracksPool.unshift(streamTrack);
+    renderTracks();
+    closeYouTubeSearchModal();
+    playTrackIndex(0);
+    showToast(`▶ Reproduciendo: "${t.title}"`);
+    return;
+  }
+
+  if (box) box.style.display = "block";
+  if (pStatus) pStatus.textContent = "Obteniendo audio de YouTube...";
+  if (pBar) pBar.style.width = "20%";
+  if (pPct) pPct.textContent = "20%";
+
+  let audioStreamUrl = "";
+  try {
+    const cobRes = await fetch("https://co.wuk.sh/api/json", {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: `https://www.youtube.com/watch?v=${t.id}`,
+        isAudioOnly: true,
+        aFormat: "mp3"
+      })
+    });
+    if (cobRes.ok) {
+      const cobData = await cobRes.json();
+      if (cobData.url) audioStreamUrl = cobData.url;
+    }
+  } catch (_e) {}
+
+  if (!audioStreamUrl) {
+    try {
+      const pRes = await fetch(`https://pipedapi.kavin.rocks/streams/${t.id}`);
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        const audStreams = pData.audioStreams || [];
+        if (audStreams.length > 0) {
+          audioStreamUrl = audStreams[0].url;
+        }
+      }
+    } catch (_e) {}
+  }
+
+  if (!audioStreamUrl) {
+    if (pStatus) pStatus.textContent = "⚠️ No se pudo obtener el stream directo. Puedes escucharlo en streaming.";
+    showToast("No se pudo obtener el audio de descarga");
+    return;
+  }
+
+  if (targetType === "local") {
+    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.downloadStreamToLocal) {
+      window.AndroidMedia.downloadStreamToLocal(audioStreamUrl, t.title, t.artist, t.thumb);
+    } else {
+      const a = document.createElement("a");
+      a.href = audioStreamUrl;
+      a.download = `${t.artist} - ${t.title}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.onYouTubeDownloadProgress("✔ Descarga iniciada en tu navegador", 100);
+    }
+  } else if (targetType === "drive") {
+    const token = document.getElementById("gdToken").value.trim();
+    const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+    if (!token) {
+      showToast("Ingresa tu Token de Google Drive en el Menú Lateral para subir a tu nube");
+      if (pStatus) pStatus.textContent = "⚠️ Requiere Token OAuth en el menú lateral.";
+      return;
+    }
+    if (pStatus) pStatus.textContent = "Subiendo a tu carpeta «Musica» en Google Drive...";
+    if (pBar) pBar.style.width = "65%";
+    if (pPct) pPct.textContent = "65%";
+
+    try {
+      const musicaId = await resolveMusicaSubfolderId(rootId, token, "");
+      const blobRes = await fetch(audioStreamUrl);
+      const blob = await blobRes.blob();
+      const safeName = cleanTrackTitle(`${t.artist} - ${t.title}`) + ".mp3";
+
+      const upRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=media`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "audio/mpeg"
+        },
+        body: blob
+      });
+
+      if (upRes.ok) {
+        const upData = await upRes.json();
+        if (musicaId && upData.id) {
+          await fetch(`https://www.googleapis.com/drive/v3/files/${upData.id}?addParents=${musicaId}&fields=id,parents`, {
+            method: "PATCH",
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+        }
+        window.onYouTubeDownloadProgress("✔ ¡Guardada con éxito en tu Google Drive!", 100);
+        showToast(`✔ "${t.title}" guardada en Google Drive ☁️`);
+        autoDiscoverDriveMusic();
+      } else {
+        window.onYouTubeDownloadProgress("Error al subir a Google Drive", -1);
+      }
+    } catch (e) {
+      window.onYouTubeDownloadProgress("Error: " + e.message, -1);
+    }
+  }
+}
+
+window.onYouTubeDownloadProgress = function(status, percent) {
+  const box = document.getElementById("ytDownloadProgressBox");
+  const pStatus = document.getElementById("ytProgressStatus");
+  const pBar = document.getElementById("ytProgressBar");
+  const pPct = document.getElementById("ytProgressPercent");
+
+  if (box) box.style.display = "block";
+  if (pStatus) pStatus.textContent = status;
+  if (percent >= 0) {
+    if (pBar) pBar.style.width = percent + "%";
+    if (pPct) pPct.textContent = percent + "%";
+    if (percent >= 100) {
+      showToast(status);
+      setTimeout(() => { if (box) box.style.display = "none"; }, 4000);
+    }
+  } else {
+    if (pBar) pBar.style.backgroundColor = "#ff4444";
+  }
+};
+
+/* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 7;
-const CURRENT_APP_VERSION_NAME = "2.5.0";
+const CURRENT_APP_VERSION_CODE = 8;
+const CURRENT_APP_VERSION_NAME = "2.6.0";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 

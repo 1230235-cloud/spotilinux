@@ -1,18 +1,18 @@
 {
-  "versionCode": 7,
-  "versionName": "2.5.0",
+  "versionCode": 8,
+  "versionName": "2.6.0",
   "releaseDate": "2026-10-25",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.5.0",
+    "version": "2.6.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Aura verde neón perimetral en el contorno del disco de vinilo que pulsa al ritmo de la música",
-    "Sincronización multi-dispositivo de reproducción activa: continúa la misma canción donde la dejaste en otro celular o PC",
-    "Aviso interactivo de reanudación continua entre dispositivos",
-    "Filtro inteligente de audios no musicales (WhatsApp, notas de voz, llamadas)"
+    "Video cinematográfico de fondo detrás del disco de vinilo en suspensión con filtro Scrim y switch OLED",
+    "Buscador y descargador directo de YouTube integrado en la aplicación",
+    "Descarga directa en almacenamiento local (SpotiLinuxMusic) o subida a Google Drive",
+    "Aura reactiva al ritmo en el contorno del vinilo y reproducción vinculada entre dispositivos"
   ]
 }
