@@ -1283,6 +1283,49 @@
     gap: 12px;
   }
 
+  /* CHIPS Y ETIQUETAS DE FILTRADO DE AUDIOS */
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #1c1c28;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #e0e0ee;
+    transition: all 0.2s ease;
+  }
+  .filter-chip:hover {
+    border-color: rgba(30, 215, 96, 0.4);
+    background: #222232;
+  }
+  .filter-chip-tag {
+    color: var(--green-bright);
+    font-weight: 700;
+    font-size: 9px;
+    text-transform: uppercase;
+    background: rgba(30, 215, 96, 0.15);
+    border: 1px solid rgba(30, 215, 96, 0.25);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .filter-chip-del {
+    background: transparent;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 13px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    transition: color 0.15s ease;
+  }
+  .filter-chip-del:hover {
+    color: #ff5555;
+  }
+
   /* ========================================================================= */
   /* MODO SUSPENSIÓN / REPOSO: DISCO DE VINILO GIRATORIO OLED                 */
   /* ========================================================================= */
@@ -1339,6 +1382,20 @@
     align-items: center;
     justify-content: center;
     margin-bottom: 22px;
+  }
+  .vinyl-aura {
+    position: absolute;
+    width: min(72vw, 300px);
+    height: min(72vw, 300px);
+    border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(30, 215, 96, 0.42) 15%, rgba(30, 215, 96, 0.22) 48%, rgba(30, 215, 96, 0.05) 70%, transparent 85%);
+    filter: blur(24px);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.22;
+    transform: scale(1.02);
+    transition: transform 0.08s ease-out, opacity 0.12s ease-out;
+    will-change: transform, opacity;
   }
   .vinyl-disc {
     width: min(72vw, 300px);
@@ -1561,6 +1618,10 @@
       width: min(65vh, 260px);
       height: min(65vh, 260px);
     }
+    .vinyl-aura {
+      width: min(65vh, 260px);
+      height: min(65vh, 260px);
+    }
     .vinyl-info-box {
       text-align: left;
       max-width: 340px;
@@ -1576,6 +1637,11 @@
       width: min(62vw, 420px);
       height: min(62vw, 420px);
       box-shadow: 0 0 65px rgba(0, 0, 0, 0.98), 0 0 45px rgba(30, 215, 96, 0.22), inset 0 0 16px #000;
+    }
+    .vinyl-aura {
+      width: min(62vw, 420px);
+      height: min(62vw, 420px);
+      filter: blur(32px);
     }
     .vinyl-tonearm {
       transform: scale(1.35) rotate(-18deg);
@@ -1652,6 +1718,11 @@
       width: min(72vh, 480px);
       height: min(72vh, 480px);
       box-shadow: 0 0 80px rgba(0, 0, 0, 0.98), 0 0 55px rgba(30, 215, 96, 0.25), inset 0 0 20px #000;
+    }
+    .vinyl-aura {
+      width: min(72vh, 480px);
+      height: min(72vh, 480px);
+      filter: blur(36px);
     }
     .vinyl-tonearm {
       transform: scale(1.45) rotate(-18deg);
@@ -1868,6 +1939,28 @@
         <div class="sm-item-text">
           <div class="sm-item-title">Selección Múltiple</div>
           <div class="sm-item-sub">Añadir varias canciones a la vez</div>
+        </div>
+      </button>
+
+      <!-- Filtro de Audios del Celular -->
+      <div class="sm-section-label">FILTRO DE AUDIOS DEL DISPOSITIVO</div>
+      <div class="sm-switch-row">
+        <div class="sm-item-text">
+          <div class="sm-item-title">Filtro de Audios del Celular</div>
+          <div class="sm-item-sub" id="smFilterSubtitle">Excluir WhatsApp, notas y llamadas</div>
+        </div>
+        <label class="custom-switch-label" title="Activar/Desactivar filtro de audios">
+          <input type="checkbox" id="chkMasterAudioFilter" checked onchange="toggleMasterAudioFilterSetting()" />
+          <span class="custom-switch-slider"></span>
+        </label>
+      </div>
+      <button class="sm-item-btn" onclick="closeSideMenu(); openDeviceAudioFilterModal()">
+        <div class="sm-item-icon" style="color:var(--green-bright); background:rgba(30, 215, 96, 0.12); border:1px solid rgba(30, 215, 96, 0.28);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/><path d="M10 19l4 2v-8.54"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title" style="color:var(--green-bright); font-weight:800;">Ajustar Reglas del Filtro</div>
+          <div class="sm-item-sub">Prefijos, nombres y reglas personalizadas</div>
         </div>
       </button>
 
@@ -2246,6 +2339,108 @@
     </div>
   </div>
 
+  <!-- MODAL: FILTRO DE AUDIOS DEL DISPOSITIVO -->
+  <div id="deviceAudioFilterModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:440px; text-align:left; max-height:88vh; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:38px; height:38px; border-radius:50%; background:rgba(30, 215, 96, 0.15); border:1px solid rgba(30, 215, 96, 0.35); display:flex; align-items:center; justify-content:center; color:var(--green-bright); flex-shrink:0;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/><path d="M10 19l4 2v-8.54"/></svg>
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:16px;">Filtro de Audios del Celular</h3>
+            <div style="font-size:11px; color:#a0a0b0;">Evita que audios o notas de voz se importen como música</div>
+          </div>
+        </div>
+        <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closeDeviceAudioFilterModal()">✕</button>
+      </div>
+
+      <div style="overflow-y:auto; flex:1; padding-right:4px;">
+        <!-- Switch Maestro -->
+        <div class="sm-switch-row" style="padding:12px 14px; background:#14141e; border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin-bottom:14px;">
+          <div class="sm-item-text">
+            <div class="sm-item-title" style="font-size:14px; font-weight:800; color:#fff;">Filtro de Audios Activado</div>
+            <div class="sm-item-sub">Aplica reglas para ocultar notas y sonidos no musicales</div>
+          </div>
+          <label class="custom-switch-label">
+            <input type="checkbox" id="modalChkMasterFilter" onchange="onFilterModalSettingChanged()" />
+            <span class="custom-switch-slider"></span>
+          </label>
+        </div>
+
+        <!-- Opciones Predeterminadas -->
+        <div style="font-size:11px; font-weight:800; color:#888; letter-spacing:0.5px; margin-bottom:8px;">OPCIONES PREDETERMINADAS</div>
+
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+          <!-- Opción WhatsApp -->
+          <div class="sm-switch-row" style="padding:10px 12px; background:#181824; border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+            <div class="sm-item-text">
+              <div class="sm-item-title" style="font-size:13px;">💬 WhatsApp y Mensajería</div>
+              <div class="sm-item-sub">Excluir archivos con "PTT-", "AUD-", notas de voz</div>
+            </div>
+            <label class="custom-switch-label">
+              <input type="checkbox" id="modalChkWhatsApp" onchange="onFilterModalSettingChanged()" />
+              <span class="custom-switch-slider"></span>
+            </label>
+          </div>
+
+          <!-- Opción Grabaciones -->
+          <div class="sm-switch-row" style="padding:10px 12px; background:#181824; border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+            <div class="sm-item-text">
+              <div class="sm-item-title" style="font-size:13px;">🎙️ Grabadora de Voz y Llamadas</div>
+              <div class="sm-item-sub">Excluir "REC_", "Call_", "Voice_", grabaciones</div>
+            </div>
+            <label class="custom-switch-label">
+              <input type="checkbox" id="modalChkRecordings" onchange="onFilterModalSettingChanged()" />
+              <span class="custom-switch-slider"></span>
+            </label>
+          </div>
+
+          <!-- Opción Audios Cortos -->
+          <div class="sm-switch-row" style="padding:10px 12px; background:#181824; border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+            <div class="sm-item-text">
+              <div class="sm-item-title" style="font-size:13px;">⏱️ Audios muy cortos (&lt; 30 segundos)</div>
+              <div class="sm-item-sub">Omitir tonos, notificaciones y clips breves</div>
+            </div>
+            <label class="custom-switch-label">
+              <input type="checkbox" id="modalChkShortAudios" onchange="onFilterModalSettingChanged()" />
+              <span class="custom-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Reglas Personalizadas -->
+        <div style="font-size:11px; font-weight:800; color:#888; letter-spacing:0.5px; margin-bottom:8px;">REGLAS PERSONALIZADAS POR EL USUARIO</div>
+        
+        <div style="background:#14141e; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px; margin-bottom:12px;">
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <select id="customFilterType" style="background:#1c1c28; color:#fff; border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:8px 10px; font-size:12px; outline:none;">
+              <option value="prefix">Empieza con (Prefijo)</option>
+              <option value="contains">Contiene en el nombre</option>
+            </select>
+            <input type="text" id="customFilterInput" placeholder="Ej: memo_, ringtone, nota..." style="flex:1; background:#1c1c28; color:#fff; border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:8px 12px; font-size:12px; outline:none;" onkeydown="if(event.key==='Enter')addCustomFilterRule()" />
+            <button class="btn-chip active" style="padding:8px 12px; font-size:12px;" onclick="addCustomFilterRule()">＋</button>
+          </div>
+          <div style="font-size:11px; color:#888;">Elige si el nombre debe comenzar con la palabra o contenerla en cualquier parte.</div>
+        </div>
+
+        <!-- Chips de Reglas Activas -->
+        <div id="filterRulesChipsContainer" style="display:flex; flex-wrap:wrap; gap:6px; min-height:36px; margin-bottom:14px;">
+          <!-- Chips renderizados dinámicamente -->
+        </div>
+
+        <!-- Resumen de canciones filtradas -->
+        <div id="filterStatusSummary" style="font-size:12px; color:var(--green-bright); background:rgba(30, 215, 96, 0.08); border:1px solid rgba(30, 215, 96, 0.2); border-radius:8px; padding:8px 12px; text-align:center;">
+          Filtro listo
+        </div>
+      </div>
+
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button class="btn-chip active" style="flex:1; padding:10px; font-size:12px;" onclick="closeDeviceAudioFilterModal()">Listo</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Barra Flotante de Selección Múltiple -->
   <div id="multiSelectBar" class="multi-select-bar">
     <span id="multiSelectCount" style="font-size:12px; font-weight:800; color:#fff;">0 seleccionadas</span>
@@ -2476,6 +2671,9 @@
     <div class="vinyl-ambient-clock" id="vinylClock">00:00</div>
 
     <div class="vinyl-player-box" onclick="event.stopPropagation()">
+      <!-- Aura reactiva al ritmo verde sutil -->
+      <div class="vinyl-aura" id="vinylAura"></div>
+
       <!-- Brazo de tocadiscos estilizado -->
       <div class="vinyl-tonearm" id="vinylTonearm">
         <div class="tonearm-base"></div>
@@ -2541,6 +2739,20 @@ const DEMO_TRACKS = [
 ];
 
 let tracks = [...DEMO_TRACKS];
+let masterTracksPool = [...DEMO_TRACKS];
+let rawDeviceTracksList = [];
+let deviceFilterConfig = {
+  enabled: true,
+  filterWhatsApp: true,
+  filterRecordings: true,
+  filterShortAudios: true,
+  customRules: [
+    { type: "prefix", value: "PTT-" },
+    { type: "prefix", value: "AUD-" },
+    { type: "prefix", value: "REC_" },
+    { type: "prefix", value: "Call_" }
+  ]
+};
 let playlists = [
   { id: "pl_synth", name: "Night Drive & Synthwave", desc: "Sintetizadores retro y bajos profundos", trackIds: ["t1", "t3", "t4", "t6"] },
   { id: "pl_chill", name: "Botica de Maomao 🌿", desc: "Beats relajantes Lo-Fi y Ambient", trackIds: ["t2", "t5"] }
@@ -2749,6 +2961,244 @@ function legacyPasswordHash(pw) {
   return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
 }
 
+/* ========================================================================= */
+/* SISTEMA DE FILTRADO DE AUDIOS DEL DISPOSITIVO                            */
+/* ========================================================================= */
+function isAudioTrackFiltered(track) {
+  if (!deviceFilterConfig || !deviceFilterConfig.enabled) return false;
+  // Nunca filtrar pistas de Google Drive, nube o demo incorporadas
+  if (track.cloud || track.driveId || (track.id && String(track.id).startsWith("gd_")) || (track.id && String(track.id).startsWith("t") && track.id.length <= 3)) {
+    return false;
+  }
+
+  const rawTitle = (track.title || "").trim();
+  const filePath = (track.filePath || track.src || "").toLowerCase();
+  const titleLower = rawTitle.toLowerCase();
+  const baseName = filePath.split(/[/\\]/).pop() || "";
+  const baseNameLower = baseName.toLowerCase();
+
+  // 1. Predeterminado: WhatsApp & Telegram
+  if (deviceFilterConfig.filterWhatsApp) {
+    if (/^(ptt-|aud-|audio-)/i.test(rawTitle) || /^(ptt-|aud-|audio-)/i.test(baseName)) return true;
+    if (filePath.includes("whatsapp") || filePath.includes("telegram") || titleLower.includes("whatsapp audio") || titleLower.includes("voice note")) {
+      return true;
+    }
+  }
+
+  // 2. Predeterminado: Grabaciones y Llamadas
+  if (deviceFilterConfig.filterRecordings) {
+    if (/^(rec_|call_|voice_|grabaci[oó]n|callrec)/i.test(rawTitle) || /^(rec_|call_|voice_|grabaci[oó]n|callrec)/i.test(baseName)) return true;
+    if (filePath.includes("call_recordings") || filePath.includes("voice_recorder") || filePath.includes("sound_recorder") || filePath.includes("recordings")) {
+      return true;
+    }
+  }
+
+  // 3. Predeterminado: Audios cortos (< 30s) si hay metadata
+  if (deviceFilterConfig.filterShortAudios) {
+    if (typeof track.duration === "number" && track.duration > 0 && track.duration < 30) {
+      return true;
+    }
+  }
+
+  // 4. Reglas personalizadas por el usuario
+  if (Array.isArray(deviceFilterConfig.customRules)) {
+    for (const rule of deviceFilterConfig.customRules) {
+      if (!rule || !rule.value) continue;
+      const targetVal = rule.value.trim().toLowerCase();
+      if (!targetVal) continue;
+      if (rule.type === "prefix") {
+        if (titleLower.startsWith(targetVal) || baseNameLower.startsWith(targetVal)) {
+          return true;
+        }
+      } else {
+        // contains
+        if (titleLower.includes(targetVal) || baseNameLower.includes(targetVal)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function applyDeviceAudioFilters() {
+  // Aseguramos que todas las pistas actuales de tracks queden registradas en masterTracksPool
+  tracks.forEach(t => {
+    const exists = masterTracksPool.some(m =>
+      (m.id && m.id === t.id) ||
+      (m.src && m.src === t.src) ||
+      (m.driveId && t.driveId && m.driveId === t.driveId)
+    );
+    if (!exists) masterTracksPool.push(t);
+  });
+
+  const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+
+  if (!deviceFilterConfig.enabled) {
+    tracks = [...masterTracksPool];
+  } else {
+    tracks = masterTracksPool.filter(t => !isAudioTrackFiltered(t));
+  }
+
+  if (curTrack) {
+    const newIdx = tracks.findIndex(t => t.id === curTrack.id || (t.driveId && t.driveId === curTrack.driveId) || t.src === curTrack.src);
+    if (newIdx >= 0) {
+      currentIndex = newIdx;
+    } else {
+      currentIndex = 0;
+    }
+  }
+
+  updateFilterUIState();
+  renderTracks();
+  renderHomePlaylists();
+
+  const summaryEl = document.getElementById("filterStatusSummary");
+  if (summaryEl) {
+    const totalRaw = masterTracksPool.length;
+    const activeCount = tracks.length;
+    const excludedCount = totalRaw - activeCount;
+    if (!deviceFilterConfig.enabled) {
+      summaryEl.textContent = `Filtro desactivado: mostrando los ${totalRaw} archivos de audio disponibles.`;
+      summaryEl.style.color = "#a0a0b0";
+      summaryEl.style.borderColor = "rgba(255, 255, 255, 0.15)";
+    } else {
+      summaryEl.textContent = `✔ ${excludedCount} audios no musicales excluidos. ${activeCount} canciones en tu biblioteca musical.`;
+      summaryEl.style.color = "var(--green-bright)";
+      summaryEl.style.borderColor = "rgba(30, 215, 96, 0.3)";
+    }
+  }
+}
+
+function updateFilterUIState() {
+  const masterChk = document.getElementById("chkMasterAudioFilter");
+  if (masterChk) masterChk.checked = deviceFilterConfig.enabled;
+  const modalMasterChk = document.getElementById("modalChkMasterFilter");
+  if (modalMasterChk) modalMasterChk.checked = deviceFilterConfig.enabled;
+
+  const subEl = document.getElementById("smFilterSubtitle");
+  if (subEl) {
+    if (!deviceFilterConfig.enabled) {
+      subEl.textContent = "Filtro desactivado (todos los audios visibles)";
+    } else {
+      const activeRulesCount = (deviceFilterConfig.filterWhatsApp ? 1 : 0) +
+                               (deviceFilterConfig.filterRecordings ? 1 : 0) +
+                               (deviceFilterConfig.filterShortAudios ? 1 : 0) +
+                               (deviceFilterConfig.customRules ? deviceFilterConfig.customRules.length : 0);
+      subEl.textContent = `Activo (${activeRulesCount} reglas) • WhatsApp y notas excluidas`;
+    }
+  }
+}
+
+function openDeviceAudioFilterModal() {
+  const modal = document.getElementById("deviceAudioFilterModal");
+  if (!modal) return;
+  modal.classList.add("active");
+
+  const modalMaster = document.getElementById("modalChkMasterFilter");
+  if (modalMaster) modalMaster.checked = deviceFilterConfig.enabled;
+  const modalWa = document.getElementById("modalChkWhatsApp");
+  if (modalWa) modalWa.checked = deviceFilterConfig.filterWhatsApp;
+  const modalRec = document.getElementById("modalChkRecordings");
+  if (modalRec) modalRec.checked = deviceFilterConfig.filterRecordings;
+  const modalShort = document.getElementById("modalChkShortAudios");
+  if (modalShort) modalShort.checked = deviceFilterConfig.filterShortAudios;
+
+  renderFilterChips();
+  applyDeviceAudioFilters();
+}
+
+function closeDeviceAudioFilterModal() {
+  const modal = document.getElementById("deviceAudioFilterModal");
+  if (modal) modal.classList.remove("active");
+  savePersistentState();
+}
+
+function toggleMasterAudioFilterSetting() {
+  const chk = document.getElementById("chkMasterAudioFilter");
+  if (!chk) return;
+  deviceFilterConfig.enabled = chk.checked;
+  applyDeviceAudioFilters();
+  savePersistentState();
+  showToast(deviceFilterConfig.enabled ? "Filtro de audios: ACTIVADO 🎵" : "Filtro de audios: DESACTIVADO 📱");
+}
+
+function onFilterModalSettingChanged() {
+  const modalMaster = document.getElementById("modalChkMasterFilter");
+  const modalWa = document.getElementById("modalChkWhatsApp");
+  const modalRec = document.getElementById("modalChkRecordings");
+  const modalShort = document.getElementById("modalChkShortAudios");
+
+  if (modalMaster) deviceFilterConfig.enabled = modalMaster.checked;
+  if (modalWa) deviceFilterConfig.filterWhatsApp = modalWa.checked;
+  if (modalRec) deviceFilterConfig.filterRecordings = modalRec.checked;
+  if (modalShort) deviceFilterConfig.filterShortAudios = modalShort.checked;
+
+  applyDeviceAudioFilters();
+  savePersistentState();
+}
+
+function renderFilterChips() {
+  const container = document.getElementById("filterRulesChipsContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!Array.isArray(deviceFilterConfig.customRules) || deviceFilterConfig.customRules.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#666; font-style:italic;">No hay reglas personalizadas añadidas. Agrega una arriba.</span>';
+    return;
+  }
+
+  deviceFilterConfig.customRules.forEach((rule, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "filter-chip";
+    const tagText = rule.type === "prefix" ? "Prefijo" : "Contiene";
+    chip.innerHTML = `
+      <span class="filter-chip-tag">${tagText}</span>
+      <span class="filter-chip-val">${escapeHtml(rule.value)}</span>
+      <button class="filter-chip-del" onclick="removeCustomFilterRule(${idx})" title="Eliminar regla">✕</button>
+    `;
+    container.appendChild(chip);
+  });
+}
+
+function addCustomFilterRule() {
+  const typeSelect = document.getElementById("customFilterType");
+  const inputEl = document.getElementById("customFilterInput");
+  if (!inputEl) return;
+  const val = inputEl.value.trim();
+  if (!val) {
+    showToast("Escribe una palabra o prefijo para filtrar");
+    return;
+  }
+  const type = typeSelect ? typeSelect.value : "prefix";
+  if (!Array.isArray(deviceFilterConfig.customRules)) deviceFilterConfig.customRules = [];
+
+  const already = deviceFilterConfig.customRules.some(r => r.type === type && r.value.toLowerCase() === val.toLowerCase());
+  if (already) {
+    showToast("Esta regla ya existe");
+    return;
+  }
+
+  deviceFilterConfig.customRules.push({ type, value: val });
+  inputEl.value = "";
+  renderFilterChips();
+  applyDeviceAudioFilters();
+  savePersistentState();
+  showToast(`Regla agregada: "${val}" (${type === "prefix" ? "Prefijo" : "Contiene"})`);
+}
+
+function removeCustomFilterRule(idx) {
+  if (!Array.isArray(deviceFilterConfig.customRules) || idx < 0 || idx >= deviceFilterConfig.customRules.length) return;
+  const removed = deviceFilterConfig.customRules.splice(idx, 1)[0];
+  renderFilterChips();
+  applyDeviceAudioFilters();
+  savePersistentState();
+  if (removed) {
+    showToast(`Regla eliminada: "${removed.value}"`);
+  }
+}
+
 /* ---------------- PERSISTENCIA DE ESTADO Y PLAYLISTS ---------------- */
 function savePersistentState() {
   const cloudTracksOnly = tracks.filter(t => t.cloud || t.driveId || String(t.id).startsWith("gd_"));
@@ -2762,6 +3212,8 @@ function savePersistentState() {
     accountsDb,
     repeatMode,
     sleepVinylEnabled,
+    deviceFilterConfig,
+    rawDeviceTracksList,
     gdToken: document.getElementById("gdToken").value.trim(),
     gdClientId: document.getElementById("gdClientId").value.trim(),
     gdFolder: document.getElementById("gdFolder").value.trim() || DEFAULT_DRIVE_ROOT_FOLDER_ID,
@@ -2823,6 +3275,25 @@ function loadPersistentState() {
       const chkVinyl = document.getElementById("chkSleepVinyl");
       if (chkVinyl) chkVinyl.checked = sleepVinylEnabled;
 
+      if (st.deviceFilterConfig && typeof st.deviceFilterConfig === "object") {
+        deviceFilterConfig = {
+          enabled: st.deviceFilterConfig.enabled !== false,
+          filterWhatsApp: st.deviceFilterConfig.filterWhatsApp !== false,
+          filterRecordings: st.deviceFilterConfig.filterRecordings !== false,
+          filterShortAudios: Boolean(st.deviceFilterConfig.filterShortAudios),
+          customRules: Array.isArray(st.deviceFilterConfig.customRules) ? st.deviceFilterConfig.customRules : [
+            { type: "prefix", value: "PTT-" },
+            { type: "prefix", value: "AUD-" },
+            { type: "prefix", value: "REC_" },
+            { type: "prefix", value: "Call_" }
+          ]
+        };
+      }
+      if (Array.isArray(st.rawDeviceTracksList) && st.rawDeviceTracksList.length > 0) {
+        rawDeviceTracksList = st.rawDeviceTracksList;
+      }
+      updateFilterUIState();
+
       const chkDedup = document.getElementById("chkVerifyDuplicates");
       if (chkDedup && typeof st.verifyDuplicates === "boolean") chkDedup.checked = st.verifyDuplicates;
       if (st.welcomeDone) localStorage.setItem("welcome_done", "1");
@@ -2841,34 +3312,34 @@ function loadPersistentState() {
 /* ---------------- ESCANEO AUTOMÁTICO DE MÚSICA DEL CELULAR Y CARPETA DE LA APP ---------------- */
 function mergeScannedDeviceTracks(savedList) {
   if (!Array.isArray(savedList)) return;
+  rawDeviceTracksList = savedList;
   let newCount = 0;
   savedList.forEach(item => {
     const cleanTitle = cleanTrackTitle(item.title || "");
     const normKey = normalizeFullTitle(cleanTitle);
 
-    const existingIdx = tracks.findIndex(t =>
+    const existingMasterIdx = masterTracksPool.findIndex(t =>
       t.src === item.src ||
       t.id === item.id ||
       (item.driveId && t.driveId === item.driveId) ||
       (normKey && normalizeFullTitle(t.title) === normKey)
     );
-    if (existingIdx >= 0) {
-      // Si ya existía como pista de Drive o con el mismo título completo, vincularla al archivo descargado sin duplicar
-      tracks[existingIdx].src = item.src;
-      tracks[existingIdx].downloaded = true;
-      tracks[existingIdx].title = cleanTitle;
-      if (item.driveId && !tracks[existingIdx].driveId) tracks[existingIdx].driveId = item.driveId;
-      if (item.savedId && !tracks[existingIdx].savedId) tracks[existingIdx].savedId = item.savedId;
-      if (item.altId && !tracks[existingIdx].altId) tracks[existingIdx].altId = item.altId;
-      if (item.filePath && !tracks[existingIdx].filePath) tracks[existingIdx].filePath = item.filePath;
-      if (item.id && tracks[existingIdx].id !== item.id) {
-        if (!tracks[existingIdx].extraIds) tracks[existingIdx].extraIds = [];
-        if (!tracks[existingIdx].extraIds.includes(item.id)) tracks[existingIdx].extraIds.push(item.id);
+    if (existingMasterIdx >= 0) {
+      masterTracksPool[existingMasterIdx].src = item.src;
+      masterTracksPool[existingMasterIdx].downloaded = true;
+      masterTracksPool[existingMasterIdx].title = cleanTitle;
+      if (item.driveId && !masterTracksPool[existingMasterIdx].driveId) masterTracksPool[existingMasterIdx].driveId = item.driveId;
+      if (item.savedId && !masterTracksPool[existingMasterIdx].savedId) masterTracksPool[existingMasterIdx].savedId = item.savedId;
+      if (item.altId && !masterTracksPool[existingMasterIdx].altId) masterTracksPool[existingMasterIdx].altId = item.altId;
+      if (item.filePath && !masterTracksPool[existingMasterIdx].filePath) masterTracksPool[existingMasterIdx].filePath = item.filePath;
+      if (item.id && masterTracksPool[existingMasterIdx].id !== item.id) {
+        if (!masterTracksPool[existingMasterIdx].extraIds) masterTracksPool[existingMasterIdx].extraIds = [];
+        if (!masterTracksPool[existingMasterIdx].extraIds.includes(item.id)) masterTracksPool[existingMasterIdx].extraIds.push(item.id);
       }
-      if (item.cover && !tracks[existingIdx].cover) tracks[existingIdx].cover = item.cover;
-      tracks[existingIdx].artist = "Google Drive (Descargada) ✔";
+      if (item.cover && !masterTracksPool[existingMasterIdx].cover) masterTracksPool[existingMasterIdx].cover = item.cover;
+      masterTracksPool[existingMasterIdx].artist = "Google Drive (Descargada) ✔";
     } else {
-      tracks.unshift({
+      masterTracksPool.unshift({
         id: item.id,
         savedId: item.savedId || item.id,
         altId: item.altId || item.id,
@@ -2888,14 +3359,15 @@ function mergeScannedDeviceTracks(savedList) {
       newCount++;
     }
   });
+
+  applyDeviceAudioFilters();
   savePersistentState();
-  renderTracks();
-  renderHomePlaylists();
+
   if (newCount > 0) {
     const banner = document.getElementById("scanBanner");
     if (banner) {
       banner.style.display = "block";
-      banner.textContent = `✔ ${savedList.length} canciones disponibles en la carpeta de la aplicación (SpotiLinuxMusic).`;
+      banner.textContent = `✔ ${savedList.length} archivos escaneados (${tracks.length} canciones tras aplicar el filtro de audios).`;
     }
   }
 }
@@ -3408,8 +3880,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 5;
-const CURRENT_APP_VERSION_NAME = "2.3.0";
+const CURRENT_APP_VERSION_CODE = 6;
+const CURRENT_APP_VERSION_NAME = "2.4.0";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -6339,6 +6811,24 @@ function animateLoop(nowMs) {
   const pose = computeDancePose(beatPos, maomaoStyle, danceAmp, idleTimeSec);
   drawMaomaoStage(pose, beatPos, bass, mid, high, mmCanvas, mmCtx);
   drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, vCanvas, vCtx);
+
+  // Aura sutil verde reactiva al ritmo para el disco de vinilo en pantalla de reposo/suspensión
+  const vinylOverlay = document.getElementById("vinylStandbyOverlay");
+  if (vinylOverlay && vinylOverlay.classList.contains("active")) {
+    const auraEl = document.getElementById("vinylAura");
+    if (auraEl) {
+      if (isPlaying) {
+        const pulse = Math.min(1, Math.max(0, pose.beatPulse * 0.70 + bass * 0.70));
+        const auraScale = (1.02 + pulse * 0.09 * danceAmp).toFixed(3);
+        const auraOpacity = (0.24 + pulse * 0.50 * danceAmp).toFixed(2);
+        auraEl.style.transform = `scale(${auraScale})`;
+        auraEl.style.opacity = auraOpacity;
+      } else {
+        auraEl.style.transform = "scale(1.015)";
+        auraEl.style.opacity = "0.15";
+      }
+    }
+  }
 
   if (isFullPlayerOpen) {
     if (!fullMmCanvas || !fullMmCtx || !fullVCanvas || !fullVCtx) {
