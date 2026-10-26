@@ -359,6 +359,49 @@ public class MainActivity extends Activity {
         return arr.toString();
     }
 
+    private String extractAndSaveCover(File audioFile) {
+        if (audioFile == null || !audioFile.exists() || audioFile.length() < 1024) return "";
+        MediaMetadataRetriever mmr = null;
+        try {
+            mmr = new MediaMetadataRetriever();
+            mmr.setDataSource(audioFile.getAbsolutePath());
+            byte[] rawArt = mmr.getEmbeddedPicture();
+            if (rawArt != null && rawArt.length > 0) {
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inJustDecodeBounds = true;
+                BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length, opts);
+                int sample = 1;
+                while ((opts.outWidth / sample) > 384 || (opts.outHeight / sample) > 384) {
+                    sample *= 2;
+                }
+                opts.inJustDecodeBounds = false;
+                opts.inSampleSize = sample;
+                Bitmap bmp = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length, opts);
+                if (bmp != null) {
+                    File coversDir = new File(getCacheDir(), "covers");
+                    if (!coversDir.exists()) coversDir.mkdirs();
+                    String hash = Integer.toHexString(audioFile.getAbsolutePath().hashCode());
+                    File coverFile = new File(coversDir, hash + ".jpg");
+                    if (!coverFile.exists() || coverFile.length() < 100) {
+                        try (FileOutputStream fos = new FileOutputStream(coverFile)) {
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 85, fos);
+                        } catch (Throwable ignored) {}
+                    }
+                    bmp.recycle();
+                    if (coverFile.exists() && coverFile.length() > 0) {
+                        return "file://" + coverFile.getAbsolutePath();
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        } finally {
+            if (mmr != null) {
+                try { mmr.release(); } catch (Throwable ignored) {}
+            }
+        }
+        return "";
+    }
+
     private String performDeviceScanAndSave() {
         File destFolder = getAppMusicFolder();
         ContentResolver resolver = getContentResolver();
@@ -669,7 +712,9 @@ public class MainActivity extends Activity {
                                     if (sameId || sameTitle) {
                                         String escPath = ef.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
                                         String escId = fileId.replace("'", "\\'");
-                                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, true);");
+                                        String coverUrl = extractAndSaveCover(ef);
+                                        String escCover = coverUrl.replace("\\", "\\\\").replace("'", "\\'");
+                                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, true, '" + escCover + "');");
                                         return;
                                     }
                                 }
@@ -709,7 +754,9 @@ public class MainActivity extends Activity {
                         if (outFile.exists() && outFile.length() > 1024) {
                             String escPath = outFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
                             String escId = fileId.replace("'", "\\'");
-                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, false);");
+                            String coverUrl = extractAndSaveCover(outFile);
+                            String escCover = coverUrl.replace("\\", "\\\\").replace("'", "\\'");
+                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, false, '" + escCover + "');");
                         } else {
                             outFile.delete();
                             dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false, false);");
@@ -1308,6 +1355,17 @@ public class MainActivity extends Activity {
                     return new String(bos.toByteArray(), StandardCharsets.UTF_8);
                 }
             } catch (Exception e) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
+        public String extractTrackCover(String filePath) {
+            if (filePath == null || filePath.trim().isEmpty()) return "";
+            try {
+                String clean = filePath.startsWith("file://") ? filePath.substring(7) : filePath;
+                return extractAndSaveCover(new File(clean));
+            } catch (Exception ignored) {
                 return "";
             }
         }

@@ -5192,6 +5192,20 @@ function updateFullPlayerUI() {
   const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
   if (!t) return;
 
+  // Auto-recuperar carátula incrustada si no existe aún en el dispositivo actual
+  if (!t.cover && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.extractTrackCover) {
+    const localTarget = t.filePath || (t.src && t.src.startsWith("/") ? t.src : (t.src && t.src.startsWith("file://") ? t.src : ""));
+    if (localTarget) {
+      try {
+        const cov = window.AndroidMedia.extractTrackCover(localTarget);
+        if (cov) {
+          t.cover = cov;
+          savePersistentState();
+        }
+      } catch(_e){}
+    }
+  }
+
   const fpTitle = document.getElementById("fpTitle");
   if (fpTitle) fpTitle.textContent = t.title;
 
@@ -7131,13 +7145,17 @@ async function refreshDriveCatalog() {
   showToast("✔ Canciones y playlists actualizadas desde Google Drive");
 }
 
-window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped) {
+window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped, coverUrl) {
   if (!ok || !savedPath) return;
   const t = tracks.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
   if (t) {
     t.src = savedPath;
+    t.filePath = savedPath;
     t.downloaded = true;
     t.artist = "Google Drive (Descargada) ✔";
+    if (coverUrl) {
+      t.cover = coverUrl;
+    }
     if (duplicateSkipped) {
       showToast(`🛡️ Duplicado evitado: «${t.title}» ya existía`);
     } else {
@@ -7146,6 +7164,8 @@ window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped
   }
   savePersistentState();
   renderTracks();
+  updateFullPlayerUI();
+  updateVinylStandbyUI();
 };
 
 /* ---------------- MODAL DE BIENVENIDA AL INICIAR LA APP ---------------- */
