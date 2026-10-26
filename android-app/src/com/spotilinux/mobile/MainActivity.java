@@ -1311,6 +1311,31 @@ public class MainActivity extends Activity {
                 return "";
             }
         }
+
+        @JavascriptInterface
+        public void clearAppState() {
+            try {
+                File f = new File(getFilesDir(), "spotilinux_state.json");
+                if (f.exists()) f.delete();
+            } catch (Exception ignored) {
+            }
+        }
+
+        @JavascriptInterface
+        public void clearAllDownloadedMusic() {
+            try {
+                File folder = getAppMusicFolder();
+                if (folder.exists()) {
+                    File[] files = folder.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
+                            if (f.isFile()) f.delete();
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     private void startMediaServiceSafely(Intent serviceIntent) {

@@ -2195,7 +2195,17 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.2 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.3 (GitHub)</div>
+        </div>
+      </button>
+
+      <button class="sm-item-btn" onclick="closeSideMenu(); resetAllAppData()">
+        <div class="sm-item-icon" style="color:#ff5577;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title" style="color:#ff7788;">Restablecer Datos de Fábrica</div>
+          <div class="sm-item-sub">Limpiar biblioteca, cuentas y playlists locales</div>
         </div>
       </button>
     </div>
@@ -2932,17 +2942,10 @@ window.onunhandledrejection = function(event) {
 
 const hasNativeAndroid = Boolean(window.AndroidMedia && typeof window.AndroidMedia.playSource === "function");
 
-const DEMO_TRACKS = [
-  { id: "t1", title: "Midnight Horizon", artist: "Neon Pulse", album: "Outrun Dreams 1984", genre: "Synthwave", src: "tracks/01_midnight_horizon.mp3", liked: true, cloud: false, downloaded: true, color: "#ec38bc", bpm: 112 },
-  { id: "t2", title: "Rainy Tokyo Coffee", artist: "Kuroshio Beats", album: "Late Night Study", genre: "Lo-Fi Chill", src: "tracks/02_rainy_tokyo_lofi.mp3", liked: true, cloud: false, downloaded: true, color: "#f2994a", bpm: 82 },
-  { id: "t3", title: "Emerald Groove", artist: "Solstice Club", album: "Ibiza Sunset", genre: "Deep House", src: "tracks/03_emerald_deep_house.mp3", liked: false, cloud: false, downloaded: true, color: "#1db954", bpm: 124 },
-  { id: "t4", title: "Cybernetic Odyssey", artist: "Valkyrie Protocol", album: "Neo-Veracruz 2099", genre: "Electro", src: "tracks/04_cybernetic_odyssey.mp3", liked: false, cloud: false, downloaded: true, color: "#ff2a54", bpm: 100 },
-  { id: "t5", title: "Aurora Borealis", artist: "Nordic Echoes", album: "Glacier Reflections", genre: "Ambient", src: "tracks/05_aurora_borealis.mp3", liked: false, cloud: false, downloaded: true, color: "#00d2ff", bpm: 90 },
-  { id: "t6", title: "Velvet Starlight", artist: "The Midnight Cruisers", album: "Coastline Drive", genre: "Indie Synthpop", src: "tracks/06_velvet_starlight.mp3", liked: false, cloud: false, downloaded: true, color: "#9b51e0", bpm: 118 }
-];
+const DEMO_TRACKS = [];
 
-let tracks = [...DEMO_TRACKS];
-let masterTracksPool = [...DEMO_TRACKS];
+let tracks = [];
+let masterTracksPool = [];
 let rawDeviceTracksList = [];
 let deviceFilterConfig = {
   enabled: true,
@@ -2956,11 +2959,8 @@ let deviceFilterConfig = {
     { type: "prefix", value: "Call_" }
   ]
 };
-let playlists = [
-  { id: "pl_synth", name: "Night Drive & Synthwave", desc: "Sintetizadores retro y bajos profundos", trackIds: ["t1", "t3", "t4", "t6"] },
-  { id: "pl_chill", name: "Botica de Maomao 🌿", desc: "Beats relajantes Lo-Fi y Ambient", trackIds: ["t2", "t5"] }
-];
-let selectedPlaylistId = "pl_synth";
+let playlists = [];
+let selectedPlaylistId = null;
 let pendingTrackIdForPlaylist = null;
 
 let activePlaybackQueue = [...tracks];
@@ -3613,7 +3613,48 @@ function savePersistentState() {
   }
 }
 
+function resetAllAppData() {
+  if (!confirm("¿Deseas restablecer SpotiLinux a su estado limpio de fábrica? Se borrarán cuentas locales, playlists y canciones guardadas.")) return;
+  localStorage.removeItem("spotilinux_mobile_state");
+  localStorage.removeItem("welcome_done");
+  localStorage.setItem("spotilinux_clean_reset_ver", "13");
+  if (hasNativeAndroid && window.AndroidMedia) {
+    if (window.AndroidMedia.clearAppState) {
+      try { window.AndroidMedia.clearAppState(); } catch(_e){}
+    }
+    if (window.AndroidMedia.clearAllDownloadedMusic) {
+      try { window.AndroidMedia.clearAllDownloadedMusic(); } catch(_e){}
+    }
+  }
+  tracks = [];
+  masterTracksPool = [];
+  rawDeviceTracksList = [];
+  playlists = [];
+  userAccount = null;
+  accountsDb = {};
+  googleUserProfile = null;
+  cloudDriveVideos = {};
+  savePersistentState();
+  renderTracks();
+  renderHomePlaylists();
+  updateAccountUI();
+  updateFullPlayerUI();
+  showToast("🧹 Datos restablecidos a estado nuevo de fábrica");
+}
+
 function loadPersistentState() {
+  const CLEAN_RESET_VERSION_CODE = 13; // v2.7.3: Versión limpia para nuevo usuario
+  const lastReset = parseInt(localStorage.getItem("spotilinux_clean_reset_ver") || "0", 10);
+  if (lastReset < CLEAN_RESET_VERSION_CODE) {
+    localStorage.removeItem("spotilinux_mobile_state");
+    localStorage.removeItem("welcome_done");
+    localStorage.setItem("spotilinux_clean_reset_ver", String(CLEAN_RESET_VERSION_CODE));
+    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.clearAppState) {
+      try { window.AndroidMedia.clearAppState(); } catch(_e){}
+    }
+    return; // Comenzar 100% limpio como nuevo cliente
+  }
+
   let raw = "";
   if (hasNativeAndroid && window.AndroidMedia.loadAppStateJson) {
     try { raw = window.AndroidMedia.loadAppStateJson(); } catch (_e) {}
@@ -4517,8 +4558,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 12;
-const CURRENT_APP_VERSION_NAME = "2.7.2";
+const CURRENT_APP_VERSION_CODE = 13;
+const CURRENT_APP_VERSION_NAME = "2.7.3";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -5415,6 +5456,23 @@ function renderTracks() {
   if (!listEl) return;
   const filtered = getFilteredTracks();
   listEl.innerHTML = "";
+
+  if (filtered.length === 0) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.style.cssText = "text-align:center; padding:45px 20px; color:#888; font-size:13px;";
+    emptyDiv.innerHTML = `
+      <div style="font-size:38px; margin-bottom:12px;">🎵</div>
+      <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Tu biblioteca está limpia</div>
+      <div style="color:#aaa; max-width:280px; margin:0 auto 18px; line-height:1.4;">Escanea las canciones de tu teléfono o sincroniza tu carpeta «Musica» de Google Drive para disfrutar de tus temas.</div>
+      <div style="display:flex; justify-content:center; gap:8px;">
+        <button class="btn-chip active" onclick="scanDeviceMusic()" style="padding:8px 16px;">📲 Escanear Teléfono</button>
+        <button class="btn-chip" onclick="switchNav('drive')" style="padding:8px 16px;">☁️ Conectar Drive</button>
+      </div>
+    `;
+    listEl.appendChild(emptyDiv);
+    return;
+  }
+
   const curTrack = tracks[currentIndex];
 
   filtered.forEach((t) => {
@@ -6366,13 +6424,13 @@ window.onCloudDatabaseFetched = function(jsonStr, fileId) {
       if (payload.accounts && typeof payload.accounts === "object") {
         Object.assign(accountsDb, payload.accounts);
       }
-      applyAccountRecordToState(payload);
+      // Únicamente restaurar playlists y estado si el usuario ha iniciado sesión explícitamente con su cuenta
       if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
         applyAccountRecordToState(accountsDb[userAccount.email]);
+        savePersistentState();
+        renderHomePlaylists();
+        renderTracks();
       }
-      savePersistentState();
-      renderHomePlaylists();
-      renderTracks();
       if (fileId) cachedCloudDbFileId = fileId;
     } catch (_e) {}
   }
