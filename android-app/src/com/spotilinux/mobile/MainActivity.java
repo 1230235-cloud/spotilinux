@@ -41,6 +41,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,6 +52,7 @@ public class MainActivity extends Activity {
     public static volatile boolean uiVisible = true;
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
+    private boolean isImageFileChooser = false;
     private static final int FILE_CHOOSER_RESULT_CODE = 1001;
     private static final int PERMISSIONS_REQUEST_CODE = 1002;
 
@@ -112,13 +114,35 @@ public class MainActivity extends Activity {
                 }
                 MainActivity.this.filePathCallback = filePathCallback;
 
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("audio/*");
-                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                boolean isImage = false;
+                if (fileChooserParams != null && fileChooserParams.getAcceptTypes() != null) {
+                    for (String type : fileChooserParams.getAcceptTypes()) {
+                        if (type != null && type.toLowerCase().contains("image")) {
+                            isImage = true;
+                            break;
+                        }
+                    }
+                }
+                MainActivity.this.isImageFileChooser = isImage;
+
+                Intent intent;
+                String chooserTitle;
+                if (isImage) {
+                    intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("image/*");
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"});
+                    chooserTitle = "Seleccionar foto de perfil";
+                } else {
+                    intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("audio/*");
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    chooserTitle = "Seleccionar música";
+                }
 
                 try {
-                    startActivityForResult(Intent.createChooser(intent, "Seleccionar música"), FILE_CHOOSER_RESULT_CODE);
+                    startActivityForResult(Intent.createChooser(intent, chooserTitle), FILE_CHOOSER_RESULT_CODE);
                 } catch (Exception e) {
                     MainActivity.this.filePathCallback = null;
                     return false;
@@ -1496,22 +1520,27 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_CHOOSER_RESULT_CODE) {
-            if (filePathCallback != null) {
-                filePathCallback.onReceiveValue(null);
-                filePathCallback = null;
-            }
+            Uri[] results = null;
             if (resultCode == Activity.RESULT_OK && data != null) {
-                final List<Uri> uris = new ArrayList<>();
                 if (data.getClipData() != null) {
                     int count = data.getClipData().getItemCount();
+                    results = new Uri[count];
                     for (int i = 0; i < count; i++) {
-                        uris.add(data.getClipData().getItemAt(i).getUri());
+                        results[i] = data.getClipData().getItemAt(i).getUri();
                     }
                 } else if (data.getData() != null) {
-                    uris.add(data.getData());
+                    results = new Uri[]{ data.getData() };
                 }
+            }
 
-                // Copiar permanentemente los archivos seleccionados a la carpeta SpotiLinuxMusic de la app
+            if (filePathCallback != null) {
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            }
+
+            // Si fue una selección de audio (no imagen de perfil), copiamos los archivos a la biblioteca local
+            if (!isImageFileChooser && results != null && results.length > 0) {
+                final List<Uri> uris = new ArrayList<>(Arrays.asList(results));
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
@@ -1526,6 +1555,7 @@ public class MainActivity extends Activity {
                     }
                 }).start();
             }
+            isImageFileChooser = false;
         } else {
             super.onActivityResult(requestCode, resultCode, data);
         }

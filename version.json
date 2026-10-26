@@ -1,18 +1,18 @@
 {
-  "versionCode": 16,
-  "versionName": "2.7.6",
+  "versionCode": 17,
+  "versionName": "2.8.0",
   "releaseDate": "2026-10-26",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.7.6",
+    "version": "2.8.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Activación y reproducción inmediata de videos de fondo en modo vinilo (streaming directo de Drive y caché local)",
-    "Detección y emparejamiento inteligente de nombres de video/audio con decodificación HTML y limpieza de etiquetas",
-    "Optimización de tasa de refresco a 60 FPS estables y eliminación de micro-congelamientos al seleccionar canciones",
-    "Blindaje anti-fallos en el motor de animación de Maomao con protección de dimensiones del lienzo Canvas"
+    "Corrección del selector de foto de perfil: soporte nativo de selección de imágenes desde la galería y cámara en Android",
+    "Renombrado oficial de la plataforma a MaoMusic (ecosistema Linux Desktop y Android APK)",
+    "Nuevo icono e imagen de perfil oficial de MaoMusic con Maomao durmiente",
+    "Documento de arquitectura técnica integral para agentes de inteligencia artificial (agentes.md)"
   ]
 }

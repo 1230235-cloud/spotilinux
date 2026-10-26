@@ -818,7 +818,7 @@ class AccountDialog(QDialog):
     def __init__(self, parent: QWidget, store: LibraryStore) -> None:
         super().__init__(parent)
         self.store = store
-        self.setWindowTitle("👤 Cuenta SpotiLinux — Vincular Datos y Playlists en Google Drive")
+        self.setWindowTitle("👤 Cuenta MaoMusic — Vincular Datos y Playlists en Google Drive")
         self.setFixedSize(520, 480)
         self.mode: str = "register"  # "register" | "login"
         self.authenticated_account: Optional[dict] = None
@@ -854,7 +854,7 @@ class AccountDialog(QDialog):
         lay.setContentsMargins(22, 18, 22, 18)
         lay.setSpacing(10)
 
-        title = QLabel("👤 Cuenta SpotiLinux Multi-Dispositivo")
+        title = QLabel("👤 Cuenta MaoMusic Multi-Dispositivo")
         title.setStyleSheet("font-size: 17px; font-weight: 900; color: #1ED760;")
         lay.addWidget(title)
 
@@ -913,7 +913,7 @@ class AccountDialog(QDialog):
         self.lbl_pass = QLabel("Contraseña:")
         self.inp_password = QLineEdit()
         self.inp_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.inp_password.setPlaceholderText("Contraseña de tu cuenta SpotiLinux")
+        self.inp_password.setPlaceholderText("Contraseña de tu cuenta MaoMusic")
 
         self.inp_token = QLineEdit(self.store.gdrive_config.access_token)
         self.inp_token.setPlaceholderText("Opcional: Token OAuth2 de Google Drive para escritura directa en la nube")
@@ -1121,7 +1121,7 @@ class SpotiLinuxWindow(QMainWindow):
     def __init__(self, base_dir: Path) -> None:
         super().__init__()
         self.base_dir = base_dir
-        self.setWindowTitle("SpotiLinux — Music Player & Cloud Drive (Maomao Edition 🌿)")
+        self.setWindowTitle("MaoMusic — Music Player & Cloud Drive (Maomao Edition 🌿)")
         self.resize(1380, 850)
         self.setMinimumSize(1040, 680)
         self.setAcceptDrops(True)
@@ -1198,9 +1198,9 @@ class SpotiLinuxWindow(QMainWindow):
         self.store.save()
 
         msg = QMessageBox(self)
-        msg.setWindowTitle("☁️ Bienvenido a SpotiLinux")
+        msg.setWindowTitle("☁️ Bienvenido a MaoMusic")
         msg.setText(
-            "¿Deseas crear/iniciar sesión en tu Cuenta SpotiLinux (vincula tus Playlists y las canciones de la "
+            "¿Deseas crear/iniciar sesión en tu Cuenta MaoMusic (vincula tus Playlists y las canciones de la "
             f"carpeta «Musica» del Drive {DEFAULT_ROOT_DRIVE_FOLDER_ID}), configurar Google Drive o rastrear la música de tu PC?"
         )
         btn_acc = msg.addButton("👤 Crear / Iniciar Cuenta", QMessageBox.ButtonRole.AcceptRole)
@@ -1227,8 +1227,8 @@ class SpotiLinuxWindow(QMainWindow):
         cl_text = "\n".join(f"• {x}" for x in changelog_items) if changelog_items else "Mejoras de rendimiento y corrección de errores."
 
         msg = QMessageBox(self)
-        msg.setWindowTitle("🚀 Actualización de SpotiLinux Disponible")
-        msg.setText(f"<b>Se ha publicado una nueva versión oficial de SpotiLinux (v{v_name}) en GitHub.</b>")
+        msg.setWindowTitle("🚀 Actualización de MaoMusic Disponible")
+        msg.setText(f"<b>Se ha publicado una nueva versión oficial de MaoMusic (v{v_name}) en GitHub.</b>")
         msg.setInformativeText(f"Novedades:\n{cl_text}\n\n¿Deseas actualizar el código automáticamente con git pull?")
         btn_update = msg.addButton("Actualizar ahora (git pull)", QMessageBox.ButtonRole.AcceptRole)
         msg.addButton("Más tarde", QMessageBox.ButtonRole.RejectRole)
@@ -1239,7 +1239,7 @@ class SpotiLinuxWindow(QMainWindow):
                 import subprocess
                 res = subprocess.run(["git", "pull", "origin", "main"], cwd=str(self.base_dir), capture_output=True, text=True, timeout=30)
                 if res.returncode == 0:
-                    QMessageBox.information(self, "Actualización Completada", "✔ SpotiLinux se actualizó exitosamente desde GitHub.\nPor favor reinicia la aplicación para disfrutar de las novedades.")
+                    QMessageBox.information(self, "Actualización Completada", "✔ MaoMusic se actualizó exitosamente desde GitHub.\nPor favor reinicia la aplicación para disfrutar de las novedades.")
                 else:
                     QMessageBox.warning(self, "Aviso de Git", f"No se pudo completar el pull automáticamente:\n{res.stderr or res.stdout}")
             except Exception as e:
@@ -1282,7 +1282,7 @@ class SpotiLinuxWindow(QMainWindow):
         logo_row = QHBoxLayout()
         lbl_logo_icon = QLabel("●")
         lbl_logo_icon.setStyleSheet("color: #1DB954; font-size: 24px; font-weight: 900;")
-        lbl_logo_text = QLabel("SpotiLinux")
+        lbl_logo_text = QLabel("MaoMusic")
         lbl_logo_text.setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: 900; letter-spacing: 0.5px;")
         lbl_maomao_tag = QLabel("🌿 Maomao")
         lbl_maomao_tag.setStyleSheet(
@@ -1490,7 +1490,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.lbl_right_title = QLabel("Selecciona una pista")
         self.lbl_right_title.setStyleSheet("color: #FFFFFF; font-size: 13px; font-weight: 800;")
         self.lbl_right_title.setWordWrap(True)
-        self.lbl_right_artist = QLabel("SpotiLinux Audio Engine")
+        self.lbl_right_artist = QLabel("MaoMusic Audio Engine")
         self.lbl_right_artist.setStyleSheet("color: #1DB954; font-size: 11px; font-weight: 600;")
         self.lbl_right_album = QLabel("Local & Google Drive Cloud")
         self.lbl_right_album.setStyleSheet("color: #9E9EA8; font-size: 10px;")
@@ -1825,7 +1825,7 @@ class SpotiLinuxWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             if dlg.logged_out:
                 self.switch_view(self.current_view)
-                QMessageBox.information(self, "Sesión cerrada", "Se cerró la sesión de tu cuenta SpotiLinux.")
+                QMessageBox.information(self, "Sesión cerrada", "Se cerró la sesión de tu cuenta MaoMusic.")
                 return
             acc = dlg.authenticated_account
             if acc:
@@ -1840,7 +1840,7 @@ class SpotiLinuxWindow(QMainWindow):
                 self.switch_view(self.current_view)
                 QMessageBox.information(
                     self,
-                    "👤 Cuenta SpotiLinux Vinculada",
+                    "👤 Cuenta MaoMusic Vinculada",
                     f"✔ Cuenta activa: {self.store.user_account.get('username')} ({self.store.user_account.get('email')})\n\n"
                     f"• Playlists vinculadas: {len(self.store.playlists)} ({pl_count} sincronizadas)\n"
                     f"• Nuevas canciones de Drive restauradas: {drive_count}\n"
@@ -2050,7 +2050,7 @@ class SpotiLinuxWindow(QMainWindow):
         if has_spoti_acc:
             s_user = self.store.user_account.get("username", "Usuario")
             s_email = self.store.user_account.get("email", "")
-            lbl_title = QLabel(f"<b>Cuenta SpotiLinux: {s_user}</b> ({s_email})")
+            lbl_title = QLabel(f"<b>Cuenta MaoMusic: {s_user}</b> ({s_email})")
             lbl_sub = QLabel(
                 f"Base de datos y carpeta «Musica» en Drive ({DEFAULT_ROOT_DRIVE_FOLDER_ID[:10]}…) • {dedup_txt}"
             )
@@ -2335,7 +2335,7 @@ class SpotiLinuxWindow(QMainWindow):
             return (
                 "PLAYLIST FAVORITA",
                 "Canciones que te gustan",
-                "Tus pistas marcadas con corazón ♥ en SpotiLinux",
+                "Tus pistas marcadas con corazón ♥ en MaoMusic",
                 tracks,
                 False,
             )
@@ -2747,7 +2747,7 @@ class SpotiLinuxWindow(QMainWindow):
                 self,
                 "☁️ Sincronización Exitosa",
                 f"Tus playlists y las canciones del Drive ({DEFAULT_ROOT_DRIVE_FOLDER_ID} / Musica) están sincronizadas.\n"
-                "Puedes usarlas en varios dispositivos iniciando sesión con tu misma cuenta SpotiLinux.",
+                "Puedes usarlas en varios dispositivos iniciando sesión con tu misma cuenta MaoMusic.",
             )
 
     def _on_cloud_sync_failed(self, err: str, notify: bool = False) -> None:
@@ -2952,7 +2952,7 @@ class SpotiLinuxWindow(QMainWindow):
             "Auto-Rastreo Completado",
             f"✔ Se rastrearon y guardaron {len(discovered)} canciones en la carpeta de la aplicación:\n"
             f"{self.store.music_library_dir}\n\n"
-            "Ya no tendrás que volver a importarlas cada vez que abras SpotiLinux.",
+            "Ya no tendrás que volver a importarlas cada vez que abras MaoMusic.",
         )
 
     def import_folder_dialog(self) -> None:
@@ -3200,7 +3200,7 @@ def resolve_app_data_dir() -> Path:
 
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setApplicationName("SpotiLinux")
+    app.setApplicationName("MaoMusic")
     app.setStyleSheet(SPOTIFY_QSS)
 
     base_dir = resolve_app_data_dir()

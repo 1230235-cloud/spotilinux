@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MaoMusic (Maomao & Cloud Edition)
+Comment=Reproductor de música estilo Spotify con Google Drive y Maomao bailando al compás
+Exec=/home/jinsoon005/.gemini/antigravity/scratch/spotify-linux/dist/MaoMusic
+Icon=/home/jinsoon005/.gemini/antigravity/scratch/spotify-linux/icon.png
+Terminal=false
+Categories=AudioVideo;Audio;Player;Qt;
+StartupWMClass=MaoMusic

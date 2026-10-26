@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.spotilinux.mobile"
-    android:versionCode="16"
-    android:versionName="2.7.6">
+    android:versionCode="17"
+    android:versionName="2.8.0">
 
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
 
@@ -20,7 +20,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
-        android:label="SpotiLinux"
+        android:label="MaoMusic"
         android:icon="@drawable/ic_launcher"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true"

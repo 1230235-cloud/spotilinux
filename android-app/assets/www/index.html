@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>SpotiLinux Mobile — Maomao, Playlists &amp; Google Drive</title>
+<title>MaoMusic Mobile — Maomao, Playlists &amp; Google Drive</title>
 <style>
   :root {
     --bg: #09090b;
@@ -1957,7 +1957,7 @@
   <div class="top-header">
     <div class="logo-box">
       <div class="logo-dot"></div>
-      <div class="logo-title">SpotiLinux</div>
+      <div class="logo-title">MaoMusic</div>
     </div>
     <button class="top-menu-btn" onclick="toggleSideMenu()" id="btnTopMenu" title="Menú y Cuenta">
       <div class="top-menu-avatar" id="topMenuAvatar">
@@ -1971,14 +1971,14 @@
   <!-- MENÚ DESPLEGABLE LATERAL ÚNICO (CUENTA + ACCIONES + AJUSTES) -->
   <div id="sideMenuBackdrop" class="side-menu-backdrop" onclick="closeSideMenu()"></div>
   <div id="sideMenuDrawer" class="side-menu-drawer">
-    <input type="file" id="avatarPicker" accept="image/*" style="display:none" onchange="handleProfilePhotoPicked(event)" />
+    <input type="file" id="avatarPicker" accept="image/*,image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="handleProfilePhotoPicked(event)" />
     <div class="sm-header">
       <div class="sm-profile-row">
         <div class="sm-avatar" id="smAvatar" onclick="document.getElementById('avatarPicker').click()" title="Toca para cambiar foto de perfil">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </div>
         <div class="sm-user-meta">
-          <div class="sm-username" id="smUsername">Cuenta SpotiLinux</div>
+          <div class="sm-username" id="smUsername">Cuenta MaoMusic</div>
           <div class="sm-status" id="smStatus">Google Drive • Conectado</div>
           <div style="display:flex; align-items:center; gap:5px; margin-top:3px;">
             <button class="btn-chip" style="font-size:9px; padding:2px 7px;" onclick="document.getElementById('avatarPicker').click()">📷 Foto de perfil</button>
@@ -2290,7 +2290,7 @@
       <!-- PESTAÑA 3: GOOGLE DRIVE PRIVADO Y CUENTA -->
       <div id="tab-drive" class="tab-pane">
         <div class="cloud-box">
-          <h3>👤 Cuenta SpotiLinux y Base de Datos en Google Drive</h3>
+          <h3>👤 Cuenta MaoMusic y Base de Datos en Google Drive</h3>
           <p>Crea una cuenta (Usuario, Correo y Contraseña) o inicia sesión para guardar tus Playlists junto con las canciones del Drive (carpeta <b>Musica</b> en <code>1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT</code>) y usarlas en varios dispositivos.</p>
 
           <!-- Perfil de cuenta vinculada -->
@@ -2303,7 +2303,7 @@
             <button class="btn-chip" id="btnLogoutAccount" style="display:none; font-size:10px; padding:5px 8px;" onclick="logoutSpotiAccount()">Salir</button>
           </div>
 
-          <!-- Formulario de Creación / Inicio de Sesión de Cuenta SpotiLinux -->
+          <!-- Formulario de Creación / Inicio de Sesión de Cuenta MaoMusic -->
           <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px; margin-bottom:12px;">
             <div style="display:flex; gap:6px; margin-bottom:8px;">
               <button class="btn-chip active" id="tabAccRegisterBtn" style="flex:1;" onclick="setAccountFormMode('register')">✨ Crear Cuenta</button>
@@ -2319,7 +2319,7 @@
             </div>
             <div class="field-group">
               <label>Contraseña:</label>
-              <input type="password" id="accPassword" placeholder="Contraseña de tu cuenta SpotiLinux" />
+              <input type="password" id="accPassword" placeholder="Contraseña de tu cuenta MaoMusic" />
             </div>
             <button class="btn-chip active" id="btnSubmitAccount" style="width:100%; padding:9px; margin-top:4px;" onclick="submitSpotiAccountForm()">
               ✨ Crear Cuenta y Guardar en Drive
@@ -2439,7 +2439,7 @@
   <!-- MODAL DE BIENVENIDA: ACCESO A CUENTA DE GOOGLE DRIVE AL INICIO + RASTREO DE DISPOSITIVO -->
   <div id="welcomeModal" class="modal-backdrop">
     <div class="modal-card">
-      <h3>🌿 ¡Bienvenido a SpotiLinux!</h3>
+      <h3>🌿 ¡Bienvenido a MaoMusic!</h3>
       <p>Conecta tu cuenta de <b>Google Drive</b> desde el inicio para buscar automáticamente tu carpeta de música en la nube (para escuchar en línea o descargar), o rastrea la música guardada en tu teléfono.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <button class="btn-chip active" style="padding:11px; font-size:13px;" onclick="closeWelcomeAndConnectGoogle()">
@@ -2573,7 +2573,7 @@
         </div>
       </div>
 
-      <p style="font-size:12px; color:#c0c0d0; margin-bottom:10px;">Se ha publicado una nueva versión oficial de SpotiLinux en GitHub con las siguientes mejoras:</p>
+      <p style="font-size:12px; color:#c0c0d0; margin-bottom:10px;">Se ha publicado una nueva versión oficial de MaoMusic en GitHub con las siguientes mejoras:</p>
 
       <div id="updateChangelogBox" style="background:#14141d; border:1px solid rgba(255, 255, 255, 0.08); border-radius:12px; padding:10px 12px; max-height:160px; overflow-y:auto; font-size:11px; line-height:1.6; margin-bottom:14px; color:#e0e0ee;">
       </div>
@@ -2963,7 +2963,7 @@
 
     <!-- Detalles de la canción y controles discretos -->
     <div class="vinyl-info-box" onclick="event.stopPropagation()">
-      <div class="vinyl-title" id="vinylTrackTitle">SpotiLinux</div>
+      <div class="vinyl-title" id="vinylTrackTitle">MaoMusic</div>
       <div class="vinyl-artist" id="vinylTrackArtist">Modo Reposo</div>
       <div class="vinyl-sub-badge">REPOSO OLED • TOCADISCOS ACTIVO</div>
 
@@ -3513,7 +3513,7 @@ async function broadcastPlaybackSession(force = false) {
     deviceType: hasNativeAndroid ? "android" : "web/desktop",
     trackId: t.id || "",
     driveId: t.driveId || "",
-    title: t.title || "SpotiLinux",
+    title: t.title || "MaoMusic",
     artist: t.artist || "Desconocido",
     album: t.album || "",
     cover: t.cover || "",
@@ -3669,7 +3669,7 @@ function savePersistentState() {
 }
 
 function resetAllAppData() {
-  if (!confirm("¿Deseas restablecer SpotiLinux a su estado limpio de fábrica? Se borrarán cuentas locales, playlists y canciones guardadas.")) return;
+  if (!confirm("¿Deseas restablecer MaoMusic a su estado limpio de fábrica? Se borrarán cuentas locales, playlists y canciones guardadas.")) return;
   localStorage.removeItem("spotilinux_mobile_state");
   localStorage.removeItem("welcome_done");
   localStorage.setItem("spotilinux_clean_reset_ver", "13");
@@ -4659,9 +4659,9 @@ function updateVinylStandbyUI() {
   const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
   if (t) {
     const titleEl = document.getElementById("vinylTrackTitle");
-    if (titleEl) titleEl.textContent = t.title || "SpotiLinux";
+    if (titleEl) titleEl.textContent = t.title || "MaoMusic";
     const artEl = document.getElementById("vinylTrackArtist");
-    if (artEl) artEl.textContent = t.artist || "SpotiLinux Mobile";
+    if (artEl) artEl.textContent = t.artist || "MaoMusic Mobile";
     
     const centerArt = document.getElementById("vinylCenterArt");
     if (centerArt) {
@@ -4810,7 +4810,7 @@ async function checkForAppUpdates(manualUserClick = false) {
       showAppUpdateModal(info);
     } else {
       if (manualUserClick) {
-        showToast(`✔ SpotiLinux ya está al día (v${getInstalledAppVersionName()})`);
+        showToast(`✔ MaoMusic ya está al día (v${getInstalledAppVersionName()})`);
       }
     }
   } catch (err) {
@@ -5276,7 +5276,7 @@ function updateSideMenuProfile() {
   const status = document.getElementById("smStatus");
   const btnRemove = document.getElementById("btnRemoveAvatar");
 
-  const name = userAccount ? userAccount.username : (googleUserProfile ? (googleUserProfile.name || "Usuario Google") : "Cuenta SpotiLinux");
+  const name = userAccount ? userAccount.username : (googleUserProfile ? (googleUserProfile.name || "Usuario Google") : "Cuenta MaoMusic");
   if (username) username.textContent = name;
   if (topName) topName.textContent = userAccount ? userAccount.username : "Menú";
 
@@ -5289,7 +5289,7 @@ function updateSideMenuProfile() {
   const customPhoto = localStorage.getItem("spotiCustomAvatar");
   if (btnRemove) btnRemove.style.display = customPhoto ? "inline-block" : "none";
 
-  const photoSrc = customPhoto || (googleUserProfile && (googleUserProfile.picture || googleUserProfile.photoLink));
+  const photoSrc = customPhoto || (googleUserProfile && (googleUserProfile.picture || googleUserProfile.photoLink)) || DEFAULT_MAOMUSIC_AVATAR;
   if (photoSrc) {
     const imgHtml = `<img src="${photoSrc}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" alt="avatar" />`;
     if (avatar) avatar.innerHTML = imgHtml + `<div class="sm-avatar-badge">📷</div>`;
@@ -6635,7 +6635,7 @@ function applyAccountRecordToState(acc) {
       playlists.push({
         id: cPl.id || ("pl_" + Date.now()),
         name: cPl.name || "Playlist Sincronizada",
-        desc: cPl.desc || cPl.description || "Sincronizada desde tu cuenta SpotiLinux",
+        desc: cPl.desc || cPl.description || "Sincronizada desde tu cuenta MaoMusic",
         trackIds: tIds
       });
     }
@@ -7049,7 +7049,7 @@ async function uploadPlaylistsToDrive(existingFileId) {
   const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
 
   const payload = {
-    app: "SpotiLinux",
+    app: "MaoMusic",
     version: "2.0.0",
     updatedAt: Date.now(),
     updated_at: Date.now(),

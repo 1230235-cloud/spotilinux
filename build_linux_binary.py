@@ -59,7 +59,8 @@ def generate_app_icon(icon_path: Path) -> None:
 def build_elf_executable() -> Path:
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     icon_path = BASE_DIR / "icon.png"
-    generate_app_icon(icon_path)
+    if not icon_path.exists():
+        generate_app_icon(icon_path)
     shutil.copy2(icon_path, DIST_DIR / "icon.png")
 
     # 1. Crear archivo ZIP con todos los módulos Python de la aplicación
@@ -152,31 +153,41 @@ int main(int argc, char *argv[]) {{
     c_path = DIST_DIR / "spotilinux_launcher.c"
     c_path.write_text(c_source, encoding="utf-8")
 
-    out_bin = DIST_DIR / "SpotiLinux"
+    out_bin = DIST_DIR / "MaoMusic"
     subprocess.run(["gcc", "-O2", str(c_path), "-o", str(out_bin)], check=True)
     c_path.unlink(missing_ok=True)
     out_bin.chmod(0o755)
 
-    # Copiar también a la raíz del proyecto como ./SpotiLinux para comodidad
+    # Copiar también a la raíz del proyecto como ./MaoMusic y mantener ./SpotiLinux
+    shutil.copy2(out_bin, BASE_DIR / "MaoMusic")
+    (BASE_DIR / "MaoMusic").chmod(0o755)
     shutil.copy2(out_bin, BASE_DIR / "SpotiLinux")
     (BASE_DIR / "SpotiLinux").chmod(0o755)
+    shutil.copy2(out_bin, DIST_DIR / "SpotiLinux")
+    (DIST_DIR / "SpotiLinux").chmod(0o755)
 
-    # Crear archivo SpotiLinux.desktop
+    # Crear archivo MaoMusic.desktop y SpotiLinux.desktop
     desktop_content = f"""[Desktop Entry]
 Version=1.0
 Type=Application
-Name=SpotiLinux (Maomao & Cloud Edition)
+Name=MaoMusic (Maomao & Cloud Edition)
 Comment=Reproductor de música estilo Spotify con Google Drive y Maomao bailando al compás
 Exec={out_bin}
 Icon={icon_path}
 Terminal=false
 Categories=AudioVideo;Audio;Player;Qt;
-StartupWMClass=SpotiLinux
+StartupWMClass=MaoMusic
 """
-    desktop_file = BASE_DIR / "SpotiLinux.desktop"
+    desktop_file = BASE_DIR / "MaoMusic.desktop"
     desktop_file.write_text(desktop_content, encoding="utf-8")
     desktop_file.chmod(0o755)
-    shutil.copy2(desktop_file, DIST_DIR / "SpotiLinux.desktop")
+    shutil.copy2(desktop_file, DIST_DIR / "MaoMusic.desktop")
+
+    # Mantener SpotiLinux.desktop para compatibilidad
+    desktop_spoti = BASE_DIR / "SpotiLinux.desktop"
+    desktop_spoti.write_text(desktop_content.replace("MaoMusic", "SpotiLinux"), encoding="utf-8")
+    desktop_spoti.chmod(0o755)
+    shutil.copy2(desktop_spoti, DIST_DIR / "SpotiLinux.desktop")
 
     return out_bin
 

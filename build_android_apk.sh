@@ -63,7 +63,7 @@ if [ ! -f "$KEYSTORE" ]; then
         -dname "CN=SpotiLinux,OU=Mobile,O=SpotiLinux,L=Linux,S=Linux,C=MX" >/dev/null 2>&1
 fi
 
-FINAL_APK="$DIST_DIR/SpotiLinux-Mobile.apk"
+FINAL_APK="$DIST_DIR/MaoMusic.apk"
 "$BUILD_TOOLS/apksigner" sign \
     --ks "$KEYSTORE" \
     --ks-pass pass:android \
@@ -71,5 +71,7 @@ FINAL_APK="$DIST_DIR/SpotiLinux-Mobile.apk"
     --out "$FINAL_APK" \
     "$BUILD_DIR/aligned.apk"
 
+cp -f "$FINAL_APK" "$BASE_DIR/MaoMusic.apk"
+cp -f "$FINAL_APK" "$DIST_DIR/SpotiLinux-Mobile.apk"
 cp -f "$FINAL_APK" "$BASE_DIR/SpotiLinux-Mobile.apk"
-echo "✔ ¡APK de Android generado y firmado exitosamente en: $FINAL_APK!"
+echo "✔ ¡APK de Android (MaoMusic) generado y firmado exitosamente en: $FINAL_APK!"
