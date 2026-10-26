@@ -2195,7 +2195,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.5 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.6 (GitHub)</div>
         </div>
       </button>
 
@@ -4308,31 +4308,51 @@ function toggleSleepVinylSetting() {
 }
 
 let cloudDriveVideos = {};
+const DEFAULT_VIDEOS_FOLDER_ID = "1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa";
+
+function cleanMediaName(str) {
+  if (!str) return "";
+  let s = String(str);
+  // 1. Decodificar entidades HTML comunes de nombres de archivos de Google Drive
+  s = s.replace(/&amp;/g, "&")
+       .replace(/&#39;/g, "'")
+       .replace(/&quot;/g, '"')
+       .replace(/&lt;/g, "<")
+       .replace(/&gt;/g, ">");
+  // 2. Quitar extensiones multimedia
+  s = s.replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "");
+  // 3. Quitar numeración de pista al inicio (ej. "01 - ", "01. ", "1. ", "01_")
+  s = s.replace(/^\s*\d{1,3}\s*[-._–—]\s*/, "");
+  // 4. Quitar prefijos y sufijos de páginas de descarga (y2mate, snaptik, yt1s, etc.)
+  s = s.replace(/^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*/i, "");
+  s = s.replace(/\by2mate(\.com|\.is)?\b/gi, "");
+  // 5. Quitar etiquetas multimedia entre corchetes o paréntesis
+  s = s.replace(/\s*[\(\[]\s*(official\s*(music\s*)?video|video\s*oficial|official\s*audio|audio\s*oficial|official|video|audio|lyric\s*video|lyrics|letra|anime\s*lyric\s*official|amv|mv|visualizer|clip|hd|4k|1080p|remix|nightcore|speed\s*up)\s*[\)\]]/gi, "");
+  // 6. Normalizar caracteres Unicode y remover diacríticos / tildes
+  s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // 7. Retener solo caracteres alfanuméricos limpios en minúsculas
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
 
 function normalizeTrackKey(str) {
-  if (!str) return "";
-  return String(str)
-    .toLowerCase()
-    .replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "")
-    .replace(/[^a-z0-9áéíóúñ]/g, "")
-    .trim();
+  return cleanMediaName(str);
 }
 
 window.onPublicDriveVideosFetched = function(videoList) {
   if (!Array.isArray(videoList)) return;
   videoList.forEach(v => {
     if (!v || !v.id) return;
-    const key = normalizeTrackKey(v.name || v.id);
-    if (key) {
-      cloudDriveVideos[key] = {
-        id: v.id,
-        driveId: v.id,
-        name: v.name || "Video",
-        src: v.localSrc || "",
-        localSrc: v.localSrc || "",
-        fallbackSrc: `https://drive.google.com/uc?export=download&id=${v.id}`
-      };
-    }
+    const cleanKey = cleanMediaName(v.name || v.id);
+    const directUrl = v.localSrc || `https://drive.google.com/uc?export=download&id=${v.id}`;
+    cloudDriveVideos[v.id] = {
+      id: v.id,
+      driveId: v.id,
+      name: v.name || "Video",
+      cleanName: cleanKey,
+      src: directUrl,
+      localSrc: v.localSrc || "",
+      fallbackSrc: `https://drive.google.com/uc?export=download&id=${v.id}`
+    };
   });
   console.log("🎬 Videos de Google Drive registrados:", Object.keys(cloudDriveVideos).length);
   updateVinylStandbyVideo();
@@ -4363,56 +4383,61 @@ function findMatchingVideo(track) {
   const videoEntries = Object.values(cloudDriveVideos);
   if (videoEntries.length === 0) return null;
 
-  const normTitle = normalizeTrackKey(track.title || "");
-  const normFull = normalizeTrackKey((track.artist || "") + " " + (track.title || ""));
-  const normDriveName = track.driveName ? normalizeTrackKey(track.driveName) : "";
+  const cleanTitle = cleanMediaName(track.title || "");
+  const cleanFull = cleanMediaName((track.artist || "") + " " + (track.title || ""));
+  const cleanDriveName = track.driveName ? cleanMediaName(track.driveName) : "";
 
-  // 1. Coincidencia exacta por clave normalizada
+  // 1. Coincidencia exacta por nombre limpio (título, archivo Drive o artista + título)
   for (const v of videoEntries) {
-    const vk = normalizeTrackKey(v.name);
-    if (vk === normTitle || vk === normFull || (normDriveName && vk === normDriveName)) {
+    if (!v.cleanName) v.cleanName = cleanMediaName(v.name);
+    const vk = v.cleanName;
+    if (vk && (vk === cleanTitle || vk === cleanDriveName || vk === cleanFull)) {
       return v;
     }
   }
 
-  // 2. Coincidencia por subcadena directa
+  // 2. Coincidencia por subcadena mutua directa si la longitud es representativa (>= 4 caracteres)
   for (const v of videoEntries) {
-    const vk = normalizeTrackKey(v.name);
-    if (normTitle && (vk.includes(normTitle) || normTitle.includes(vk))) {
+    const vk = v.cleanName;
+    if (cleanTitle && cleanTitle.length >= 4 && (vk.includes(cleanTitle) || cleanTitle.includes(vk))) {
       return v;
     }
-    if (normFull && (vk.includes(normFull) || normFull.includes(vk))) {
+    if (cleanDriveName && cleanDriveName.length >= 4 && (vk.includes(cleanDriveName) || cleanDriveName.includes(vk))) {
+      return v;
+    }
+    if (cleanFull && cleanFull.length >= 5 && (vk.includes(cleanFull) || cleanFull.includes(vk))) {
       return v;
     }
   }
 
-  // 3. Coincidencia por tokens / palabras clave (ej: "adicto", "tainy", "anuel")
-  const stopWords = new Set(["the", "and", "los", "las", "del", "con", "por", "para", "official", "video", "animated", "audio", "music", "letra", "lyrics", "remix"]);
-  const getTokens = (str) => {
-    return String(str || "")
-      .toLowerCase()
+  // 3. Coincidencia por palabras clave (tokens con peso)
+  const stopWords = new Set(["the", "and", "los", "las", "del", "con", "por", "para", "official", "video", "animated", "audio", "music", "letra", "lyrics", "remix", "versio", "version", "ft", "feat"]);
+  const extractTokens = (str) => {
+    let s = String(str || "").replace(/&amp;/g, " ").replace(/&#39;/g, " ").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return s.toLowerCase()
       .replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "")
-      .replace(/[^a-z0-9áéíóúñ\s]/gi, " ")
+      .replace(/[^a-z0-9\s]/g, " ")
       .split(/\s+/)
       .filter(w => w.length >= 3 && !stopWords.has(w));
   };
 
-  const trackTokens = getTokens(`${track.artist || ""} ${track.title || ""} ${track.driveName || ""}`);
+  const trackTokens = extractTokens(`${track.title || ""} ${track.driveName || ""} ${track.artist || ""}`);
   if (trackTokens.length > 0) {
     let bestMatch = null;
-    let maxMatches = 0;
+    let maxScore = 0;
     for (const v of videoEntries) {
-      const vTokens = new Set(getTokens(v.name));
+      const vTokens = new Set(extractTokens(v.name));
       let matches = 0;
       for (const t of trackTokens) {
         if (vTokens.has(t)) matches++;
       }
-      if (matches > maxMatches && matches >= 1) {
-        maxMatches = matches;
+      if (matches > maxScore && matches >= 1) {
+        maxScore = matches;
         bestMatch = v;
       }
     }
-    if (bestMatch && maxMatches >= 1) {
+    // Si coincide en al menos 2 palabras clave, o el 50% de las palabras clave de la pista
+    if (bestMatch && (maxScore >= 2 || (maxScore >= 1 && trackTokens.length <= 2))) {
       return bestMatch;
     }
   }
@@ -4513,18 +4538,20 @@ function updateVinylStandbyVideo() {
     return;
   }
 
-  // Si aún no está descargado localmente, solicitar descarga en segundo plano a Java y mantener reposo negro mientras descarga
-  if (!matchedVideo.src || matchedVideo.src.startsWith("http")) {
+  // Fuente de video: usar archivo en caché local si ya existe, o stream directo de Drive
+  const videoSrc = matchedVideo.localSrc || matchedVideo.src || matchedVideo.fallbackSrc;
+  if (!videoSrc) {
     stopVinylStandbyVideo();
-    if (matchedVideo.id && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.prepareDriveVideo) {
-      const tok = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
-      const key = document.getElementById("gdApiKey") ? document.getElementById("gdApiKey").value.trim() : "";
-      window.AndroidMedia.prepareDriveVideo(matchedVideo.id, matchedVideo.name, tok, key);
-    }
     return;
   }
 
-  const videoSrc = matchedVideo.src;
+  // Si no está descargado localmente en Android, solicitar descarga en segundo plano para caché local
+  if (!matchedVideo.localSrc && matchedVideo.id && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.prepareDriveVideo) {
+    const tok = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
+    const key = document.getElementById("gdApiKey") ? document.getElementById("gdApiKey").value.trim() : "";
+    window.AndroidMedia.prepareDriveVideo(matchedVideo.id, matchedVideo.name, tok, key);
+  }
+
   const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
 
   // Manejadores estrictos para garantizar que NUNCA aparezca un icono de video roto
@@ -4738,8 +4765,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 15;
-const CURRENT_APP_VERSION_NAME = "2.7.5";
+const CURRENT_APP_VERSION_CODE = 16;
+const CURRENT_APP_VERSION_NAME = "2.7.6";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -5209,7 +5236,7 @@ function updatePlayerUI() {
   const btnPlay = document.getElementById("btnPlay");
   if (btnPlay) btnPlay.innerHTML = playSvg;
 
-  renderTracks();
+  // Actualización instantánea sin reconstruir el árbol DOM entero (tasa de refresco ultra fluida)
   highlightPlayingTracks();
   updateFullPlayerUI();
   updateVinylStandbyUI();
@@ -7205,7 +7232,7 @@ async function resolveVideosSubfolderId(rootFolderId, token, apiKey) {
       }
     } catch (_e) {}
   }
-  return "";
+  return DEFAULT_VIDEOS_FOLDER_ID;
 }
 
 function triggerDriveUploadPicker() {
@@ -7733,9 +7760,12 @@ function onTrackChangedForRhythm(trackObj) {
   onsetTimestamps = [];
   specFloor.fill(0.12);
   prevRawMag.fill(0);
-  if (trackObj && trackObj.bpm && trackObj.bpm > 40) {
-    trackKnownBpm = trackObj.bpm;
-    currentBpm = trackObj.bpm;
+  const parsedBpm = (trackObj && typeof trackObj.bpm === "number" && isFinite(trackObj.bpm))
+    ? trackObj.bpm
+    : (trackObj && trackObj.bpm ? parseFloat(trackObj.bpm) : 0);
+  if (parsedBpm && isFinite(parsedBpm) && parsedBpm >= 40 && parsedBpm <= 240) {
+    trackKnownBpm = parsedBpm;
+    currentBpm = parsedBpm;
     beatConfidence = 0.92;
   } else {
     trackKnownBpm = 0;
@@ -7861,43 +7891,35 @@ window.onNativeSpectrum = function(rawBins) {
 };
 
 function syncCanvasDimensions() {
-  const rectM = mmCanvas.getBoundingClientRect();
-  if (rectM.width > 20 && rectM.height > 20) {
-    mmCanvas.width = Math.round(rectM.width);
-    mmCanvas.height = Math.round(rectM.height);
+  if (mmCanvas) {
+    const rectM = mmCanvas.getBoundingClientRect();
+    const nw = Math.max(120, Math.round(rectM.width || mmCanvas.clientWidth || 360));
+    const nh = Math.max(80, Math.round(rectM.height || mmCanvas.clientHeight || 175));
+    if (mmCanvas.width !== nw) mmCanvas.width = nw;
+    if (mmCanvas.height !== nh) mmCanvas.height = nh;
   }
-  const rectV = vCanvas.getBoundingClientRect();
-  if (rectV.width > 20 && rectV.height > 15) {
-    vCanvas.width = Math.round(rectV.width);
-    vCanvas.height = Math.round(rectV.height);
+  if (vCanvas) {
+    const rectV = vCanvas.getBoundingClientRect();
+    const vw = Math.max(120, Math.round(rectV.width || vCanvas.clientWidth || 360));
+    const vh = Math.max(30, Math.round(rectV.height || vCanvas.clientHeight || 56));
+    if (vCanvas.width !== vw) vCanvas.width = vw;
+    if (vCanvas.height !== vh) vCanvas.height = vh;
   }
   if (!fullMmCanvas) fullMmCanvas = document.getElementById("fullMaomaoCanvas");
   if (fullMmCanvas) {
     const rectFM = fullMmCanvas.getBoundingClientRect();
-    if (rectFM.width > 20 && rectFM.height > 20) {
-      fullMmCanvas.width = Math.round(rectFM.width);
-      fullMmCanvas.height = Math.round(rectFM.height);
-    } else if (fullMmCanvas.clientWidth > 20 && fullMmCanvas.clientHeight > 20) {
-      fullMmCanvas.width = Math.round(fullMmCanvas.clientWidth);
-      fullMmCanvas.height = Math.round(fullMmCanvas.clientHeight);
-    } else if (fullMmCanvas.width < 50) {
-      fullMmCanvas.width = 380;
-      fullMmCanvas.height = 220;
-    }
+    const fnw = Math.max(140, Math.round(rectFM.width || fullMmCanvas.clientWidth || 380));
+    const fnh = Math.max(90, Math.round(rectFM.height || fullMmCanvas.clientHeight || 220));
+    if (fullMmCanvas.width !== fnw) fullMmCanvas.width = fnw;
+    if (fullMmCanvas.height !== fnh) fullMmCanvas.height = fnh;
   }
   if (!fullVCanvas) fullVCanvas = document.getElementById("fullVisCanvas");
   if (fullVCanvas) {
     const rectFV = fullVCanvas.getBoundingClientRect();
-    if (rectFV.width > 20 && rectFV.height > 15) {
-      fullVCanvas.width = Math.round(rectFV.width);
-      fullVCanvas.height = Math.round(rectFV.height);
-    } else if (fullVCanvas.clientWidth > 20 && fullVCanvas.clientHeight > 15) {
-      fullVCanvas.width = Math.round(fullVCanvas.clientWidth);
-      fullVCanvas.height = Math.round(fullVCanvas.clientHeight);
-    } else if (fullVCanvas.width < 50) {
-      fullVCanvas.width = 380;
-      fullVCanvas.height = 56;
-    }
+    const fvw = Math.max(140, Math.round(rectFV.width || fullVCanvas.clientWidth || 380));
+    const fvh = Math.max(30, Math.round(rectFV.height || fullVCanvas.clientHeight || 56));
+    if (fullVCanvas.width !== fvw) fullVCanvas.width = fvw;
+    if (fullVCanvas.height !== fvh) fullVCanvas.height = fvh;
   }
 }
 
@@ -7985,122 +8007,127 @@ function computeDancePose(beatPos, styleIdx, amp, idleSec) {
 
 function animateLoop(nowMs) {
   requestAnimationFrame(animateLoop);
-  if (typeof nowMs !== "number") nowMs = performance.now();
-  const dt = Math.min(0.08, Math.max(0.004, (nowMs - lastFrameTimeMs) / 1000));
-  lastFrameTimeMs = nowMs;
-  idleTimeSec += dt;
+  try {
+    if (typeof nowMs !== "number" || isNaN(nowMs)) nowMs = performance.now();
+    const dt = Math.min(0.08, Math.max(0.004, (nowMs - lastFrameTimeMs) / 1000));
+    lastFrameTimeMs = nowMs;
+    idleTimeSec += dt;
 
-  const posSec = getSmoothPlaybackSec();
-  const beatPos = posSec * (currentBpm / 60);
+    const posSec = getSmoothPlaybackSec();
+    const safeBpm = (isFinite(currentBpm) && currentBpm >= 40) ? currentBpm : 116;
+    const beatPos = posSec * (safeBpm / 60);
 
-  if (isPlaying) {
-    danceAmp = Math.min(1, danceAmp + dt * 3.8);
-  } else {
-    danceAmp = Math.max(0, danceAmp - dt * 4.2);
-  }
-  onsetImpulse = Math.max(0, onsetImpulse - dt * 5.2);
-
-  // Si el visualizador nativo de Android no envió trama en los últimos 220 ms (p.ej. sin permiso RECORD_AUDIO o en navegador),
-  // generamos un espectro musical con progresión de secciones (Intro/Verso/Build-up/Drop) y formantes móviles bloqueados al beat
-  const nativeActive = isPlaying && (nowMs - lastNativeSpecAt < 220);
-  if (!nativeActive) {
-    const frac = ((beatPos % 1) + 1) % 1;
-    const phrase16 = ((beatPos % 16) + 16) % 16;
-    const sectionEnergy = phrase16 < 4 ? 0.55 : (phrase16 < 12 ? 0.82 : (phrase16 < 14 ? 0.92 : 1.05));
-    const kickEnv = Math.pow(Math.max(0, Math.cos((frac - 0.05) * Math.PI)), 3.8) * sectionEnergy;
-    const snareEnv = (Math.floor(beatPos) % 2 === 1 ? Math.pow(Math.max(0, Math.cos((frac - 0.04) * Math.PI)), 3.2) * 0.92 : kickEnv * 0.18) * sectionEnergy;
-    const hatEnv = Math.pow(Math.abs(Math.sin(beatPos * Math.PI * 2)), 2.8) * 0.62 * sectionEnergy;
-    const melodyCenter = 0.44 + 0.18 * Math.sin(beatPos * Math.PI * 0.25);
-
-    const eqBoostBass = Math.max(0.55, 1 + currentEqValues[0] / 18);
-    const eqBoostMid  = Math.max(0.55, 1 + currentEqValues[2] / 18);
-    const eqBoostHigh = Math.max(0.55, 1 + currentEqValues[4] / 18);
-
-    for (let i = 0; i < NUM_SPEC_BARS; i++) {
-      let target = 0;
-      if (isPlaying) {
-        const x = i / (NUM_SPEC_BARS - 1);
-        const sub = Math.exp(-Math.pow(x / 0.20, 2)) * (0.08 + 0.84 * kickEnv) * eqBoostBass;
-        const mid = Math.exp(-Math.pow((x - melodyCenter) / 0.20, 2)) * (0.10 + 0.55 * snareEnv + 0.24 * Math.max(0, Math.sin(beatPos * Math.PI * 0.5 + i * 0.42))) * eqBoostMid;
-        const air = Math.exp(-Math.pow((x - 0.84) / 0.18, 2)) * (0.06 + 0.52 * hatEnv) * eqBoostHigh;
-        target = Math.min(0.98, Math.max(0.03, sub + mid + air));
-      }
-      if (target >= specBars[i]) {
-        specBars[i] = 0.28 * specBars[i] + 0.72 * target;
-      } else {
-        specBars[i] = 0.75 * specBars[i] + 0.25 * target;
-      }
-      if (specBars[i] >= specPeaks[i]) specPeaks[i] = specBars[i];
-      else specPeaks[i] = Math.max(0, specPeaks[i] - 0.016);
+    if (isPlaying) {
+      danceAmp = Math.min(1, danceAmp + dt * 3.8);
+    } else {
+      danceAmp = Math.max(0, danceAmp - dt * 4.2);
     }
-    if (isPlaying && kickEnv > 0.78) onsetImpulse = Math.max(onsetImpulse, 0.65);
-  }
+    onsetImpulse = Math.max(0, onsetImpulse - dt * 5.2);
 
-  let bass = 0, mid = 0, high = 0;
-  for (let i = 0; i < 8; i++) bass += specBars[i];
-  for (let i = 8; i < 18; i++) mid += specBars[i];
-  for (let i = 18; i < NUM_SPEC_BARS; i++) high += specBars[i];
-  bass /= 8;
-  mid /= 10;
-  high /= (NUM_SPEC_BARS - 18);
+    // Si el visualizador nativo de Android no envió trama en los últimos 220 ms (p.ej. sin permiso RECORD_AUDIO o en navegador),
+    // generamos un espectro musical con progresión de secciones (Intro/Verso/Build-up/Drop) y formantes móviles bloqueados al beat
+    const nativeActive = isPlaying && (nowMs - lastNativeSpecAt < 220);
+    if (!nativeActive) {
+      const frac = ((beatPos % 1) + 1) % 1;
+      const phrase16 = ((beatPos % 16) + 16) % 16;
+      const sectionEnergy = phrase16 < 4 ? 0.55 : (phrase16 < 12 ? 0.82 : (phrase16 < 14 ? 0.92 : 1.05));
+      const kickEnv = Math.pow(Math.max(0, Math.cos((frac - 0.05) * Math.PI)), 3.8) * sectionEnergy;
+      const snareEnv = (Math.floor(beatPos) % 2 === 1 ? Math.pow(Math.max(0, Math.cos((frac - 0.04) * Math.PI)), 3.2) * 0.92 : kickEnv * 0.18) * sectionEnergy;
+      const hatEnv = Math.pow(Math.abs(Math.sin(beatPos * Math.PI * 2)), 2.8) * 0.62 * sectionEnergy;
+      const melodyCenter = 0.44 + 0.18 * Math.sin(beatPos * Math.PI * 0.25);
 
-  const pose = computeDancePose(beatPos, maomaoStyle, danceAmp, idleTimeSec);
-  drawMaomaoStage(pose, beatPos, bass, mid, high, mmCanvas, mmCtx);
-  drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, vCanvas, vCtx);
+      const eqBoostBass = Math.max(0.55, 1 + currentEqValues[0] / 18);
+      const eqBoostMid  = Math.max(0.55, 1 + currentEqValues[2] / 18);
+      const eqBoostHigh = Math.max(0.55, 1 + currentEqValues[4] / 18);
 
-  // Aura en el contorno del disco de vinilo en pantalla de reposo/suspensión
-  const vinylOverlay = document.getElementById("vinylStandbyOverlay");
-  if (vinylOverlay && vinylOverlay.classList.contains("active")) {
-    const auraEl = document.getElementById("vinylAura");
-    const discEl = document.getElementById("vinylDisc");
-    if (auraEl) {
-      if (isPlaying) {
-        const pulse = Math.min(1, Math.max(0, pose.beatPulse * 0.70 + bass * 0.70));
-        const glowSpread = (16 + pulse * 28 * danceAmp).toFixed(0);
-        const glowOuter = (32 + pulse * 45 * danceAmp).toFixed(0);
-        const op = (0.45 + pulse * 0.55 * danceAmp).toFixed(2);
-        const borderGlow = (0.65 + pulse * 0.35 * danceAmp).toFixed(2);
-        
-        auraEl.style.boxShadow = `0 0 ${glowSpread}px rgba(30, 215, 96, ${op}), 0 0 ${glowOuter}px rgba(30, 215, 96, ${(op * 0.55).toFixed(2)}), inset 0 0 ${(10 + pulse * 14).toFixed(0)}px rgba(30, 215, 96, ${(op * 0.5).toFixed(2)})`;
-        auraEl.style.borderColor = `rgba(30, 215, 96, ${borderGlow})`;
-        auraEl.style.opacity = op;
-        auraEl.style.transform = `scale(${(1.002 + pulse * 0.025 * danceAmp).toFixed(4)})`;
-
-        if (discEl) {
-          discEl.style.borderColor = `rgba(30, 215, 96, ${(0.35 + pulse * 0.50 * danceAmp).toFixed(2)})`;
-          discEl.style.boxShadow = `0 0 50px rgba(0, 0, 0, 0.95), 0 0 ${(22 + pulse * 24).toFixed(0)}px rgba(30, 215, 96, ${(0.3 + pulse * 0.45).toFixed(2)}), inset 0 0 10px #000`;
+      for (let i = 0; i < NUM_SPEC_BARS; i++) {
+        let target = 0;
+        if (isPlaying) {
+          const x = i / (NUM_SPEC_BARS - 1);
+          const sub = Math.exp(-Math.pow(x / 0.20, 2)) * (0.08 + 0.84 * kickEnv) * eqBoostBass;
+          const mid = Math.exp(-Math.pow((x - melodyCenter) / 0.20, 2)) * (0.10 + 0.55 * snareEnv + 0.24 * Math.max(0, Math.sin(beatPos * Math.PI * 0.5 + i * 0.42))) * eqBoostMid;
+          const air = Math.exp(-Math.pow((x - 0.84) / 0.18, 2)) * (0.06 + 0.52 * hatEnv) * eqBoostHigh;
+          target = Math.min(0.98, Math.max(0.03, sub + mid + air));
         }
-      } else {
-        auraEl.style.boxShadow = "0 0 12px rgba(30, 215, 96, 0.25), inset 0 0 8px rgba(30, 215, 96, 0.15)";
-        auraEl.style.borderColor = "rgba(30, 215, 96, 0.35)";
-        auraEl.style.opacity = "0.25";
-        auraEl.style.transform = "scale(1)";
-        if (discEl) {
-          discEl.style.borderColor = "#1c1c24";
-          discEl.style.boxShadow = "0 0 50px rgba(0, 0, 0, 0.95), 0 0 20px rgba(30, 215, 96, 0.15), inset 0 0 10px #000";
+        if (target >= specBars[i]) {
+          specBars[i] = 0.28 * specBars[i] + 0.72 * target;
+        } else {
+          specBars[i] = 0.75 * specBars[i] + 0.25 * target;
+        }
+        if (specBars[i] >= specPeaks[i]) specPeaks[i] = specBars[i];
+        else specPeaks[i] = Math.max(0, specPeaks[i] - 0.016);
+      }
+      if (isPlaying && kickEnv > 0.78) onsetImpulse = Math.max(onsetImpulse, 0.65);
+    }
+
+    let bass = 0, mid = 0, high = 0;
+    for (let i = 0; i < 8; i++) bass += specBars[i];
+    for (let i = 8; i < 18; i++) mid += specBars[i];
+    for (let i = 18; i < NUM_SPEC_BARS; i++) high += specBars[i];
+    bass /= 8;
+    mid /= 10;
+    high /= (NUM_SPEC_BARS - 18);
+
+    const pose = computeDancePose(beatPos, maomaoStyle, danceAmp, idleTimeSec);
+    drawMaomaoStage(pose, beatPos, bass, mid, high, mmCanvas, mmCtx);
+    drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, vCanvas, vCtx);
+
+    // Aura en el contorno del disco de vinilo en pantalla de reposo/suspensión
+    const vinylOverlay = document.getElementById("vinylStandbyOverlay");
+    if (vinylOverlay && vinylOverlay.classList.contains("active")) {
+      const auraEl = document.getElementById("vinylAura");
+      const discEl = document.getElementById("vinylDisc");
+      if (auraEl) {
+        if (isPlaying) {
+          const pulse = Math.min(1, Math.max(0, pose.beatPulse * 0.70 + bass * 0.70));
+          const glowSpread = (16 + pulse * 28 * danceAmp).toFixed(0);
+          const glowOuter = (32 + pulse * 45 * danceAmp).toFixed(0);
+          const op = (0.45 + pulse * 0.55 * danceAmp).toFixed(2);
+          const borderGlow = (0.65 + pulse * 0.35 * danceAmp).toFixed(2);
+          
+          auraEl.style.boxShadow = `0 0 ${glowSpread}px rgba(30, 215, 96, ${op}), 0 0 ${glowOuter}px rgba(30, 215, 96, ${(op * 0.55).toFixed(2)}), inset 0 0 ${(10 + pulse * 14).toFixed(0)}px rgba(30, 215, 96, ${(op * 0.5).toFixed(2)})`;
+          auraEl.style.borderColor = `rgba(30, 215, 96, ${borderGlow})`;
+          auraEl.style.opacity = op;
+          auraEl.style.transform = `scale(${(1.002 + pulse * 0.025 * danceAmp).toFixed(4)})`;
+
+          if (discEl) {
+            discEl.style.borderColor = `rgba(30, 215, 96, ${(0.35 + pulse * 0.50 * danceAmp).toFixed(2)})`;
+            discEl.style.boxShadow = `0 0 50px rgba(0, 0, 0, 0.95), 0 0 ${(22 + pulse * 24).toFixed(0)}px rgba(30, 215, 96, ${(0.3 + pulse * 0.45).toFixed(2)}), inset 0 0 10px #000`;
+          }
+        } else {
+          auraEl.style.boxShadow = "0 0 12px rgba(30, 215, 96, 0.25), inset 0 0 8px rgba(30, 215, 96, 0.15)";
+          auraEl.style.borderColor = "rgba(30, 215, 96, 0.35)";
+          auraEl.style.opacity = "0.25";
+          auraEl.style.transform = "scale(1)";
+          if (discEl) {
+            discEl.style.borderColor = "#1c1c24";
+            discEl.style.boxShadow = "0 0 50px rgba(0, 0, 0, 0.95), 0 0 20px rgba(30, 215, 96, 0.15), inset 0 0 10px #000";
+          }
         }
       }
     }
-  }
 
-  if (isFullPlayerOpen) {
-    if (!fullMmCanvas || !fullMmCtx || !fullVCanvas || !fullVCtx) {
-      initFullPlayer();
+    if (isFullPlayerOpen) {
+      if (!fullMmCanvas || !fullMmCtx || !fullVCanvas || !fullVCtx) {
+        initFullPlayer();
+      }
+      if (fullMmCanvas && fullMmCtx && fullVCanvas && fullVCtx) {
+        if (fullMmCanvas.width < 50 || fullMmCanvas.height < 50) {
+          fullMmCanvas.width = fullMmCanvas.clientWidth || 380;
+          fullMmCanvas.height = fullMmCanvas.clientHeight || 220;
+        }
+        if (fullVCanvas.width < 50 || fullVCanvas.height < 20) {
+          fullVCanvas.width = fullVCanvas.clientWidth || 380;
+          fullVCanvas.height = fullVCanvas.clientHeight || 56;
+        }
+        if (fullPlayerTab === "visualizer") {
+          drawMaomaoStage(pose, beatPos, bass, mid, high, fullMmCanvas, fullMmCtx);
+          drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, fullVCanvas, fullVCtx);
+        }
+      }
     }
-    if (fullMmCanvas && fullMmCtx && fullVCanvas && fullVCtx) {
-      if (fullMmCanvas.width < 50 || fullMmCanvas.height < 50) {
-        fullMmCanvas.width = fullMmCanvas.clientWidth || 380;
-        fullMmCanvas.height = fullMmCanvas.clientHeight || 220;
-      }
-      if (fullVCanvas.width < 50 || fullVCanvas.height < 20) {
-        fullVCanvas.width = fullVCanvas.clientWidth || 380;
-        fullVCanvas.height = fullVCanvas.clientHeight || 56;
-      }
-      if (fullPlayerTab === "visualizer") {
-        drawMaomaoStage(pose, beatPos, bass, mid, high, fullMmCanvas, fullMmCtx);
-        drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, fullVCanvas, fullVCtx);
-      }
-    }
+  } catch (loopErr) {
+    // Si ocurre cualquier excepción inesperada, se silencia para asegurar 60 FPS ininterrumpidos
   }
 }
 
@@ -8108,32 +8135,41 @@ function drawMaomaoStage(pose, beatPos, bass, mid, high, targetCanvas, targetCtx
   const mmCanvas = targetCanvas || document.getElementById("maomaoCanvas");
   const mmCtx = targetCtx || (mmCanvas ? mmCanvas.getContext("2d") : null);
   if (!mmCanvas || !mmCtx) return;
-  const w = mmCanvas.width, h = mmCanvas.height;
+  let w = mmCanvas.width, h = mmCanvas.height;
+  if (!isFinite(w) || !isFinite(h) || w < 20 || h < 20) {
+    w = Math.max(120, mmCanvas.clientWidth || 360);
+    h = Math.max(80, mmCanvas.clientHeight || 175);
+    mmCanvas.width = w;
+    mmCanvas.height = h;
+  }
   mmCtx.clearRect(0, 0, w, h);
 
   const cx = w / 2;
   const floorY = h - 12;
-  const scaleFactor = Math.min(w / 240, (h - 18) / 168);
+  let scaleFactor = Math.min(w / 240, Math.max(30, h - 18) / 168);
+  if (!isFinite(scaleFactor) || scaleFactor <= 0.05) scaleFactor = 1.0;
 
-  // Halo rítmico sincronizado con el beat
-  const haloR = (68 + (pose.beatPulse * 20 + bass * 16) * danceAmp) * scaleFactor;
-  const grad = mmCtx.createRadialGradient(cx, floorY - 55 * scaleFactor, 6, cx, floorY - 55 * scaleFactor, haloR);
+  // Halo rítmico sincronizado con el beat (radio asegurado positivo y mayor que el centro)
+  const haloR = Math.max(16, (68 + ((pose.beatPulse || 0) * 20 + (bass || 0) * 16) * (danceAmp || 0)) * scaleFactor);
+  const grad = mmCtx.createRadialGradient(cx, floorY - 55 * scaleFactor, 4, cx, floorY - 55 * scaleFactor, haloR);
   grad.addColorStop(0, `rgba(29, 185, 84, ${(0.18 + (pose.beatPulse * 0.24 + bass * 0.18) * danceAmp).toFixed(3)})`);
   grad.addColorStop(0.6, `rgba(162, 32, 68, ${(0.10 + mid * 0.22 * danceAmp).toFixed(3)})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
   mmCtx.fillStyle = grad;
   mmCtx.beginPath();
-  mmCtx.arc(cx, floorY - 55 * scaleFactor, 92 * scaleFactor, 0, Math.PI * 2);
+  mmCtx.arc(cx, floorY - 55 * scaleFactor, Math.max(16, 92 * scaleFactor), 0, Math.PI * 2);
   mmCtx.fill();
 
   // Sombra elíptica en el piso
   mmCtx.fillStyle = "rgba(0, 0, 0, 0.45)";
   mmCtx.beginPath();
-  mmCtx.ellipse(cx + pose.swayX * scaleFactor, floorY + 2, Math.max(12, (28 - pose.bounce * 0.35) * scaleFactor), 4.5 * scaleFactor, 0, 0, Math.PI * 2);
+  const swaySafe = isFinite(pose.swayX) ? pose.swayX : 0;
+  const bounceSafe = isFinite(pose.bounce) ? pose.bounce : 0;
+  mmCtx.ellipse(cx + swaySafe * scaleFactor, floorY + 2, Math.max(12, (28 - bounceSafe * 0.35) * scaleFactor), Math.max(2, 4.5 * scaleFactor), 0, 0, Math.PI * 2);
   mmCtx.fill();
 
   mmCtx.save();
-  mmCtx.translate(cx + pose.swayX * scaleFactor, floorY - pose.bounce * scaleFactor);
+  mmCtx.translate(cx + swaySafe * scaleFactor, floorY - bounceSafe * scaleFactor);
   mmCtx.scale(scaleFactor, scaleFactor);
 
   // Pies con pasitos alternados al ritmo del beat

@@ -1,18 +1,18 @@
 {
-  "versionCode": 15,
-  "versionName": "2.7.5",
-  "releaseDate": "2026-10-25",
+  "versionCode": 16,
+  "versionName": "2.7.6",
+  "releaseDate": "2026-10-26",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.7.5",
+    "version": "2.7.6",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Buscador de canciones interactivo dentro de cada playlist y filtrado por playlist en la biblioteca",
-    "Vinculación bidireccional en tiempo real entre el video de fondo en modo vinilo y la reproducción de audio",
-    "Sistema corregido y robusto de pilas de memoria para el modo aleatorio (shuffle) sin atascos ni congelamientos",
-    "Retroceso inteligente en cola aleatoria y reinicio instantáneo a 0:00 para canciones con más de 3 segundos"
+    "Activación y reproducción inmediata de videos de fondo en modo vinilo (streaming directo de Drive y caché local)",
+    "Detección y emparejamiento inteligente de nombres de video/audio con decodificación HTML y limpieza de etiquetas",
+    "Optimización de tasa de refresco a 60 FPS estables y eliminación de micro-congelamientos al seleccionar canciones",
+    "Blindaje anti-fallos en el motor de animación de Maomao con protección de dimensiones del lienzo Canvas"
   ]
 }

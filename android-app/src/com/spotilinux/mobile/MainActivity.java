@@ -931,6 +931,10 @@ public class MainActivity extends Activity {
                         musicaFolders.add("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T");
                     }
                     List<String> videoFolders = new ArrayList<>();
+                    // Subcarpeta 'videos' oficial compartida de SpotiLinux en Google Drive
+                    if (!videoFolders.contains("1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa")) {
+                        videoFolders.add("1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa");
+                    }
 
                     String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + fid + "#list");
                     JSONArray pendingAudio = musicApiSuccess ? new JSONArray() : filesArr;
@@ -965,6 +969,9 @@ public class MainActivity extends Activity {
                                     File vFile = new File(videoDir, "video_" + vid + ".mp4");
                                     if (vFile.exists() && vFile.length() > 10240) {
                                         vf.put("localSrc", "file://" + vFile.getAbsolutePath());
+                                        vf.put("src", "file://" + vFile.getAbsolutePath());
+                                    } else {
+                                        vf.put("src", "https://drive.google.com/uc?export=download&id=" + vid);
                                     }
                                 }
                             } catch (Exception ignored) {}

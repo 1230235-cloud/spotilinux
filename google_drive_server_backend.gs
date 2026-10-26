@@ -19,6 +19,7 @@
 
 var ROOT_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
 var MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T";
+var VIDEOS_FOLDER_ID = "1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa";
 var DB_FILENAME = "spotilinux_database.json";
 
 function doGet(e) {
@@ -54,6 +55,34 @@ function doGet(e) {
         }
       }
       return jsonResponse({ status: "ok", count: list.length, files: list });
+    }
+
+    if (action === "list_videos") {
+      var vFolder = null;
+      try {
+        vFolder = DriveApp.getFolderById(VIDEOS_FOLDER_ID);
+      } catch (_e) {}
+      if (!vFolder) {
+        var vf = folder.getFoldersByName("videos");
+        if (!vf.hasNext()) vf = folder.getFoldersByName("Videos");
+        vFolder = vf.hasNext() ? vf.next() : folder;
+      }
+      var vFiles = vFolder.getFiles();
+      var vList = [];
+      while (vFiles.hasNext()) {
+        var vfObj = vFiles.next();
+        var vMime = vfObj.getMimeType();
+        var vName = vfObj.getName();
+        if (vMime.indexOf("video/") !== -1 || vName.match(/\.(mp4|webm|mkv|avi|mov)$/i)) {
+          vList.push({
+            id: vfObj.getId(),
+            name: vName,
+            size: vfObj.getSize(),
+            download_url: "https://drive.google.com/uc?export=download&id=" + vfObj.getId()
+          });
+        }
+      }
+      return jsonResponse({ status: "ok", count: vList.length, files: vList });
     }
 
     // Por defecto: descargar la base de datos de cuentas y playlists
