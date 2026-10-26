@@ -1375,6 +1375,8 @@
     position: absolute;
     top: 0; left: 0;
     filter: brightness(0.68) saturate(1.22);
+    display: none;
+    background: transparent;
   }
   .vinyl-bg-iframe {
     width: 100%;
@@ -2193,7 +2195,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.1 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.2 (GitHub)</div>
         </div>
       </button>
     </div>
@@ -2855,7 +2857,7 @@
   <div id="vinylStandbyOverlay" class="vinyl-standby-overlay" onclick="exitVinylStandbyMode()">
     <!-- Video de fondo cinematográfico opcional detrás del disco de vinilo -->
     <div class="vinyl-video-bg-container" id="vinylVideoBgContainer">
-      <video class="vinyl-bg-video" id="vinylBgVideo" muted loop playsinline preload="auto"></video>
+      <video class="vinyl-bg-video" id="vinylBgVideo" muted loop playsinline preload="none" style="display:none;"></video>
       <div class="vinyl-video-scrim"></div>
     </div>
 
@@ -4194,13 +4196,27 @@ window.onPublicDriveVideosFetched = function(videoList) {
     if (key) {
       cloudDriveVideos[key] = {
         id: v.id,
+        driveId: v.id,
         name: v.name || "Video",
-        src: `https://lh3.googleusercontent.com/d/${v.id}`,
+        src: v.localSrc || "",
+        localSrc: v.localSrc || "",
         fallbackSrc: `https://drive.google.com/uc?export=download&id=${v.id}`
       };
     }
   });
   console.log("🎬 Videos de Google Drive registrados:", Object.keys(cloudDriveVideos).length);
+  updateVinylStandbyVideo();
+};
+
+window.onDriveVideoReady = function(fileId, localFileUrl) {
+  if (!fileId || !localFileUrl) return;
+  for (const [k, v] of Object.entries(cloudDriveVideos)) {
+    if (v.id === fileId || v.driveId === fileId) {
+      v.src = localFileUrl;
+      v.localSrc = localFileUrl;
+      break;
+    }
+  }
   updateVinylStandbyVideo();
 };
 
@@ -4325,24 +4341,41 @@ function updateVinylStandbyVideo() {
   const matchedVideo = findMatchingVideo(t);
 
   // SI NO HAY VIDEO EN LA SUBCARPETA VIDEOS O LOCAL, NO SE PONE NADA (PANTALLA OLED NEGRA LIMPIA)
-  if (!matchedVideo || !matchedVideo.src) {
+  if (!matchedVideo) {
     stopVinylStandbyVideo();
+    return;
+  }
+
+  // Si aún no está descargado localmente, solicitar descarga en segundo plano a Java y mantener reposo negro mientras descarga
+  if (!matchedVideo.src || matchedVideo.src.startsWith("http")) {
+    stopVinylStandbyVideo();
+    if (matchedVideo.id && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.prepareDriveVideo) {
+      const tok = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
+      const key = document.getElementById("gdApiKey") ? document.getElementById("gdApiKey").value.trim() : "";
+      window.AndroidMedia.prepareDriveVideo(matchedVideo.id, matchedVideo.name, tok, key);
+    }
     return;
   }
 
   const videoSrc = matchedVideo.src;
   const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
-  videoEl.style.display = "block";
+
+  // Manejadores estrictos para garantizar que NUNCA aparezca un icono de video roto
+  videoEl.onerror = () => {
+    stopVinylStandbyVideo();
+  };
+
+  videoEl.oncanplay = () => {
+    if (videoEl.src && videoEl.src !== "") {
+      videoEl.style.display = "block";
+      container.classList.add("active");
+    }
+  };
 
   if (currentPlayingVideoSource !== videoSrc) {
     currentPlayingVideoSource = videoSrc;
-    videoEl.onerror = () => {
-      console.warn("⚠️ Falló carga de vídeo en CDN lh3, intentando fallback:", videoSrc);
-      if (matchedVideo.fallbackSrc && videoEl.src !== matchedVideo.fallbackSrc) {
-        videoEl.src = matchedVideo.fallbackSrc;
-        videoEl.play().catch(() => {});
-      }
-    };
+    videoEl.style.display = "none";
+    container.classList.remove("active");
     videoEl.src = videoSrc;
     videoEl.muted = true;
     videoEl.playsInline = true;
@@ -4353,8 +4386,8 @@ function updateVinylStandbyVideo() {
   if (isPlaying) {
     const playPromise = videoEl.play();
     if (playPromise !== undefined) {
-      playPromise.catch(err => {
-        console.warn("Autoplay de vídeo en reposo prevenido:", err);
+      playPromise.catch(() => {
+        stopVinylStandbyVideo();
       });
     }
     if (Math.abs(videoEl.currentTime - curSec) > 2) {
@@ -4363,7 +4396,6 @@ function updateVinylStandbyVideo() {
   } else {
     videoEl.pause();
   }
-  container.classList.add("active");
 }
 
 function resetSleepVinylIdleTimer() {
@@ -4485,8 +4517,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 11;
-const CURRENT_APP_VERSION_NAME = "2.7.1";
+const CURRENT_APP_VERSION_CODE = 12;
+const CURRENT_APP_VERSION_NAME = "2.7.2";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 

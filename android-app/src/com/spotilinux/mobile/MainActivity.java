@@ -907,7 +907,205 @@ public class MainActivity extends Activity {
                     }
 
                     if (videoFilesArr.length() > 0) {
+                        final File videoDir = new File(getAppMusicFolder(), "videos");
+                        if (!videoDir.exists()) videoDir.mkdirs();
+
+                        for (int i = 0; i < videoFilesArr.length(); i++) {
+                            try {
+                                JSONObject vf = videoFilesArr.getJSONObject(i);
+                                String vid = vf.optString("id");
+                                if (!vid.isEmpty()) {
+                                    File vFile = new File(videoDir, "video_" + vid + ".mp4");
+                                    if (vFile.exists() && vFile.length() > 10240) {
+                                        vf.put("localSrc", "file://" + vFile.getAbsolutePath());
+                                    }
+                                }
+                            } catch (Exception ignored) {}
+                        }
+
                         dispatchJs("if(window.onPublicDriveVideosFetched) window.onPublicDriveVideosFetched(" + videoFilesArr.toString() + ");");
+
+                        // Descargar en segundo plano los videos faltantes
+                        for (int i = 0; i < videoFilesArr.length(); i++) {
+                            try {
+                                JSONObject vf = videoFilesArr.getJSONObject(i);
+                                final String vid = vf.optString("id");
+                                if (!vid.isEmpty()) {
+                                    final File vFile = new File(videoDir, "video_" + vid + ".mp4");
+                                    if (!vFile.exists() || vFile.length() <= 10240) {
+                                        new Thread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                if (downloadDriveMediaFile(vid, vFile, null, null)) {
+                                                    String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+                                                    dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + vid + "', 'file://" + escPath + "');");
+                                                }
+                                            }
+                                        }).start();
+                                    }
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            }).start();
+        }
+
+        private boolean downloadDriveMediaFile(String fileId, File outFile, String authToken, String apiKey) {
+            String curUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
+            String cookieHeader = "";
+
+            for (int redirectCount = 0; redirectCount < 8; redirectCount++) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(curUrl).openConnection();
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(35000);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+                    if (cookieHeader != null && !cookieHeader.isEmpty()) {
+                        conn.setRequestProperty("Cookie", cookieHeader);
+                    }
+                    if (authToken != null && !authToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + authToken);
+                    }
+
+                    int code = conn.getResponseCode();
+
+                    List<String> cookies = conn.getHeaderFields().get("Set-Cookie");
+                    if (cookies != null) {
+                        StringBuilder sb = new StringBuilder(cookieHeader);
+                        for (String c : cookies) {
+                            if (c != null && !c.isEmpty()) {
+                                String part = c.split(";")[0].trim();
+                                if (sb.length() > 0) sb.append("; ");
+                                sb.append(part);
+                            }
+                        }
+                        cookieHeader = sb.toString();
+                    }
+
+                    if (code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_MOVED_PERM || code == 303 || code == 307) {
+                        String loc = conn.getHeaderField("Location");
+                        if (loc != null && !loc.isEmpty()) {
+                            if (loc.startsWith("/")) {
+                                URL u = new URL(curUrl);
+                                loc = u.getProtocol() + "://" + u.getHost() + loc;
+                            }
+                            curUrl = loc;
+                            conn.disconnect();
+                            continue;
+                        }
+                    }
+
+                    if (code == 200) {
+                        String contentType = conn.getContentType();
+                        if (contentType != null && contentType.toLowerCase().contains("text/html")) {
+                            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                            byte[] b = new byte[8192];
+                            int r;
+                            InputStream is = conn.getInputStream();
+                            while ((r = is.read(b)) > 0) {
+                                bos.write(b, 0, r);
+                            }
+                            is.close();
+                            String html = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+
+                            Matcher m = Pattern.compile("href=\"(/uc\\?export=download[^\"]+)\"").matcher(html);
+                            if (m.find()) {
+                                curUrl = "https://drive.google.com" + m.group(1).replace("&amp;", "&");
+                                conn.disconnect();
+                                continue;
+                            }
+                            Matcher m2 = Pattern.compile("action=\"([^\"]+)\"").matcher(html);
+                            if (m2.find()) {
+                                String act = m2.group(1).replace("&amp;", "&");
+                                if (act.startsWith("/")) act = "https://drive.google.com" + act;
+                                curUrl = act;
+                                conn.disconnect();
+                                continue;
+                            }
+                            if (!curUrl.contains("confirm=")) {
+                                curUrl = "https://drive.google.com/uc?export=download&id=" + fileId + "&confirm=t";
+                                conn.disconnect();
+                                continue;
+                            }
+                        }
+
+                        File tmpFile = new File(outFile.getAbsolutePath() + ".tmp");
+                        try (InputStream in = conn.getInputStream();
+                             FileOutputStream fos = new FileOutputStream(tmpFile)) {
+                            byte[] buffer = new byte[65536];
+                            int len;
+                            while ((len = in.read(buffer)) > 0) {
+                                fos.write(buffer, 0, len);
+                            }
+                        }
+                        if (tmpFile.exists() && tmpFile.length() > 10240) {
+                            if (outFile.exists()) outFile.delete();
+                            tmpFile.renameTo(outFile);
+                            return true;
+                        } else {
+                            tmpFile.delete();
+                        }
+                    }
+                    conn.disconnect();
+                } catch (Exception ex) {
+                    break;
+                }
+            }
+
+            if (authToken != null && !authToken.isEmpty()) {
+                try {
+                    String apiMediaUrl = "https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media";
+                    HttpURLConnection conn = (HttpURLConnection) new URL(apiMediaUrl).openConnection();
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(35000);
+                    conn.setRequestProperty("Authorization", "Bearer " + authToken);
+                    if (conn.getResponseCode() == 200) {
+                        File tmpFile = new File(outFile.getAbsolutePath() + ".tmp");
+                        try (InputStream in = conn.getInputStream();
+                             FileOutputStream fos = new FileOutputStream(tmpFile)) {
+                            byte[] buffer = new byte[65536];
+                            int len;
+                            while ((len = in.read(buffer)) > 0) {
+                                fos.write(buffer, 0, len);
+                            }
+                        }
+                        if (tmpFile.exists() && tmpFile.length() > 10240) {
+                            if (outFile.exists()) outFile.delete();
+                            tmpFile.renameTo(outFile);
+                            return true;
+                        } else {
+                            tmpFile.delete();
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            return false;
+        }
+
+        @JavascriptInterface
+        public void prepareDriveVideo(final String fileId, final String title, final String authToken, final String apiKey) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (fileId == null || fileId.trim().isEmpty()) return;
+                        File videoDir = new File(getAppMusicFolder(), "videos");
+                        if (!videoDir.exists()) videoDir.mkdirs();
+                        File vFile = new File(videoDir, "video_" + fileId.trim() + ".mp4");
+                        if (vFile.exists() && vFile.length() > 10240) {
+                            String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+                            dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId.trim() + "', 'file://" + escPath + "');");
+                            return;
+                        }
+
+                        if (downloadDriveMediaFile(fileId.trim(), vFile, authToken, apiKey)) {
+                            String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+                            dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId.trim() + "', 'file://" + escPath + "');");
+                        }
+                    } catch (Exception ignored) {
                     }
                 }
             }).start();

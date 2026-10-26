@@ -1,18 +1,17 @@
 {
-  "versionCode": 11,
-  "versionName": "2.7.1",
+  "versionCode": 12,
+  "versionName": "2.7.2",
   "releaseDate": "2026-10-25",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.7.1",
+    "version": "2.7.2",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Detección y vinculación inteligente de la subcarpeta 'videos' de Google Drive con streaming directo de alta velocidad vía CDN lh3",
-    "Emparejamiento difuso por tokens y subcadenas para reproducir clips en segundo plano detrás del vinilo OLED sin importar diferencias en sufijos (Animated Video, Official Video, etc.)",
-    "Visualización de la carátula real del álbum en la notificación desplegable y pantalla de bloqueo al minimizar la app en Android",
-    "Sincronización y compatibilidad de metadatos adaptada para la versión de Linux Desktop"
+    "Descarga y almacenamiento en caché local nativo en segundo plano de videos de Google Drive (evita por completo el icono de video roto o no disponible)",
+    "Ocultamiento estricto del elemento de video hasta la carga completa del buffer para garantizar reposo OLED negro limpio",
+    "Emparejamiento inteligente de clips por tokens y subcadenas con soporte de redirecciones complejas de Google Drive"
   ]
 }
