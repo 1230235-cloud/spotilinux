@@ -55,6 +55,8 @@ public class MainActivity extends Activity {
     private boolean isImageFileChooser = false;
     private static final int FILE_CHOOSER_RESULT_CODE = 1001;
     private static final int PERMISSIONS_REQUEST_CODE = 1002;
+    private static final java.util.concurrent.ExecutorService videoDownloadExecutor = java.util.concurrent.Executors.newFixedThreadPool(2);
+    private static final java.util.Set<String> activeVideoDownloadSet = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -1003,30 +1005,58 @@ public class MainActivity extends Activity {
 
                         dispatchJs("if(window.onPublicDriveVideosFetched) window.onPublicDriveVideosFetched(" + videoFilesArr.toString() + ");");
 
-                        // Descargar en segundo plano los videos faltantes
+                        // Encolar descargas en segundo plano de manera controlada y concurrente
                         for (int i = 0; i < videoFilesArr.length(); i++) {
                             try {
                                 JSONObject vf = videoFilesArr.getJSONObject(i);
                                 final String vid = vf.optString("id");
                                 if (!vid.isEmpty()) {
-                                    final File vFile = new File(videoDir, "video_" + vid + ".mp4");
-                                    if (!vFile.exists() || vFile.length() <= 10240) {
-                                        new Thread(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                if (downloadDriveMediaFile(vid, vFile, null, null)) {
-                                                    String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
-                                                    dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + vid + "', 'file://" + escPath + "');");
-                                                }
-                                            }
-                                        }).start();
-                                    }
+                                    queueVideoDownload(vid, false, null, null);
                                 }
                             } catch (Exception ignored) {}
                         }
                     }
                 }
             }).start();
+        }
+
+        private void queueVideoDownload(final String vid, final boolean priority, final String authToken, final String apiKey) {
+            if (vid == null || vid.trim().isEmpty()) return;
+            final String fileId = vid.trim();
+            final File videoDir = new File(getAppMusicFolder(), "videos");
+            if (!videoDir.exists()) videoDir.mkdirs();
+            final File vFile = new File(videoDir, "video_" + fileId + ".mp4");
+
+            if (vFile.exists() && vFile.length() > 10240) {
+                String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+                dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId + "', 'file://" + escPath + "');");
+                return;
+            }
+
+            if (activeVideoDownloadSet.contains(fileId)) return;
+            activeVideoDownloadSet.add(fileId);
+
+            Runnable task = new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (downloadDriveMediaFile(fileId, vFile, authToken, apiKey)) {
+                            String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+                            dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId + "', 'file://" + escPath + "');");
+                        }
+                    } catch (Exception ignored) {
+                    } finally {
+                        activeVideoDownloadSet.remove(fileId);
+                    }
+                }
+            };
+
+            if (priority) {
+                // Iniciar de inmediato en hilo prioritario para la canción activa
+                new Thread(task).start();
+            } else {
+                videoDownloadExecutor.submit(task);
+            }
         }
 
         private boolean downloadDriveMediaFile(String fileId, File outFile, String authToken, String apiKey) {
@@ -1038,7 +1068,7 @@ public class MainActivity extends Activity {
                     HttpURLConnection conn = (HttpURLConnection) new URL(curUrl).openConnection();
                     conn.setInstanceFollowRedirects(false);
                     conn.setConnectTimeout(15000);
-                    conn.setReadTimeout(35000);
+                    conn.setReadTimeout(45000);
                     conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
                     if (cookieHeader != null && !cookieHeader.isEmpty()) {
@@ -1089,17 +1119,53 @@ public class MainActivity extends Activity {
                             is.close();
                             String html = new String(bos.toByteArray(), StandardCharsets.UTF_8);
 
-                            Matcher m = Pattern.compile("href=\"(/uc\\?export=download[^\"]+)\"").matcher(html);
-                            if (m.find()) {
-                                curUrl = "https://drive.google.com" + m.group(1).replace("&amp;", "&");
+                            // 1. Extraer formulario oficial con id, export, confirm y uuid
+                            Matcher mForm = Pattern.compile("<form[^>]*action=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE).matcher(html);
+                            String formAction = mForm.find() ? mForm.group(1).replace("&amp;", "&") : "https://drive.usercontent.google.com/download";
+                            if (formAction.startsWith("/")) {
+                                formAction = "https://drive.usercontent.google.com" + formAction;
+                            }
+
+                            StringBuilder qParams = new StringBuilder();
+                            Matcher mInputs = Pattern.compile("<input[^>]+name=[\"']([^\"']+)[\"'][^>]+value=[\"']([^\"']*)[\"']", Pattern.CASE_INSENSITIVE).matcher(html);
+                            boolean foundInputs = false;
+                            while (mInputs.find()) {
+                                foundInputs = true;
+                                if (qParams.length() > 0) qParams.append("&");
+                                qParams.append(URLEncoder.encode(mInputs.group(1), "UTF-8"))
+                                       .append("=")
+                                       .append(URLEncoder.encode(mInputs.group(2), "UTF-8"));
+                            }
+                            if (!foundInputs) {
+                                Matcher mInputs2 = Pattern.compile("<input[^>]+value=[\"']([^\"']*)[\"'][^>]+name=[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE).matcher(html);
+                                while (mInputs2.find()) {
+                                    foundInputs = true;
+                                    if (qParams.length() > 0) qParams.append("&");
+                                    qParams.append(URLEncoder.encode(mInputs2.group(2), "UTF-8"))
+                                           .append("=")
+                                           .append(URLEncoder.encode(mInputs2.group(1), "UTF-8"));
+                                }
+                            }
+
+                            if (foundInputs && qParams.length() > 0) {
+                                curUrl = formAction + (formAction.contains("?") ? "&" : "?") + qParams.toString();
                                 conn.disconnect();
                                 continue;
                             }
-                            Matcher m2 = Pattern.compile("action=\"([^\"]+)\"").matcher(html);
-                            if (m2.find()) {
-                                String act = m2.group(1).replace("&amp;", "&");
-                                if (act.startsWith("/")) act = "https://drive.google.com" + act;
-                                curUrl = act;
+
+                            // 2. Extraer token uuid directamente si está en el HTML
+                            Matcher mUuid = Pattern.compile("name=[\"']uuid[\"'][^>]+value=[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE).matcher(html);
+                            if (mUuid.find()) {
+                                String uuid = mUuid.group(1);
+                                curUrl = "https://drive.usercontent.google.com/download?id=" + fileId + "&export=download&confirm=t&uuid=" + uuid;
+                                conn.disconnect();
+                                continue;
+                            }
+
+                            // 3. Fallbacks tradicionales
+                            Matcher m = Pattern.compile("href=\"(/uc\\?export=download[^\"]+)\"").matcher(html);
+                            if (m.find()) {
+                                curUrl = "https://drive.google.com" + m.group(1).replace("&amp;", "&");
                                 conn.disconnect();
                                 continue;
                             }
@@ -1138,7 +1204,7 @@ public class MainActivity extends Activity {
                     String apiMediaUrl = "https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media";
                     HttpURLConnection conn = (HttpURLConnection) new URL(apiMediaUrl).openConnection();
                     conn.setConnectTimeout(15000);
-                    conn.setReadTimeout(35000);
+                    conn.setReadTimeout(45000);
                     conn.setRequestProperty("Authorization", "Bearer " + authToken);
                     if (conn.getResponseCode() == 200) {
                         File tmpFile = new File(outFile.getAbsolutePath() + ".tmp");
@@ -1165,28 +1231,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void prepareDriveVideo(final String fileId, final String title, final String authToken, final String apiKey) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        if (fileId == null || fileId.trim().isEmpty()) return;
-                        File videoDir = new File(getAppMusicFolder(), "videos");
-                        if (!videoDir.exists()) videoDir.mkdirs();
-                        File vFile = new File(videoDir, "video_" + fileId.trim() + ".mp4");
-                        if (vFile.exists() && vFile.length() > 10240) {
-                            String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
-                            dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId.trim() + "', 'file://" + escPath + "');");
-                            return;
-                        }
-
-                        if (downloadDriveMediaFile(fileId.trim(), vFile, authToken, apiKey)) {
-                            String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
-                            dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId.trim() + "', 'file://" + escPath + "');");
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-            }).start();
+            queueVideoDownload(fileId, true, authToken, apiKey);
         }
 
         @JavascriptInterface

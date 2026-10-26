@@ -2195,7 +2195,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.6 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.8.3 (GitHub)</div>
         </div>
       </button>
 
@@ -3149,16 +3149,16 @@ function cleanTrackTitle(name) {
   t = t.replace(/^[「\[]Nightcore[」\]]\s*[➼♡–—\-]*\s*/i, "Nightcore - ");
   // 5. Quitar / Lyrics o / Letras dentro o fuera de paréntesis
   t = t.replace(/\s*\/\s*(lyrics|letras)\b/gi, "");
-  // 6. Quitar sufijos ruidosos de youtube (Video Oficial, Lyrics, etc.)
-  t = t.replace(/\s*[\(\[]\s*(video\s*oficial|official\s*(music\s*)?video|video|lyrics|letras|letra|official|audio\s*oficial|audio|amv)\s*[\)\]]/gi, "");
+  // 6. Quitar sufijos ruidosos de youtube (Video Oficial, Lyrics, etc.) en cualquier tipo de corchetes
+  t = t.replace(/\s*[\(\[\{「【『《〔〚]\s*(video\s*oficial|official\s*(music\s*)?video|video|lyrics|letras|letra|official|audio\s*oficial|audio|amv|mv|visualizer|clip|hd|4k)\s*[\)\]\}」】』》〕〛]/gi, "");
   t = t.replace(/\s+(lyrics|letras)\b.*$/i, "");
   t = t.replace(/\s*#[a-zA-Z0-9_-]+/g, "");
   // 7. Quitar adornos iniciales y finales molestos
-  t = t.replace(/^[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+/, "");
-  t = t.replace(/[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+$/, "");
+  t = t.replace(/^[💀⚔️♣️◼💖💞「」『』【】《》〔〕〚〛➼♬°•★☆✦✧\s–—-]+/, "");
+  t = t.replace(/[💀⚔️♣️◼💖💞「」『』【】《》〔〕〚〛➼♬°•★☆✦✧\s–—-]+$/, "");
   t = t.replace(/[◼💖💞]+/g, "");
   t = t.replace(/\s*°•[^\s•]+•°\s*/g, " ");
-  t = t.replace(/\s*[\(\[]\s*[\)\]]/g, "");
+  t = t.replace(/\s*[\(\[\{「【『《〔〚]\s*[\)\]\}」】』》〕〛]/g, "");
   t = t.replace(/\s+/g, " ").trim();
   if (t && t[0] >= "a" && t[0] <= "z") {
     t = t[0].toUpperCase() + t.slice(1);
@@ -4445,12 +4445,14 @@ function findMatchingVideo(track) {
   const cleanTitle = cleanMediaName(track.title || "");
   const cleanFull = cleanMediaName((track.artist || "") + " " + (track.title || ""));
   const cleanDriveName = track.driveName ? cleanMediaName(track.driveName) : "";
+  const cleanFileName = track.fileName ? cleanMediaName(track.fileName) : "";
+  const cleanName = track.name ? cleanMediaName(track.name) : "";
 
   // 1. Coincidencia exacta por nombre limpio (título, archivo Drive o artista + título)
   for (const v of videoEntries) {
     if (!v.cleanName) v.cleanName = cleanMediaName(v.name);
     const vk = v.cleanName;
-    if (vk && (vk === cleanTitle || vk === cleanDriveName || vk === cleanFull)) {
+    if (vk && (vk === cleanTitle || vk === cleanDriveName || vk === cleanFileName || vk === cleanName || vk === cleanFull)) {
       return v;
     }
   }
@@ -4841,8 +4843,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 16;
-const CURRENT_APP_VERSION_NAME = "2.7.6";
+const CURRENT_APP_VERSION_CODE = 20;
+const CURRENT_APP_VERSION_NAME = "2.8.3";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -7406,6 +7408,8 @@ window.onPublicDriveFolderFetched = function(filesList) {
     const trackObj = {
       id: cid,
       driveId: f.id,
+      fileName: fname,
+      driveName: fname,
       title: cleanTitle,
       artist: "Google Drive (Musica) ☁️",
       album: "Google Drive • Musica",

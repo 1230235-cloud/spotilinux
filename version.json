@@ -1,17 +1,18 @@
 {
-  "versionCode": 19,
-  "versionName": "2.8.2",
+  "versionCode": 20,
+  "versionName": "2.8.3",
   "releaseDate": "2026-10-26",
   "minAndroidSdk": 24,
-  "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
+  "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.8.2",
+    "version": "2.8.3",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Motor de emparejamiento inteligente de video para canciones Nightcore y versiones especiales (Rock, Female, Male, Soft Rock, Hits Hard)",
-    "Eliminación de falsos positivos y asignación de videos incorrectos cuando la pista no cuenta con video oficial",
-    "Desambiguación de títulos cortos y nombres similares (Blue, Heavenly, Waka Waka, On The Floor, Otaku Encubierto, Tú compras oro)"
+    "Descarga y reproducción de video en segundo plano 100% restaurada en modo Vinilo",
+    "Compatibilidad con el nuevo sistema de tokens y cookies de Google Drive (resolución de UUID y Range 206)",
+    "Descargador concurrente optimizado para evitar saturación de red en segundo plano",
+    "Soporte perfecto para pistas Nightcore y desambiguación completa de títulos especiales (Otaku Encubierto, Que Dolor, Soft Rock, Female, Rock)"
   ]
 }
