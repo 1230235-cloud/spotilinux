@@ -40,6 +40,7 @@ class TrackMetadata:
     cover_path: str
     dominant_color: tuple[int, int, int]
     added_at: float = 0.0
+    video_url: str = ""
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -61,6 +62,7 @@ class TrackMetadata:
             cover_path=data.get("cover_path", ""),
             dominant_color=(int(color[0]), int(color[1]), int(color[2])),
             added_at=float(data.get("added_at", 0.0)),
+            video_url=str(data.get("video_url", "")),
         )
 
 

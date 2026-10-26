@@ -2193,7 +2193,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.0 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.1 (GitHub)</div>
         </div>
       </button>
     </div>
@@ -4195,11 +4195,84 @@ window.onPublicDriveVideosFetched = function(videoList) {
       cloudDriveVideos[key] = {
         id: v.id,
         name: v.name || "Video",
-        src: `https://drive.google.com/uc?export=download&id=${v.id}`
+        src: `https://lh3.googleusercontent.com/d/${v.id}`,
+        fallbackSrc: `https://drive.google.com/uc?export=download&id=${v.id}`
       };
     }
   });
+  console.log("🎬 Videos de Google Drive registrados:", Object.keys(cloudDriveVideos).length);
+  updateVinylStandbyVideo();
 };
+
+function findMatchingVideo(track) {
+  if (!track) return null;
+  if (track.videoSrc) return { src: track.videoSrc, name: track.title, fallbackSrc: "" };
+  if (track.filePath) {
+    const candidateMp4 = track.filePath.replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i, ".mp4");
+    if (candidateMp4 !== track.filePath) {
+      return { src: candidateMp4, name: track.title, fallbackSrc: "" };
+    }
+  }
+
+  const videoEntries = Object.values(cloudDriveVideos);
+  if (videoEntries.length === 0) return null;
+
+  const normTitle = normalizeTrackKey(track.title || "");
+  const normFull = normalizeTrackKey((track.artist || "") + " " + (track.title || ""));
+  const normDriveName = track.driveName ? normalizeTrackKey(track.driveName) : "";
+
+  // 1. Coincidencia exacta por clave normalizada
+  for (const v of videoEntries) {
+    const vk = normalizeTrackKey(v.name);
+    if (vk === normTitle || vk === normFull || (normDriveName && vk === normDriveName)) {
+      return v;
+    }
+  }
+
+  // 2. Coincidencia por subcadena directa
+  for (const v of videoEntries) {
+    const vk = normalizeTrackKey(v.name);
+    if (normTitle && (vk.includes(normTitle) || normTitle.includes(vk))) {
+      return v;
+    }
+    if (normFull && (vk.includes(normFull) || normFull.includes(vk))) {
+      return v;
+    }
+  }
+
+  // 3. Coincidencia por tokens / palabras clave (ej: "adicto", "tainy", "anuel")
+  const stopWords = new Set(["the", "and", "los", "las", "del", "con", "por", "para", "official", "video", "animated", "audio", "music", "letra", "lyrics", "remix"]);
+  const getTokens = (str) => {
+    return String(str || "")
+      .toLowerCase()
+      .replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "")
+      .replace(/[^a-z0-9áéíóúñ\s]/gi, " ")
+      .split(/\s+/)
+      .filter(w => w.length >= 3 && !stopWords.has(w));
+  };
+
+  const trackTokens = getTokens(`${track.artist || ""} ${track.title || ""} ${track.driveName || ""}`);
+  if (trackTokens.length > 0) {
+    let bestMatch = null;
+    let maxMatches = 0;
+    for (const v of videoEntries) {
+      const vTokens = new Set(getTokens(v.name));
+      let matches = 0;
+      for (const t of trackTokens) {
+        if (vTokens.has(t)) matches++;
+      }
+      if (matches > maxMatches && matches >= 1) {
+        maxMatches = matches;
+        bestMatch = v;
+      }
+    }
+    if (bestMatch && maxMatches >= 1) {
+      return bestMatch;
+    }
+  }
+
+  return null;
+}
 
 function toggleSleepVinylVideoSetting(e) {
   if (e && e.stopPropagation) e.stopPropagation();
@@ -4248,49 +4321,42 @@ function updateVinylStandbyVideo() {
     return;
   }
 
-  // 1. Video asignado explícitamente o video local mp4
-  let videoSrc = t.videoSrc || "";
-  if (!videoSrc && t.filePath) {
-    const candidateMp4 = t.filePath.replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i, ".mp4");
-    if (candidateMp4 !== t.filePath) {
-      videoSrc = candidateMp4;
-    }
-  }
+  // Buscar vídeo correspondiente (local o subcarpeta 'videos' de Google Drive)
+  const matchedVideo = findMatchingVideo(t);
 
-  // 2. Buscar en la subcarpeta 'videos' de Google Drive
-  if (!videoSrc) {
-    const normTitle = normalizeTrackKey(t.title || "");
-    const normFull = normalizeTrackKey((t.artist || "") + " " + (t.title || ""));
-    if (normTitle && cloudDriveVideos[normTitle]) {
-      videoSrc = cloudDriveVideos[normTitle].src;
-    } else if (normFull && cloudDriveVideos[normFull]) {
-      videoSrc = cloudDriveVideos[normFull].src;
-    } else if (normTitle) {
-      for (const [k, v] of Object.entries(cloudDriveVideos)) {
-        if (k === normTitle || k.includes(normTitle) || normTitle.includes(k)) {
-          videoSrc = v.src;
-          break;
-        }
-      }
-    }
-  }
-
-  // SI NO HAY VIDEO EN LA SUBCARPETA VIDEOS O LOCAL, NO SE PONE NADA
-  if (!videoSrc) {
+  // SI NO HAY VIDEO EN LA SUBCARPETA VIDEOS O LOCAL, NO SE PONE NADA (PANTALLA OLED NEGRA LIMPIA)
+  if (!matchedVideo || !matchedVideo.src) {
     stopVinylStandbyVideo();
     return;
   }
 
+  const videoSrc = matchedVideo.src;
   const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
   videoEl.style.display = "block";
+
   if (currentPlayingVideoSource !== videoSrc) {
     currentPlayingVideoSource = videoSrc;
+    videoEl.onerror = () => {
+      console.warn("⚠️ Falló carga de vídeo en CDN lh3, intentando fallback:", videoSrc);
+      if (matchedVideo.fallbackSrc && videoEl.src !== matchedVideo.fallbackSrc) {
+        videoEl.src = matchedVideo.fallbackSrc;
+        videoEl.play().catch(() => {});
+      }
+    };
     videoEl.src = videoSrc;
     videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.setAttribute("playsinline", "true");
+    videoEl.setAttribute("webkit-playsinline", "true");
   }
 
   if (isPlaying) {
-    videoEl.play().catch(() => {});
+    const playPromise = videoEl.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(err => {
+        console.warn("Autoplay de vídeo en reposo prevenido:", err);
+      });
+    }
     if (Math.abs(videoEl.currentTime - curSec) > 2) {
       try { videoEl.currentTime = curSec; } catch(_e){}
     }
@@ -4419,8 +4485,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 10;
-const CURRENT_APP_VERSION_NAME = "2.7.0";
+const CURRENT_APP_VERSION_CODE = 11;
+const CURRENT_APP_VERSION_NAME = "2.7.1";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -6761,10 +6827,10 @@ async function autoDiscoverDriveMusic() {
   const headers = token ? { "Authorization": `Bearer ${token}` } : {};
   let rootFolderId = extractDriveId(folderInput) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
 
-  // Si no hay Token ni API Key, usar el extractor nativo de carpeta pública compartida (1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT -> Musica)
+  // Si no hay Token ni API Key, usar el extractor nativo de carpeta pública compartida (1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT -> Musica y videos)
   if (!token && !apiKey) {
     if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
-      st.textContent = `🔍 Escaneando carpeta «Musica» en Drive (${rootFolderId.substring(0, 10)}…)...`;
+      st.textContent = `🔍 Escaneando carpeta «Musica» y «videos» en Drive (${rootFolderId.substring(0, 10)}…)...`;
       window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
       return;
     }
@@ -6776,10 +6842,19 @@ async function autoDiscoverDriveMusic() {
         const listData = await listRes.json();
         if (listData.files && Array.isArray(listData.files)) {
           window.onPublicDriveFolderFetched(listData.files);
-          return;
         }
       }
     } catch (_e) {}
+    try {
+      const vRes = await fetch(DEFAULT_DRIVE_SERVER_URL + "?action=list_videos");
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        if (vData.files && Array.isArray(vData.files)) {
+          window.onPublicDriveVideosFetched(vData.files);
+        }
+      }
+    } catch (_ve) {}
+    return;
   }
 
   st.textContent = "🔍 Localizando subcarpeta «Musica» dentro del Drive...";
@@ -6863,11 +6938,16 @@ async function autoDiscoverDriveMusic() {
               (vData.files || []).forEach(vf => {
                 const vk = normalizeTrackKey(vf.name);
                 if (vk) {
-                  let vSrc = `https://drive.google.com/uc?export=download&id=${vf.id}`;
-                  if (apiKey && !token) vSrc += `&key=${apiKey}`;
-                  cloudDriveVideos[vk] = { id: vf.id, name: vf.name, src: vSrc };
+                  let vSrc = `https://lh3.googleusercontent.com/d/${vf.id}`;
+                  let vFallback = `https://drive.google.com/uc?export=download&id=${vf.id}`;
+                  if (apiKey && !token) {
+                    vSrc += `?key=${apiKey}`;
+                    vFallback += `&key=${apiKey}`;
+                  }
+                  cloudDriveVideos[vk] = { id: vf.id, name: vf.name, src: vSrc, fallbackSrc: vFallback };
                 }
               });
+              updateVinylStandbyVideo();
             }
           }
         } catch (_ve) {}

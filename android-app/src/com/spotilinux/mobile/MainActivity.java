@@ -741,35 +741,98 @@ public class MainActivity extends Activity {
             }
         }
 
+        private String unescapeHtmlText(String text) {
+            if (text == null) return "";
+            return text.replace("&amp;", "&")
+                       .replace("&lt;", "<")
+                       .replace("&gt;", ">")
+                       .replace("&quot;", "\"")
+                       .replace("&#39;", "'")
+                       .replace("&#039;", "'")
+                       .trim();
+        }
+
         private void parseEmbeddedFolderHtml(String html, JSONArray outFiles, List<String> musicaSubfolders, List<String> videoSubfolders) {
             if (html == null || html.isEmpty()) return;
             try {
-                Pattern folderPat = Pattern.compile("href=\"https://drive\\.google\\.com/drive/(?:u/\\d+/)?folders/([A-Za-z0-9_-]{15,})\"[^>]*>([\\s\\S]*?)</a>");
-                Matcher fm = folderPat.matcher(html);
-                while (fm.find()) {
-                    String fid = fm.group(1);
-                    String inner = fm.group(2);
-                    Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<").matcher(inner);
-                    String name = tm.find() ? tm.group(1).trim() : "Carpeta";
+                // 1. Extraer elementos por contenedor id="entry-<id>"
+                Pattern entryPat = Pattern.compile("id=\"entry-([A-Za-z0-9_-]{10,})\"([\\s\\S]*?)(?=id=\"entry-|$)", Pattern.CASE_INSENSITIVE);
+                Matcher em = entryPat.matcher(html);
+                boolean foundEntries = false;
+                while (em.find()) {
+                    foundEntries = true;
+                    String id = em.group(1);
+                    String block = em.group(2);
+
+                    Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<", Pattern.CASE_INSENSITIVE).matcher(block);
+                    String name = tm.find() ? unescapeHtmlText(tm.group(1)) : ("Drive_" + id.substring(0, Math.min(6, id.length())));
+
+                    boolean isFolder = block.contains("/folders/") || block.toLowerCase().contains("mime=application/vnd.google-apps.folder");
                     String low = name.toLowerCase();
-                    if (low.equals("musica") || low.equals("música") || low.equals("music") || low.contains("musica")) {
-                        if (musicaSubfolders != null && !musicaSubfolders.contains(fid)) musicaSubfolders.add(fid);
-                    } else if (low.equals("videos") || low.equals("video") || low.equals("vídeos") || low.contains("video")) {
-                        if (videoSubfolders != null && !videoSubfolders.contains(fid)) videoSubfolders.add(fid);
+
+                    if (isFolder) {
+                        if ((low.contains("video") || low.contains("vídeo")) && videoSubfolders != null) {
+                            if (!videoSubfolders.contains(id)) videoSubfolders.add(id);
+                        } else if ((low.contains("musica") || low.contains("música") || low.contains("music")) && musicaSubfolders != null) {
+                            if (!musicaSubfolders.contains(id)) musicaSubfolders.add(id);
+                        }
+                    } else if (outFiles != null) {
+                        boolean exists = false;
+                        for (int i = 0; i < outFiles.length(); i++) {
+                            if (id.equals(outFiles.getJSONObject(i).optString("id"))) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            JSONObject obj = new JSONObject();
+                            obj.put("id", id);
+                            obj.put("name", name);
+                            outFiles.put(obj);
+                        }
                     }
                 }
 
-                Pattern filePat = Pattern.compile("href=\"https://drive\\.google\\.com/file/d/([A-Za-z0-9_-]{15,})/[^\"]*\"[^>]*>([\\s\\S]*?)</a>");
-                Matcher fileM = filePat.matcher(html);
-                while (fileM.find()) {
-                    String fid = fileM.group(1);
-                    String inner = fileM.group(2);
-                    Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<").matcher(inner);
-                    String name = tm.find() ? tm.group(1).trim() : ("Drive_File_" + fid.substring(0, 6));
-                    JSONObject obj = new JSONObject();
-                    obj.put("id", fid);
-                    obj.put("name", name);
-                    outFiles.put(obj);
+                // 2. Fallback de expresiones regulares si Google Drive usa formato href directo
+                if (!foundEntries) {
+                    Pattern folderPat = Pattern.compile("href=\"(?:https://drive\\.google\\.com)?(?:/drive)?/(?:u/\\d+/)?folders/([A-Za-z0-9_-]{10,})\"[^>]*>([\\s\\S]*?)</a>", Pattern.CASE_INSENSITIVE);
+                    Matcher fm = folderPat.matcher(html);
+                    while (fm.find()) {
+                        String fid = fm.group(1);
+                        String inner = fm.group(2);
+                        Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<", Pattern.CASE_INSENSITIVE).matcher(inner);
+                        String name = tm.find() ? unescapeHtmlText(tm.group(1)) : "Carpeta";
+                        String low = name.toLowerCase();
+                        if ((low.contains("video") || low.contains("vídeo")) && videoSubfolders != null) {
+                            if (!videoSubfolders.contains(fid)) videoSubfolders.add(fid);
+                        } else if ((low.contains("musica") || low.contains("música") || low.contains("music")) && musicaSubfolders != null) {
+                            if (!musicaSubfolders.contains(fid)) musicaSubfolders.add(fid);
+                        }
+                    }
+
+                    Pattern filePat = Pattern.compile("href=\"(?:https://drive\\.google\\.com)?/file/d/([A-Za-z0-9_-]{10,})/[^\"]*\"[^>]*>([\\s\\S]*?)</a>", Pattern.CASE_INSENSITIVE);
+                    Matcher fileM = filePat.matcher(html);
+                    while (fileM.find()) {
+                        String fid = fileM.group(1);
+                        String inner = fileM.group(2);
+                        Matcher tm = Pattern.compile("class=\"flip-entry-title\"[^>]*>([^<]+)<", Pattern.CASE_INSENSITIVE).matcher(inner);
+                        String name = tm.find() ? unescapeHtmlText(tm.group(1)) : ("Drive_File_" + fid.substring(0, Math.min(6, fid.length())));
+                        if (outFiles != null) {
+                            boolean exists = false;
+                            for (int i = 0; i < outFiles.length(); i++) {
+                                if (fid.equals(outFiles.getJSONObject(i).optString("id"))) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                JSONObject obj = new JSONObject();
+                                obj.put("id", fid);
+                                obj.put("name", name);
+                                outFiles.put(obj);
+                            }
+                        }
+                    }
                 }
             } catch (Exception ignored) {
             }
@@ -782,6 +845,10 @@ public class MainActivity extends Activity {
                 public void run() {
                     JSONArray filesArr = new JSONArray();
                     JSONArray videoFilesArr = new JSONArray();
+                    String fid = (folderId != null && !folderId.trim().isEmpty()) ? folderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+
+                    // 1. Intentar consultar música y videos vía API del Apps Script Web App
+                    boolean musicApiSuccess = false;
                     try {
                         String apiUrl = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec?action=list_music";
                         String res = fetchUrlText(apiUrl);
@@ -789,31 +856,56 @@ public class MainActivity extends Activity {
                             JSONObject obj = new JSONObject(res);
                             if (obj.has("files")) {
                                 filesArr = obj.getJSONArray("files");
-                                String json = filesArr.toString();
-                                dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + json + ");");
-                                return;
+                                if (filesArr.length() > 0) {
+                                    musicApiSuccess = true;
+                                    dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + filesArr.toString() + ");");
+                                }
                             }
                         }
                     } catch (Exception ignored) {
                     }
 
+                    try {
+                        String videoApiUrl = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec?action=list_videos";
+                        String vRes = fetchUrlText(videoApiUrl);
+                        if (vRes != null && !vRes.trim().isEmpty() && vRes.trim().startsWith("{")) {
+                            JSONObject vObj = new JSONObject(vRes);
+                            if (vObj.has("files") && vObj.getJSONArray("files").length() > 0) {
+                                videoFilesArr = vObj.getJSONArray("files");
+                                dispatchJs("if(window.onPublicDriveVideosFetched) window.onPublicDriveVideosFetched(" + videoFilesArr.toString() + ");");
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    // 2. Escanear mediante embeddedfolderview la carpeta raíz compartida y subcarpetas Musica y Videos
                     List<String> musicaFolders = new ArrayList<>();
                     if (!musicaFolders.contains("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T")) {
                         musicaFolders.add("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T");
                     }
                     List<String> videoFolders = new ArrayList<>();
-                    String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + folderId + "#list");
-                    parseEmbeddedFolderHtml(htmlRoot, filesArr, musicaFolders, videoFolders);
-                    for (String subId : musicaFolders) {
-                        String htmlSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + subId + "#list");
-                        parseEmbeddedFolderHtml(htmlSub, filesArr, null, null);
+
+                    String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + fid + "#list");
+                    JSONArray pendingAudio = musicApiSuccess ? new JSONArray() : filesArr;
+                    parseEmbeddedFolderHtml(htmlRoot, pendingAudio, musicaFolders, videoFolders);
+
+                    // Si no teníamos música de la API, escanear subcarpetas de música
+                    if (!musicApiSuccess) {
+                        for (String subId : musicaFolders) {
+                            String htmlSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + subId + "#list");
+                            parseEmbeddedFolderHtml(htmlSub, filesArr, null, null);
+                        }
+                        if (filesArr.length() > 0) {
+                            dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + filesArr.toString() + ");");
+                        }
                     }
+
+                    // Escanear todas las subcarpetas de videos encontradas
                     for (String vSubId : videoFolders) {
                         String htmlVSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + vSubId + "#list");
                         parseEmbeddedFolderHtml(htmlVSub, videoFilesArr, null, null);
                     }
-                    String json = filesArr.toString();
-                    dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + json + ");");
+
                     if (videoFilesArr.length() > 0) {
                         dispatchJs("if(window.onPublicDriveVideosFetched) window.onPublicDriveVideosFetched(" + videoFilesArr.toString() + ");");
                     }

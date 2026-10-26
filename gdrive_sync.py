@@ -313,6 +313,15 @@ def resolve_videos_subfolder_id(config: GoogleDriveConfig) -> Optional[tuple[str
                         return f["id"], f["name"]
         except Exception:
             pass
+
+    # Fallback mediante vista pública embebida
+    try:
+        entries = list_public_drive_folder_items(root_id)
+        for e in entries:
+            if e.get("is_folder") and ("video" in e.get("name", "").lower() or "vídeo" in e.get("name", "").lower()):
+                return e["id"], e["name"]
+    except Exception:
+        pass
     return None
 
 
