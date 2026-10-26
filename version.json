@@ -1,18 +1,18 @@
 {
-  "versionCode": 13,
-  "versionName": "2.7.3",
+  "versionCode": 14,
+  "versionName": "2.7.4",
   "releaseDate": "2026-10-25",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.7.3",
+    "version": "2.7.4",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Restablecimiento limpio de fábrica: sin canciones precargadas, cuentas ni playlists residuales para iniciar como un cliente nuevo",
-    "Corrección del aislamiento de base de datos para no mezclar playlists ni pistas de pruebas previas en usuarios no autenticados",
-    "Nuevo botón 'Restablecer Datos de Fábrica' en el menú lateral para reiniciar la biblioteca y caché local con un solo clic",
+    "Extracción automática y generación de carátulas ID3 en alta definición al descargar canciones desde Google Drive",
+    "Sincronización y recuperación dinámica de portadas entre múltiples dispositivos (teléfono y tablet)",
+    "Instalación limpia de fábrica sin residuos de pruebas ni cuentas anteriores para nuevos usuarios",
     "Soporte perfeccionado de videos en segundo plano de vinilo desde la subcarpeta videos en Google Drive"
   ]
 }
