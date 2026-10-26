@@ -4344,8 +4344,8 @@ function cleanMediaName(str) {
   // 4. Quitar prefijos y sufijos de páginas de descarga (y2mate, snaptik, yt1s, etc.)
   s = s.replace(/^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*/i, "");
   s = s.replace(/\by2mate(\.com|\.is)?\b/gi, "");
-  // 5. Quitar etiquetas multimedia entre corchetes o paréntesis
-  s = s.replace(/\s*[\(\[]\s*(official\s*(music\s*)?video|video\s*oficial|official\s*audio|audio\s*oficial|official|video|audio|lyric\s*video|lyrics|letra|anime\s*lyric\s*official|amv|mv|visualizer|clip|hd|4k|1080p|remix|nightcore|speed\s*up)\s*[\)\]]/gi, "");
+  // 5. Quitar etiquetas multimedia entre corchetes, paréntesis o comillas orientales
+  s = s.replace(/\s*[\(\[\{「【『《〔〚]\s*(official\s*(music\s*)?video|video\s*oficial|official\s*audio|audio\s*oficial|official|video|audio|lyric\s*video|lyrics|letra|anime\s*lyric\s*official|amv|mv|visualizer|clip|hd|4k|1080p|remix|nightcore|speed\s*up)\s*[\)\]\}」】』》〕〛]/gi, "");
   // 6. Normalizar caracteres Unicode y remover diacríticos / tildes
   s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   // 7. Retener solo caracteres alfanuméricos limpios en minúsculas
@@ -4354,6 +4354,47 @@ function cleanMediaName(str) {
 
 function normalizeTrackKey(str) {
   return cleanMediaName(str);
+}
+
+const VIDEO_STOP_WORDS = new Set([
+  "nightcore", "version", "vercion", "versio", "remix", "cover", "lyrics", "lyric",
+  "audio", "video", "oficial", "official", "music", "cancion", "himno",
+  "el", "la", "los", "las", "de", "del", "un", "una", "unos", "unas",
+  "al", "lo", "se", "su", "sus", "mi", "mis", "tu", "tus", "yo", "me", "te",
+  "que", "por", "para", "con", "sin", "sobre", "tras", "en", "y", "e", "o", "u",
+  "the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for", "with", "from",
+  "prod", "by", "ft", "feat", "amv", "mv", "hd", "4k", "1080p", "clip", "visualizer",
+  "extended", "extendida", "completa", "full", "special", "original"
+]);
+
+function extractCoreTokens(str) {
+  if (!str) return new Set();
+  let s = String(str)
+    .replace(/&amp;/g, " ")
+    .replace(/&#39;/g, " ")
+    .replace(/&quot;/g, " ")
+    .replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  s = s.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  const words = s.split(/\s+/).filter(w => w.length >= 2 && !VIDEO_STOP_WORDS.has(w));
+  return new Set(words);
+}
+
+function extractVersionTags(str) {
+  if (!str) return new Set();
+  const s = String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const tags = new Set();
+  if (/\bfemale\b/.test(s)) tags.add("female");
+  else if (/\bmale\b/.test(s)) tags.add("male");
+  if (s.includes("soft rock")) tags.add("soft rock");
+  else if (/\brock\b/.test(s)) tags.add("rock");
+  if (s.includes("hit")) tags.add("hits");
+  if (s.includes("switch")) tags.add("switching");
+  if (s.includes("sped up")) tags.add("sped up");
+  if (s.includes("slowed")) tags.add("slowed");
+  if (s.includes("espanol") || s.includes("traducida")) tags.add("espanol");
+  return tags;
 }
 
 window.onPublicDriveVideosFetched = function(videoList) {
@@ -4395,6 +4436,12 @@ function findMatchingVideo(track) {
   const videoEntries = Object.values(cloudDriveVideos);
   if (videoEntries.length === 0) return null;
 
+  const tSearchStr = `${track.title || ""} ${track.driveName || ""} ${track.fileName || ""} ${track.name || ""} ${track.artist || ""}`;
+  const tCore = extractCoreTokens(tSearchStr);
+  const tVersions = extractVersionTags(tSearchStr);
+
+  if (tCore.size === 0) return null;
+
   const cleanTitle = cleanMediaName(track.title || "");
   const cleanFull = cleanMediaName((track.artist || "") + " " + (track.title || ""));
   const cleanDriveName = track.driveName ? cleanMediaName(track.driveName) : "";
@@ -4408,53 +4455,57 @@ function findMatchingVideo(track) {
     }
   }
 
-  // 2. Coincidencia por subcadena mutua directa si la longitud es representativa (>= 4 caracteres)
+  // 2. Coincidencia semántica con desambiguación estricta de versiones (Nightcore, Rock, Female/Male)
+  let bestVideo = null;
+  let bestScore = 0;
+
   for (const v of videoEntries) {
-    const vk = v.cleanName;
-    if (cleanTitle && cleanTitle.length >= 4 && (vk.includes(cleanTitle) || cleanTitle.includes(vk))) {
-      return v;
+    const vCore = extractCoreTokens(v.name);
+    const vVersions = extractVersionTags(v.name);
+
+    // Intersección de palabras clave principales
+    const overlap = [];
+    for (const w of tCore) {
+      if (vCore.has(w)) overlap.push(w);
     }
-    if (cleanDriveName && cleanDriveName.length >= 4 && (vk.includes(cleanDriveName) || cleanDriveName.includes(vk))) {
-      return v;
+    if (overlap.length === 0) continue;
+
+    let score = 0;
+    overlap.forEach(w => { score += w.length * 10; });
+
+    // Incompatibilidad estricta de género/versión (ej. female vs male)
+    if ((tVersions.has("female") && vVersions.has("male")) || (tVersions.has("male") && vVersions.has("female"))) {
+      continue;
     }
-    if (cleanFull && cleanFull.length >= 5 && (vk.includes(cleanFull) || cleanFull.includes(vk))) {
-      return v;
+
+    // Bonificación por versiones coincidentes
+    tVersions.forEach(vtag => {
+      if (vVersions.has(vtag)) score += 50;
+      else score -= 20;
+    });
+
+    // Leve penalización si el video tiene versión extra pero no hay conflicto
+    vVersions.forEach(vtag => {
+      if (!tVersions.has(vtag)) score -= 8;
+    });
+
+    // Desambiguación para títulos cortos como "Blue" (evitar confundir "Blue Da Ba Dee" con "I'm Good Blue")
+    if (tCore.size === 1 && tCore.has("blue")) {
+      if (vCore.has("good") && !tCore.has("good")) score -= 60;
+      if (vCore.has("dee") || vCore.has("daba") || vCore.has("baba")) score += 50;
+    }
+
+    // Filtrar coincidencias accidentales de palabras sueltas cortas
+    const totalOverlapLen = overlap.reduce((acc, w) => acc + w.length, 0);
+    if (totalOverlapLen < 3 && overlap.length < 2) continue;
+
+    if (score > bestScore && score >= 25) {
+      bestScore = score;
+      bestVideo = v;
     }
   }
 
-  // 3. Coincidencia por palabras clave (tokens con peso)
-  const stopWords = new Set(["the", "and", "los", "las", "del", "con", "por", "para", "official", "video", "animated", "audio", "music", "letra", "lyrics", "remix", "versio", "version", "ft", "feat"]);
-  const extractTokens = (str) => {
-    let s = String(str || "").replace(/&amp;/g, " ").replace(/&#39;/g, " ").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return s.toLowerCase()
-      .replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "")
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter(w => w.length >= 3 && !stopWords.has(w));
-  };
-
-  const trackTokens = extractTokens(`${track.title || ""} ${track.driveName || ""} ${track.artist || ""}`);
-  if (trackTokens.length > 0) {
-    let bestMatch = null;
-    let maxScore = 0;
-    for (const v of videoEntries) {
-      const vTokens = new Set(extractTokens(v.name));
-      let matches = 0;
-      for (const t of trackTokens) {
-        if (vTokens.has(t)) matches++;
-      }
-      if (matches > maxScore && matches >= 1) {
-        maxScore = matches;
-        bestMatch = v;
-      }
-    }
-    // Si coincide en al menos 2 palabras clave, o el 50% de las palabras clave de la pista
-    if (bestMatch && (maxScore >= 2 || (maxScore >= 1 && trackTokens.length <= 2))) {
-      return bestMatch;
-    }
-  }
-
-  return null;
+  return bestVideo;
 }
 
 function toggleSleepVinylVideoSetting(e) {

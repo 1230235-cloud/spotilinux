@@ -1,17 +1,17 @@
 {
-  "versionCode": 18,
-  "versionName": "2.8.1",
+  "versionCode": 19,
+  "versionName": "2.8.2",
   "releaseDate": "2026-10-26",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.8.1",
+    "version": "2.8.2",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Corrección crítica de la animación de Maomao y barras de espectro (resolución de ReferenceError en avatar y polyfill universal de roundRect para tabletas)",
-    "Corrección de vinculación y reproducción de videos de fondo en modo vinilo (eliminación de desvío erróneo a mp4 local inexistente y protección de buffer)",
-    "Blindaje integral de inicialización DOM para arranque ininterrumpido a 60 FPS"
+    "Motor de emparejamiento inteligente de video para canciones Nightcore y versiones especiales (Rock, Female, Male, Soft Rock, Hits Hard)",
+    "Eliminación de falsos positivos y asignación de videos incorrectos cuando la pista no cuenta con video oficial",
+    "Desambiguación de títulos cortos y nombres similares (Blue, Heavenly, Waka Waka, On The Floor, Otaku Encubierto, Tú compras oro)"
   ]
 }
