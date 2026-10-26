@@ -1,18 +1,17 @@
 {
-  "versionCode": 17,
-  "versionName": "2.8.0",
+  "versionCode": 18,
+  "versionName": "2.8.1",
   "releaseDate": "2026-10-26",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.8.0",
+    "version": "2.8.1",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Corrección del selector de foto de perfil: soporte nativo de selección de imágenes desde la galería y cámara en Android",
-    "Renombrado oficial de la plataforma a MaoMusic (ecosistema Linux Desktop y Android APK)",
-    "Nuevo icono e imagen de perfil oficial de MaoMusic con Maomao durmiente",
-    "Documento de arquitectura técnica integral para agentes de inteligencia artificial (agentes.md)"
+    "Corrección crítica de la animación de Maomao y barras de espectro (resolución de ReferenceError en avatar y polyfill universal de roundRect para tabletas)",
+    "Corrección de vinculación y reproducción de videos de fondo en modo vinilo (eliminación de desvío erróneo a mp4 local inexistente y protección de buffer)",
+    "Blindaje integral de inicialización DOM para arranque ininterrumpido a 60 FPS"
   ]
 }
