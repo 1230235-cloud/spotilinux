@@ -1108,7 +1108,7 @@ class GitHubDesktopUpdateWorker(QThread):
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     remote_code = data.get("versionCode", 0)
-                    local_code = 14  # v2.7.4
+                    local_code = 15  # v2.7.5
                     if remote_code > local_code:
                         self.update_available.emit(data)
         except Exception:
@@ -2380,6 +2380,12 @@ class SpotiLinuxWindow(QMainWindow):
 
     def _refresh_track_table(self) -> None:
         badge, title, subtitle, tracks, is_custom_pl = self._get_base_tracks_for_view()
+
+        # Actualizar placeholder según la playlist o vista actual
+        if is_custom_pl or self.current_view.startswith("playlist:") or self.current_view in ("liked", "gdrive"):
+            self.search_input.setPlaceholderText(f"🔍 Buscar canciones en «{title}»...")
+        else:
+            self.search_input.setPlaceholderText("🔍 ¿Qué quieres reproducir? (título, artista, álbum...)")
 
         if self.active_genre_filter == "Cloud ☁️":
             tracks = [

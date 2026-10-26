@@ -1,18 +1,18 @@
 {
-  "versionCode": 14,
-  "versionName": "2.7.4",
+  "versionCode": 15,
+  "versionName": "2.7.5",
   "releaseDate": "2026-10-25",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/SpotiLinux-Mobile.apk",
   "desktop": {
-    "version": "2.7.4",
+    "version": "2.7.5",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Extracción automática y generación de carátulas ID3 en alta definición al descargar canciones desde Google Drive",
-    "Sincronización y recuperación dinámica de portadas entre múltiples dispositivos (teléfono y tablet)",
-    "Instalación limpia de fábrica sin residuos de pruebas ni cuentas anteriores para nuevos usuarios",
-    "Soporte perfeccionado de videos en segundo plano de vinilo desde la subcarpeta videos en Google Drive"
+    "Buscador de canciones interactivo dentro de cada playlist y filtrado por playlist en la biblioteca",
+    "Vinculación bidireccional en tiempo real entre el video de fondo en modo vinilo y la reproducción de audio",
+    "Sistema corregido y robusto de pilas de memoria para el modo aleatorio (shuffle) sin atascos ni congelamientos",
+    "Retroceso inteligente en cola aleatoria y reinicio instantáneo a 0:00 para canciones con más de 3 segundos"
   ]
 }

@@ -2195,7 +2195,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.4 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.7.5 (GitHub)</div>
         </div>
       </button>
 
@@ -2274,6 +2274,7 @@
           <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">Descargadas</button>
           <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">Favoritos</button>
           <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">Google Drive</button>
+          <button class="btn-chip" id="flt-playlist" onclick="openPlaylistSelectFilterModal()">📁 Por Playlist ▾</button>
           <button class="btn-chip" id="flt-shuffle" onclick="startRandomPlayback()">Aleatorio</button>
         </div>
         <div class="section-title">
@@ -2502,6 +2503,60 @@
         <button class="btn-chip active" style="flex:1; padding:9px;" onclick="confirmMultiPickerAdd()">✔ Añadir Canciones</button>
         <button class="btn-chip" style="padding:9px;" onclick="closeMultiTrackPickerModal()">Cerrar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DETALLE Y BUSCADOR DE CANCIONES POR PLAYLIST -->
+  <div id="playlistDetailModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:440px; max-height:88vh; display:flex; flex-direction:column; padding:16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:10px; overflow:hidden;">
+          <div id="plDetailCover" style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg, #1db954, #121218); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; color:#fff; box-shadow:0 4px 14px rgba(0,0,0,0.4);">🎵</div>
+          <div style="overflow:hidden;">
+            <div id="plDetailTitle" style="font-size:16px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Playlist</div>
+            <div id="plDetailStats" style="font-size:11px; color:var(--green-bright); margin-top:2px;">0 canciones</div>
+          </div>
+        </div>
+        <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closePlaylistDetailModal()">✕</button>
+      </div>
+
+      <!-- Barra de acciones de la playlist -->
+      <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+        <button class="btn-chip active" id="btnPlayAllPlDetail" style="padding:7px 13px; font-size:11px; display:inline-flex; align-items:center; gap:5px;" onclick="playCurrentDetailPlaylist()">
+          ▶ Reproducir
+        </button>
+        <button class="btn-chip" id="btnShufflePlDetail" style="padding:7px 13px; font-size:11px; display:inline-flex; align-items:center; gap:5px;" onclick="shuffleCurrentDetailPlaylist()">
+          🔀 Aleatorio
+        </button>
+        <button class="btn-chip" id="btnAddTracksPlDetail" style="padding:7px 11px; font-size:11px;" onclick="openMultiTrackPickerForCurrentPlaylist()">
+          ＋ Añadir canciones
+        </button>
+        <button class="btn-chip" id="btnDeletePlDetail" style="padding:7px 11px; font-size:11px; color:#ff5555;" onclick="deleteCurrentDetailPlaylist()" title="Eliminar Playlist">
+          🗑
+        </button>
+      </div>
+
+      <!-- BUSCADOR DE CANCIONES DENTRO DE LA PLAYLIST -->
+      <div class="search-wrapper" style="margin-bottom:8px;">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="plDetailSearchInput" class="search-input" placeholder="🔍 Buscar canciones en esta playlist..." oninput="filterCurrentDetailPlaylist(this.value)" />
+      </div>
+
+      <!-- Lista scrolleable de canciones de la playlist filtradas -->
+      <div id="plDetailTrackList" class="track-list" style="flex:1; overflow-y:auto; max-height:48vh; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:4px;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: SELECCIÓN RÁPIDA DE PLAYLIST PARA FILTRAR EN CANCIONES -->
+  <div id="playlistSelectFilterModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:380px; max-height:85vh; display:flex; flex-direction:column; padding:16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:15px; color:#fff;">📁 Filtrar por Playlist</h3>
+        <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closePlaylistSelectFilterModal()">✕</button>
+      </div>
+      <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Selecciona la playlist para explorar y buscar sus canciones:</p>
+      <div id="playlistFilterModalChoices" style="display:flex; flex-direction:column; gap:6px; flex:1; overflow-y:auto; margin-bottom:12px;"></div>
+      <button class="btn-chip" style="padding:9px;" onclick="closePlaylistSelectFilterModal()">Cerrar</button>
     </div>
   </div>
 
@@ -3924,20 +3979,22 @@ function togglePlay() {
       window.AndroidMedia.togglePlayPause();
       setTimeout(() => { broadcastPlaybackSession(true); }, 600);
     }
-    return;
-  }
-  if (!audio.src && tracks.length > 0) {
-    if (activePlaybackQueue.length > 0) {
-      executePlayTrack(activePlaybackQueue[activeQueueIndex]);
+  } else {
+    if (!audio.src && tracks.length > 0) {
+      if (activePlaybackQueue.length > 0) {
+        executePlayTrack(activePlaybackQueue[activeQueueIndex]);
+      } else {
+        playTrackIndex(currentIndex);
+      }
     } else {
-      playTrackIndex(currentIndex);
+      if (audio.paused) { audio.play(); isPlaying = true; }
+      else { audio.pause(); isPlaying = false; }
+      updatePlayerUI();
+      setTimeout(() => { broadcastPlaybackSession(true); }, 500);
     }
-    return;
   }
-  if (audio.paused) { audio.play(); isPlaying = true; }
-  else { audio.pause(); isPlaying = false; }
-  updatePlayerUI();
-  setTimeout(() => { broadcastPlaybackSession(true); }, 500);
+  // Sincronización inmediata con video de fondo en reposo
+  setTimeout(() => { syncVinylVideoWithPlayback(); }, 50);
 }
 
 function initOrSyncShufflePool(forcedCurrentIdx = activeQueueIndex) {
@@ -3946,28 +4003,33 @@ function initOrSyncShufflePool(forcedCurrentIdx = activeQueueIndex) {
     shuffleUnplayedPool = [];
     return;
   }
-  const total = activePlaybackQueue.length;
-  if (forcedCurrentIdx >= 0 && forcedCurrentIdx < total) {
-    shufflePlayedStack = [forcedCurrentIdx];
-    shuffleUnplayedPool = [];
-    for (let i = 0; i < total; i++) {
-      if (i !== forcedCurrentIdx) shuffleUnplayedPool.push(i);
-    }
+  
+  const curTrack = (forcedCurrentIdx >= 0 && forcedCurrentIdx < activePlaybackQueue.length)
+    ? activePlaybackQueue[forcedCurrentIdx]
+    : activePlaybackQueue[0];
+  const curId = curTrack ? curTrack.id : null;
+
+  if (curId) {
+    shufflePlayedStack = [curId];
+    shuffleUnplayedPool = activePlaybackQueue
+      .filter(t => t && t.id !== curId)
+      .map(t => t.id);
   } else {
     shufflePlayedStack = [];
-    shuffleUnplayedPool = Array.from({ length: total }, (_, i) => i);
+    shuffleUnplayedPool = activePlaybackQueue.filter(t => t).map(t => t.id);
   }
 }
 
-function nextTrack() {
+function nextTrack(isAutoEnd = false) {
   if (!activePlaybackQueue || !activePlaybackQueue.length) {
     activePlaybackQueue = [...tracks];
   }
   if (!activePlaybackQueue.length) return;
 
   if (shuffleMode && activePlaybackQueue.length > 1) {
+    // Si la pila de pendientes se vació:
     if (!Array.isArray(shuffleUnplayedPool) || shuffleUnplayedPool.length === 0) {
-      if (repeatMode === "off") {
+      if (isAutoEnd && repeatMode === "off") {
         isPlaying = false;
         if (hasNativeAndroid && window.AndroidMedia.pause) {
           try { window.AndroidMedia.pause(); } catch(e){}
@@ -3975,26 +4037,35 @@ function nextTrack() {
           audio.pause();
         }
         updatePlayerUI();
+        syncVinylVideoWithPlayback();
         showToast("Todas las canciones del aleatorio fueron reproducidas ✔");
         return;
       }
-      initOrSyncShufflePool(activeQueueIndex);
-      showToast("Ciclo aleatorio completado. Reiniciando lista 🔀");
+      // Reabastecer el pool excluyendo la canción actualmente en curso
+      const curT = activePlaybackQueue[activeQueueIndex];
+      const curId = curT ? curT.id : null;
+      shuffleUnplayedPool = activePlaybackQueue
+        .filter(t => t && t.id !== curId)
+        .map(t => t.id);
+      showToast("Ciclo aleatorio completado. Continuando lista 🔀");
     }
 
     const randomPoolPos = Math.floor(Math.random() * shuffleUnplayedPool.length);
-    const chosenIdx = shuffleUnplayedPool.splice(randomPoolPos, 1)[0];
-    shufflePlayedStack.push(chosenIdx);
-    activeQueueIndex = chosenIdx;
+    const chosenId = shuffleUnplayedPool.splice(randomPoolPos, 1)[0];
+    shufflePlayedStack.push(chosenId);
+
+    const foundIdx = activePlaybackQueue.findIndex(t => t.id === chosenId);
+    activeQueueIndex = foundIdx >= 0 ? foundIdx : 0;
   } else {
     activeQueueIndex = (activeQueueIndex + 1) % activePlaybackQueue.length;
-    if (shufflePlayedStack[shufflePlayedStack.length - 1] !== activeQueueIndex) {
-      shufflePlayedStack.push(activeQueueIndex);
+    const curT = activePlaybackQueue[activeQueueIndex];
+    if (curT && shufflePlayedStack[shufflePlayedStack.length - 1] !== curT.id) {
+      shufflePlayedStack.push(curT.id);
     }
   }
 
   const t = activePlaybackQueue[activeQueueIndex];
-  currentIndex = tracks.indexOf(t);
+  currentIndex = tracks.findIndex(x => x.id === t.id);
   if (currentIndex < 0) currentIndex = 0;
   executePlayTrack(t);
 }
@@ -4005,18 +4076,34 @@ function prevTrack() {
   }
   if (!activePlaybackQueue.length) return;
 
+  // Regla estándar de reproductores: Si lleva más de 3 segundos, reiniciar al principio de la pista
+  const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
+  if (curSec > 3.0) {
+    seekAudio(0);
+    return;
+  }
+
   if (shuffleMode && Array.isArray(shufflePlayedStack) && shufflePlayedStack.length > 1) {
-    const current = shufflePlayedStack.pop();
-    if (!shuffleUnplayedPool.includes(current)) {
-      shuffleUnplayedPool.push(current);
+    // Sacar pista actual de la cima de la pila y regresarla a pendientes
+    const currentId = shufflePlayedStack.pop();
+    if (!shuffleUnplayedPool.includes(currentId)) {
+      shuffleUnplayedPool.unshift(currentId);
     }
-    activeQueueIndex = shufflePlayedStack[shufflePlayedStack.length - 1];
+    // La anterior es ahora la cima de la pila
+    const prevId = shufflePlayedStack[shufflePlayedStack.length - 1];
+    const foundIdx = activePlaybackQueue.findIndex(t => t.id === prevId);
+    activeQueueIndex = foundIdx >= 0 ? foundIdx : 0;
+  } else if (shuffleMode) {
+    // Primer tema de la sesión aleatoria: reiniciar pista actual
+    seekAudio(0);
+    showToast("Inicio de la lista aleatoria");
+    return;
   } else {
     activeQueueIndex = (activeQueueIndex - 1 + activePlaybackQueue.length) % activePlaybackQueue.length;
   }
 
   const t = activePlaybackQueue[activeQueueIndex];
-  currentIndex = tracks.indexOf(t);
+  currentIndex = tracks.findIndex(x => x.id === t.id);
   if (currentIndex < 0) currentIndex = 0;
   executePlayTrack(t);
 }
@@ -4025,9 +4112,11 @@ function seekAudio(val) {
   if (hasNativeAndroid) {
     const targetMs = Math.floor((val / 1000) * nativeDurationMs);
     window.AndroidMedia.seekTo(targetMs);
+    syncVinylVideoWithPlayback(targetMs / 1000);
   } else {
     const dur = audio.duration || 28;
     audio.currentTime = (val / 1000) * dur;
+    syncVinylVideoWithPlayback(audio.currentTime);
   }
 }
 
@@ -4361,6 +4450,43 @@ function stopVinylStandbyVideo() {
   currentPlayingVideoSource = "";
 }
 
+let isInternalVideoSync = false;
+
+function syncVinylVideoWithPlayback(overrideCurSec = null) {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  const container = document.getElementById("vinylVideoBgContainer");
+  const videoEl = document.getElementById("vinylBgVideo");
+  if (!overlay || !overlay.classList.contains("active") || !videoEl || !videoEl.src) return;
+
+  if (!sleepVinylVideoEnabled) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  const curSec = (overrideCurSec !== null && !isNaN(overrideCurSec))
+    ? overrideCurSec
+    : (typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0));
+
+  isInternalVideoSync = true;
+  try {
+    if (isPlaying) {
+      if (videoEl.paused) {
+        const p = videoEl.play();
+        if (p !== undefined) p.catch(() => {});
+      }
+      if (Math.abs(videoEl.currentTime - curSec) > 1.2) {
+        try { videoEl.currentTime = curSec; } catch(_e){}
+      }
+    } else {
+      if (!videoEl.paused) {
+        videoEl.pause();
+      }
+    }
+  } finally {
+    setTimeout(() => { isInternalVideoSync = false; }, 100);
+  }
+}
+
 function updateVinylStandbyVideo() {
   const overlay = document.getElementById("vinylStandbyOverlay");
   const container = document.getElementById("vinylVideoBgContainer");
@@ -4413,6 +4539,52 @@ function updateVinylStandbyVideo() {
     }
   };
 
+  // VINCULACIÓN BIDIRECCIONAL: cuando el video se pausa por interacción externa o controles, el audio también se pausa
+  videoEl.onpause = () => {
+    if (isInternalVideoSync) return;
+    const ov = document.getElementById("vinylStandbyOverlay");
+    if (!ov || !ov.classList.contains("active")) return;
+    if (isPlaying) {
+      if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.pause) {
+        try { window.AndroidMedia.pause(); } catch(e){}
+      } else if (audio) {
+        audio.pause();
+      }
+      isPlaying = false;
+      updatePlayerUI();
+      const playSvg = ICONS.play;
+      const vPlay = document.getElementById("vinylBtnPlay");
+      if (vPlay) vPlay.innerHTML = playSvg;
+      const vDisc = document.getElementById("vinylDisc");
+      if (vDisc) vDisc.classList.remove("playing");
+      const vArm = document.getElementById("vinylTonearm");
+      if (vArm) vArm.classList.remove("playing");
+    }
+  };
+
+  // VINCULACIÓN BIDIRECCIONAL: cuando el video se reanuda, el audio también se reanuda
+  videoEl.onplay = () => {
+    if (isInternalVideoSync) return;
+    const ov = document.getElementById("vinylStandbyOverlay");
+    if (!ov || !ov.classList.contains("active")) return;
+    if (!isPlaying) {
+      if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.resume) {
+        try { window.AndroidMedia.resume(); } catch(e){}
+      } else if (audio) {
+        audio.play().catch(() => {});
+      }
+      isPlaying = true;
+      updatePlayerUI();
+      const playSvg = ICONS.pause;
+      const vPlay = document.getElementById("vinylBtnPlay");
+      if (vPlay) vPlay.innerHTML = playSvg;
+      const vDisc = document.getElementById("vinylDisc");
+      if (vDisc) vDisc.classList.add("playing");
+      const vArm = document.getElementById("vinylTonearm");
+      if (vArm) vArm.classList.add("playing");
+    }
+  };
+
   if (currentPlayingVideoSource !== videoSrc) {
     currentPlayingVideoSource = videoSrc;
     videoEl.style.display = "none";
@@ -4424,18 +4596,23 @@ function updateVinylStandbyVideo() {
     videoEl.setAttribute("webkit-playsinline", "true");
   }
 
-  if (isPlaying) {
-    const playPromise = videoEl.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        stopVinylStandbyVideo();
-      });
+  isInternalVideoSync = true;
+  try {
+    if (isPlaying) {
+      const playPromise = videoEl.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          stopVinylStandbyVideo();
+        });
+      }
+      if (Math.abs(videoEl.currentTime - curSec) > 1.2) {
+        try { videoEl.currentTime = curSec; } catch(_e){}
+      }
+    } else {
+      videoEl.pause();
     }
-    if (Math.abs(videoEl.currentTime - curSec) > 2) {
-      try { videoEl.currentTime = curSec; } catch(_e){}
-    }
-  } else {
-    videoEl.pause();
+  } finally {
+    setTimeout(() => { isInternalVideoSync = false; }, 100);
   }
 }
 
@@ -4536,6 +4713,9 @@ window.onNativeProgress = function(posMs, durMs, playingState) {
   const vinylTonearm = document.getElementById("vinylTonearm");
   if (vinylTonearm) vinylTonearm.classList.toggle("playing", isPlaying);
 
+  // Sincronización continua y estrecha del video de vinilo con el audio nativo
+  syncVinylVideoWithPlayback(posMs / 1000);
+
   if (isPlaying) {
     broadcastPlaybackSession(false);
   }
@@ -4558,8 +4738,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 14;
-const CURRENT_APP_VERSION_NAME = "2.7.4";
+const CURRENT_APP_VERSION_CODE = 15;
+const CURRENT_APP_VERSION_NAME = "2.7.5";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -5393,6 +5573,17 @@ function getFilteredTracks() {
     if (activeFilter === "saved" && !t.downloaded) return false;
     if (activeFilter === "liked" && !t.liked) return false;
     if (activeFilter === "cloud" && !t.cloud) return false;
+    if (activeFilter.startsWith("pl:")) {
+      const plId = activeFilter.replace("pl:", "");
+      if (plId === "pl_liked") {
+        if (!t.liked) return false;
+      } else if (plId === "pl_cloud") {
+        if (!t.cloud) return false;
+      } else {
+        const pl = playlists.find(p => p.id === plId);
+        if (!pl || !pl.trackIds || !pl.trackIds.includes(t.id)) return false;
+      }
+    }
     if (q) {
       const title = (t.title || "").toLowerCase();
       const artist = (t.artist || "").toLowerCase();
@@ -5578,7 +5769,9 @@ function renderTracks() {
   });
 }
 
-/* ---------------- GESTIÓN DE PLAYLISTS DISPONIBLES EN INICIO ---------------- */
+/* ---------------- GESTIÓN DE PLAYLISTS DISPONIBLES EN INICIO Y DETALLE ---------------- */
+let currentDetailPlaylistId = null;
+
 function renderHomePlaylists() {
   const grid = document.getElementById("homePlaylistGrid");
   if (!grid) return;
@@ -5589,20 +5782,7 @@ function renderHomePlaylists() {
   const likedCard = document.createElement("div");
   likedCard.className = "playlist-card";
   likedCard.style.background = "linear-gradient(135deg, #2b1754 0%, #150f28 100%)";
-  likedCard.onclick = () => {
-    if (!likedList.length) {
-      showToast("Aún no tienes canciones favoritas marcadas con corazón");
-      return;
-    }
-    activePlaybackQueue = [...likedList];
-    activeQueueIndex = 0;
-    activeQueueName = "Tus Me Gusta";
-    executePlayTrack(likedList[0]);
-    updatePlayerUI();
-    updateFullPlayerUI();
-    setFullPlayerTab("visualizer");
-    openFullPlayer();
-  };
+  likedCard.onclick = () => openPlaylistDetailModal("pl_liked");
   likedCard.innerHTML = `
     <div class="playlist-card-badge">FAVORITOS</div>
     <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
@@ -5613,7 +5793,7 @@ function renderHomePlaylists() {
     <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_liked')" title="Reproducir en aleatorio">
       ${ICONS.shuffle}
     </button>
-    <div class="playlist-card-play-btn">${ICONS.play}</div>
+    <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('pl_liked')" title="Reproducir">${ICONS.play}</div>
   `;
   grid.appendChild(likedCard);
 
@@ -5622,20 +5802,7 @@ function renderHomePlaylists() {
   const cloudCard = document.createElement("div");
   cloudCard.className = "playlist-card";
   cloudCard.style.background = "linear-gradient(135deg, #0d261e 0%, #0a1410 100%)";
-  cloudCard.onclick = () => {
-    if (!cloudList.length) {
-      showToast("No se encontraron canciones en Google Drive");
-      return;
-    }
-    activePlaybackQueue = [...cloudList];
-    activeQueueIndex = 0;
-    activeQueueName = "Google Drive";
-    executePlayTrack(cloudList[0]);
-    updatePlayerUI();
-    updateFullPlayerUI();
-    setFullPlayerTab("visualizer");
-    openFullPlayer();
-  };
+  cloudCard.onclick = () => openPlaylistDetailModal("pl_cloud");
   cloudCard.innerHTML = `
     <div class="playlist-card-badge">NUBE</div>
     <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
@@ -5646,7 +5813,7 @@ function renderHomePlaylists() {
     <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_cloud')" title="Reproducir en aleatorio">
       ${ICONS.shuffle}
     </button>
-    <div class="playlist-card-play-btn">${ICONS.play}</div>
+    <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('pl_cloud')" title="Reproducir">${ICONS.play}</div>
   `;
   grid.appendChild(cloudCard);
 
@@ -5655,20 +5822,7 @@ function renderHomePlaylists() {
     const card = document.createElement("div");
     card.className = "playlist-card";
     const plTracks = getPlaylistTracks(pl);
-    card.onclick = () => {
-      if (!plTracks.length) {
-        showToast("Esta playlist no contiene canciones aún");
-        return;
-      }
-      activePlaybackQueue = [...plTracks];
-      activeQueueIndex = 0;
-      activeQueueName = pl.name;
-      executePlayTrack(plTracks[0]);
-      updatePlayerUI();
-      updateFullPlayerUI();
-      setFullPlayerTab("visualizer");
-      openFullPlayer();
-    };
+    card.onclick = () => openPlaylistDetailModal(pl.id);
     card.innerHTML = `
       <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -5678,10 +5832,278 @@ function renderHomePlaylists() {
       <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
         ${ICONS.shuffle}
       </button>
-      <div class="playlist-card-play-btn">${ICONS.play}</div>
+      <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</div>
     `;
     grid.appendChild(card);
   });
+}
+
+function playPlaylistDirect(plId) {
+  let plTracks = [];
+  let plName = "Playlist";
+  if (plId === "pl_liked") {
+    plTracks = tracks.filter(t => t.liked);
+    plName = "Tus Me Gusta";
+  } else if (plId === "pl_cloud") {
+    plTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const pl = playlists.find(p => p.id === plId);
+    if (!pl) return;
+    plTracks = getPlaylistTracks(pl);
+    plName = pl.name;
+  }
+  if (!plTracks.length) {
+    showToast(`La playlist «${plName}» no contiene canciones aún`);
+    return;
+  }
+  activePlaybackQueue = [...plTracks];
+  activeQueueIndex = 0;
+  activeQueueName = plName;
+  executePlayTrack(plTracks[0]);
+  updatePlayerUI();
+  updateFullPlayerUI();
+  setFullPlayerTab("visualizer");
+  openFullPlayer();
+}
+
+/* ========================================================================= */
+/* BUSCADOR DE CANCIONES POR PLAYLIST (MODAL ELEGANTE + FILTRADO EN VIVO)     */
+/* ========================================================================= */
+function openPlaylistDetailModal(plId) {
+  currentDetailPlaylistId = plId;
+  selectedPlaylistId = plId;
+  const modal = document.getElementById("playlistDetailModal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("plDetailTitle");
+  const statsEl = document.getElementById("plDetailStats");
+  const coverEl = document.getElementById("plDetailCover");
+  const btnDel = document.getElementById("btnDeletePlDetail");
+  const btnAdd = document.getElementById("btnAddTracksPlDetail");
+  const searchInput = document.getElementById("plDetailSearchInput");
+
+  if (searchInput) searchInput.value = "";
+
+  if (plId === "pl_liked") {
+    if (titleEl) titleEl.textContent = "Canciones Favoritas ♥";
+    if (coverEl) {
+      coverEl.style.background = "linear-gradient(135deg, #4b1764, #1b0a2a)";
+      coverEl.innerHTML = ICONS.likeFilled;
+    }
+    if (btnDel) btnDel.style.display = "none";
+    if (btnAdd) btnAdd.style.display = "none";
+  } else if (plId === "pl_cloud") {
+    if (titleEl) titleEl.textContent = "Google Drive ☁️";
+    if (coverEl) {
+      coverEl.style.background = "linear-gradient(135deg, #0f4b36, #091a13)";
+      coverEl.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1ed760" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
+    }
+    if (btnDel) btnDel.style.display = "none";
+    if (btnAdd) btnAdd.style.display = "none";
+  } else {
+    const pl = playlists.find(p => p.id === plId);
+    if (titleEl) titleEl.textContent = pl ? pl.name : "Playlist";
+    if (coverEl) {
+      coverEl.style.background = "linear-gradient(135deg, #1db954, #121218)";
+      coverEl.innerHTML = `🎵`;
+    }
+    if (btnDel) btnDel.style.display = "inline-block";
+    if (btnAdd) btnAdd.style.display = "inline-block";
+  }
+
+  renderDetailPlaylistTracks("");
+  modal.classList.add("open");
+}
+
+function closePlaylistDetailModal() {
+  const modal = document.getElementById("playlistDetailModal");
+  if (modal) modal.classList.remove("open");
+  currentDetailPlaylistId = null;
+}
+
+function filterCurrentDetailPlaylist(query) {
+  renderDetailPlaylistTracks(query);
+}
+
+function renderDetailPlaylistTracks(query = "") {
+  const listEl = document.getElementById("plDetailTrackList");
+  const statsEl = document.getElementById("plDetailStats");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+
+  let allPlTracks = [];
+  let plName = "Playlist";
+
+  if (currentDetailPlaylistId === "pl_liked") {
+    allPlTracks = tracks.filter(t => t.liked);
+    plName = "Tus Favoritos";
+  } else if (currentDetailPlaylistId === "pl_cloud") {
+    allPlTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const pl = playlists.find(p => p.id === currentDetailPlaylistId);
+    if (pl) {
+      allPlTracks = getPlaylistTracks(pl);
+      plName = pl.name;
+    }
+  }
+
+  const q = String(query || "").toLowerCase().trim();
+  const filtered = q
+    ? allPlTracks.filter(t => {
+        const title = (t.title || "").toLowerCase();
+        const artist = (t.artist || "").toLowerCase();
+        const album = (t.album || "").toLowerCase();
+        return title.includes(q) || artist.includes(q) || album.includes(q);
+      })
+    : allPlTracks;
+
+  if (statsEl) {
+    statsEl.textContent = q
+      ? `${filtered.length} de ${allPlTracks.length} canciones encontradas`
+      : `${allPlTracks.length} canciones`;
+  }
+
+  if (filtered.length === 0) {
+    const emptyRow = document.createElement("div");
+    emptyRow.style.cssText = "padding: 24px 12px; text-align: center; color: var(--muted); font-size: 12px;";
+    emptyRow.innerHTML = q
+      ? `No se encontraron canciones en esta playlist para «<b>${escapeHtml(q)}</b>»`
+      : `Esta playlist aún no tiene canciones guardadas.`;
+    listEl.appendChild(emptyRow);
+    return;
+  }
+
+  filtered.forEach((t, idx) => {
+    const isThisPlaying = isPlaying && (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id);
+    const row = document.createElement("div");
+    row.className = "track-item" + (isThisPlaying ? " playing" : "");
+    row.setAttribute("data-track-id", t.id);
+    row.onclick = () => {
+      closePlaylistDetailModal();
+      playTrackFromQueue(allPlTracks, allPlTracks.indexOf(t) >= 0 ? allPlTracks.indexOf(t) : 0, plName);
+    };
+
+    const numSpan = document.createElement("div");
+    numSpan.style.cssText = `font-size:11px; font-weight:800; color:${isThisPlaying ? 'var(--green-bright)' : 'var(--muted)'}; width:20px; text-align:center;`;
+    numSpan.textContent = isThisPlaying ? "▶" : String(idx + 1);
+    row.appendChild(numSpan);
+
+    const thumb = document.createElement("div");
+    if (t.cover) {
+      thumb.className = "track-thumb";
+      thumb.style.background = "#14141c";
+      thumb.innerHTML = `<img src="${t.cover}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:6px;" />`;
+    } else {
+      thumb.className = "track-thumb track-thumb-empty";
+      thumb.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
+    }
+    row.appendChild(thumb);
+
+    const meta = document.createElement("div");
+    meta.className = "track-meta";
+    meta.innerHTML = `<div class="track-title">${escapeHtml(t.title || 'Canción')}</div>
+                      <div class="track-sub">${escapeHtml(t.artist || 'Artista')}</div>`;
+    row.appendChild(meta);
+
+    // Botón para quitar de la playlist (solo para playlists creadas por el usuario)
+    if (currentDetailPlaylistId !== "pl_liked" && currentDetailPlaylistId !== "pl_cloud") {
+      const rmBtn = document.createElement("button");
+      rmBtn.className = "icon-action-btn";
+      rmBtn.textContent = "✕";
+      rmBtn.title = "Quitar de esta playlist";
+      rmBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        const pl = playlists.find(p => p.id === currentDetailPlaylistId);
+        if (pl && pl.trackIds) {
+          pl.trackIds = pl.trackIds.filter(tid => tid !== t.id);
+          savePersistentState();
+          renderHomePlaylists();
+          renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
+          uploadPlaylistsToDrive();
+          showToast(`Canción retirada de «${pl.name}»`);
+        }
+      };
+      row.appendChild(rmBtn);
+    }
+
+    listEl.appendChild(row);
+  });
+}
+
+function playCurrentDetailPlaylist() {
+  if (!currentDetailPlaylistId) return;
+  closePlaylistDetailModal();
+  playPlaylistDirect(currentDetailPlaylistId);
+}
+
+function shuffleCurrentDetailPlaylist() {
+  if (!currentDetailPlaylistId) return;
+  closePlaylistDetailModal();
+  playPlaylistShuffle(currentDetailPlaylistId);
+}
+
+function deleteCurrentDetailPlaylist() {
+  if (!currentDetailPlaylistId || currentDetailPlaylistId === "pl_liked" || currentDetailPlaylistId === "pl_cloud") return;
+  const pl = playlists.find(p => p.id === currentDetailPlaylistId);
+  const name = pl ? pl.name : "Playlist";
+  playlists = playlists.filter(p => p.id !== currentDetailPlaylistId);
+  savePersistentState();
+  renderHomePlaylists();
+  closePlaylistDetailModal();
+  uploadPlaylistsToDrive();
+  showToast(`🗑 Playlist «${name}» eliminada`);
+}
+
+/* ========================================================================= */
+/* SELECTOR DE FILTRO DE PLAYLIST PARA LA PESTAÑA CANCIONES                  */
+/* ========================================================================= */
+function openPlaylistSelectFilterModal() {
+  const modal = document.getElementById("playlistSelectFilterModal");
+  const choices = document.getElementById("playlistFilterModalChoices");
+  if (!modal || !choices) return;
+  choices.innerHTML = "";
+
+  const makeFilterBtn = (text, filterVal, isActive) => {
+    const btn = document.createElement("button");
+    btn.className = "btn-chip" + (isActive ? " active" : "");
+    btn.style.textAlign = "left";
+    btn.style.padding = "10px 14px";
+    btn.style.display = "flex";
+    btn.style.justifyContent = "space-between";
+    btn.style.alignItems = "center";
+    btn.innerHTML = text;
+    btn.onclick = () => {
+      closePlaylistSelectFilterModal();
+      setFilter(filterVal);
+    };
+    return btn;
+  };
+
+  // Opción 1: Ver todas las canciones
+  choices.appendChild(makeFilterBtn(`<span>🎵 Todas las canciones</span><span style="font-size:10px; opacity:0.7;">${tracks.length}</span>`, "all", activeFilter === "all"));
+
+  // Opción 2: Favoritos
+  const likedCount = tracks.filter(t => t.liked).length;
+  choices.appendChild(makeFilterBtn(`<span>♥ Tus Favoritos</span><span style="font-size:10px; opacity:0.7;">${likedCount}</span>`, "pl:pl_liked", activeFilter === "pl:pl_liked"));
+
+  // Opción 3: Google Drive
+  const cloudCount = tracks.filter(t => t.cloud).length;
+  choices.appendChild(makeFilterBtn(`<span>☁️ Google Drive</span><span style="font-size:10px; opacity:0.7;">${cloudCount}</span>`, "pl:pl_cloud", activeFilter === "pl:pl_cloud"));
+
+  // Playlists del usuario
+  playlists.forEach(pl => {
+    const plTracks = getPlaylistTracks(pl);
+    choices.appendChild(makeFilterBtn(`<span>📁 ${escapeHtml(pl.name)}</span><span style="font-size:10px; opacity:0.7;">${plTracks.length}</span>`, "pl:" + pl.id, activeFilter === ("pl:" + pl.id)));
+  });
+
+  modal.classList.add("open");
+}
+
+function closePlaylistSelectFilterModal() {
+  const modal = document.getElementById("playlistSelectFilterModal");
+  if (modal) modal.classList.remove("open");
 }
 
 function togglePlaylistCollapse() {
@@ -7219,8 +7641,45 @@ function switchTab(tab) {
 function setFilter(flt) {
   activeFilter = flt;
   ["all", "saved", "liked", "cloud"].forEach(k => {
-    document.getElementById("flt-" + k).classList.toggle("active", k === flt);
+    const el = document.getElementById("flt-" + k);
+    if (el) el.classList.toggle("active", k === flt);
   });
+  const plBtn = document.getElementById("flt-playlist");
+  if (plBtn) {
+    if (flt.startsWith("pl:")) {
+      plBtn.classList.add("active");
+      const plId = flt.replace("pl:", "");
+      if (plId === "pl_liked") plBtn.textContent = "♥ Favoritos ▾";
+      else if (plId === "pl_cloud") plBtn.textContent = "☁️ Drive ▾";
+      else {
+        const pl = playlists.find(p => p.id === plId);
+        plBtn.textContent = pl ? ("📁 " + (pl.name.length > 12 ? pl.name.slice(0, 10) + "…" : pl.name) + " ▾") : "📁 Playlist ▾";
+      }
+    } else {
+      plBtn.classList.remove("active");
+      plBtn.textContent = "📁 Por Playlist ▾";
+    }
+  }
+  const heading = document.getElementById("listHeading");
+  if (heading) {
+    if (flt.startsWith("pl:")) {
+      const plId = flt.replace("pl:", "");
+      if (plId === "pl_liked") heading.textContent = "Playlist • Tus Favoritos";
+      else if (plId === "pl_cloud") heading.textContent = "Playlist • Google Drive";
+      else {
+        const pl = playlists.find(p => p.id === plId);
+        heading.textContent = pl ? ("Playlist • " + pl.name) : "Biblioteca de Canciones";
+      }
+    } else if (flt === "saved") {
+      heading.textContent = "Canciones Descargadas";
+    } else if (flt === "liked") {
+      heading.textContent = "Tus Favoritos";
+    } else if (flt === "cloud") {
+      heading.textContent = "Google Drive (Nube)";
+    } else {
+      heading.textContent = "Biblioteca de Canciones";
+    }
+  }
   renderTracks();
 }
 

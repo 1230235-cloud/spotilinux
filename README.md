@@ -36,10 +36,17 @@
 - **Analizador de Espectro Musical (dB + Tilt + AGC) y Ecualizador de 5 Bandas**:
   - Espectro logarítmico (`45 Hz – 9 kHz`) con conversión a decibelios (`dB`), compensación de agudos (`+3.5 dB/octava`), control automático de ganancia lento (`AGC`) y ataque/decaimiento musical para que las barras, la onda neón y el modo radial se muevan con suavidad profesional al ritmo del beat.
   - Bandas de ecualización en `60 Hz`, `230 Hz`, `910 Hz`, `3.6 kHz` y `14 kHz` con presets (*Plano, Bass Boost, Synthwave, Lo-Fi Chill, Vocal, Rock, Club*).
-- **Pantalla de Reposo / Suspensión OLED con Disco de Vinilo y Subcarpeta `videos` de Google Drive (v2.7.4)**:
+- **Pantalla de Reposo / Suspensión OLED con Disco de Vinilo y Video Bidireccional Sincronizado (v2.7.5)**:
   - Al activarse el reposo (automático por inactividad o manual), la app proyecta un tocadiscos giratorio con brazo de aguja y aura reactiva al ritmo en verde esmeralda sobre fondo negro OLED puro.
   - **Soporte de Subcarpeta `videos` en Google Drive y Pre-Caché Local**: Los videos de las canciones se almacenan en la subcarpeta `videos/` dentro del Drive de SpotiLinux (o localmente como `.mp4`). La aplicación escanea la subcarpeta y descarga/cachea los videos en segundo plano en el almacenamiento persistente de la app, permitiendo reproducción local inmediata fluida por aceleración de hardware. Si el video no está disponible o aún se descarga, la pantalla permanece en reposo negro OLED puro con el tocadiscos de vinilo sin mostrar nunca iconos de video roto ni errores.
-  - **Instalación Limpia de Fábrica para Nuevos Clientes**: Biblioteca, cuentas y playlists inicializadas desde cero sin residuos de pruebas anteriores. Incluye opción manual en el menú lateral para restablecer la aplicación y base de datos con un solo clic.
+  - **Vinculación Bidireccional Estricta Audio-Video**: En el modo vinilo, el video de fondo y la pista de audio están sincronizados en tiempo real: si el audio se detiene (por auriculares, bloqueo, notificación o interfaz), el video se detiene al unísono; y si se pausa el video o se toca la pantalla, el audio se pausa y reanuda inmediatamente en sincronía de tiempo.
+- **Buscador de Canciones por Playlist y Filtrado en Tiempo Real (v2.7.5)**:
+  - Panel interactivo al tocar cualquier playlist desde la pantalla de Inicio que incluye un buscador dedicado para encontrar temas al instante por título, artista o álbum dentro de esa lista, además de permitir reproducir cualquier canción, poner la playlist en aleatorio o eliminarla.
+  - Nuevo filtro `📁 Por Playlist` en la pestaña `💿 Canciones` para explorar y buscar canciones de una playlist sin salir de la biblioteca principal.
+- **Pilas Robustas del Modo Aleatorio (Shuffle) y Retroceso Inteligente (v2.7.5)**:
+  - Manejo de memoria mediante pilas de IDs únicos (`shufflePlayedStack` y `shuffleUnplayedPool`) que evita que el modo aleatorio se trabe, se repitan pistas antes de tiempo o se detenga al presionar Siguiente.
+  - Navegación hacia atrás fiable en shuffle y comportamiento profesional en `prevTrack()`: si la canción lleva más de 3 segundos, se reinicia instantáneamente a `0:00`.
+- **Instalación Limpia de Fábrica para Nuevos Clientes**: Biblioteca, cuentas y playlists inicializadas desde cero sin residuos de pruebas anteriores. Incluye opción manual en el menú lateral para restablecer la aplicación y base de datos con un solo clic.
 - **Carátula Real del Álbum en la Notificación Desplegable y Pantalla de Bloqueo al Minimizar (Android)**:
   - Al minimizar la aplicación o apagar la pantalla, el servicio nativo `MediaPlaybackService.java` extrae y procesa la carátula real del álbum/canción en alta definición (`METADATA_KEY_ALBUM_ART`, `METADATA_KEY_ART` y `setLargeIcon`), mostrándola en el reproductor de la barra de notificaciones del sistema y coloreando el fondo del widget en vez de mostrar el icono genérico de la aplicación.
 - **Diseño Visual y Botonera Profesional**:
