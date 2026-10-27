@@ -79,16 +79,16 @@ def clean_track_title(name: str) -> str:
     t = re.sub(r"^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*", "", t, flags=re.I)
     t = re.sub(r"\by2mate(\.com)?\s*[-_–—:]*\s*", "", t, flags=re.I)
     t = t.replace("⧸", " / ").replace("_", " ")
-    t = re.sub(r"^[「\[]Nightcore[」\]]\s*[➼♡–—\-]*\s*", "Nightcore - ", t, flags=re.I)
+    t = re.sub(r"^[「\[【『]Nightcore[」\]】』]\s*[➼♡–—\-]*\s*", "Nightcore - ", t, flags=re.I)
     t = re.sub(r"\s*/\s*(lyrics|letras)\b", "", t, flags=re.I)
-    t = re.sub(r"\s*[\(\[]\s*(video\s*oficial|official\s*(music\s*)?video|video|lyrics|letras|letra|official|audio\s*oficial|audio|amv)\s*[\)\]]", "", t, flags=re.I)
+    t = re.sub(r"\s*[\(\[「【『]\s*(video\s*oficial|official\s*(music\s*)?video|music\s*video|lyric\s*video|video|lyrics|letras|letra|official|audio\s*oficial|official\s*audio|audio|amv|hd|4k|hq)\s*[\)\]」】』]", "", t, flags=re.I)
     t = re.sub(r"\s+(lyrics|letras)\b.*$", "", t, flags=re.I)
     t = re.sub(r"\s*#[a-zA-Z0-9_-]+", "", t)
-    t = re.sub(r"^[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+", "", t)
-    t = re.sub(r"[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\s–—-]+$", "", t)
+    t = re.sub(r"^[💀⚔️♣️◼💖💞「」『』【】➼♬°•★☆✦✧\s–—-]+", "", t)
+    t = re.sub(r"[💀⚔️♣️◼💖💞「」『』【】➼♬°•★☆✦✧\s–—-]+$", "", t)
     t = re.sub(r"[◼💖💞]+", "", t)
     t = re.sub(r"\s*°•[^\s•]+•°\s*", " ", t)
-    t = re.sub(r"\s*[\(\[]\s*[\)\]]", "", t)
+    t = re.sub(r"\s*[\(\[「【『]\s*[\)\]」】』]", "", t)
     t = re.sub(r"\s+", " ", t).strip()
     if t and t[0].islower():
         t = t[0].upper() + t[1:]
@@ -535,12 +535,11 @@ class GDriveSyncWorker(QThread):
 
         # Modo en línea (Streaming bajo demanda)
         cover_file = self.covers_dir / f"{tid}.jpg"
-        clean_title = Path(fname).stem.replace("_", " ").replace("-", " - ")
+        clean_title = clean_track_title(fname)
         artist_guess = "Google Drive • Musica ☁️"
         if " - " in clean_title:
             parts = clean_title.split(" - ", 1)
             artist_guess = f"{parts[0].strip()} ☁️"
-            clean_title = parts[1].strip()
 
         if not cover_file.exists():
             generate_fallback_cover(clean_title, artist_guess, cover_file, tid)
@@ -774,6 +773,7 @@ def download_drive_file_to_cache(
         if config.api_key and not config.access_token:
             api_url += f"&key={config.api_key}"
         urls_to_try.append((api_url, headers))
+        urls_to_try.append((f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t", {}))
         urls_to_try.append((f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t", {}))
 
         downloaded = False
@@ -1276,7 +1276,7 @@ def sync_cloud_playlists_with_drive(
     db_path = local_db_path or Path("data/accounts_db.json")
 
     try:
-        db = download_cloud_database(cfg, db_path)
+        db, _ = download_cloud_database(cfg, db_path)
         account = local_payload.get("account") or {}
         acc_email = str(account.get("email", "")).strip().lower()
         acc_user = str(account.get("username", "")).strip().lower()

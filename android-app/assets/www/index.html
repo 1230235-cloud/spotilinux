@@ -2195,7 +2195,7 @@
         </div>
         <div class="sm-item-text">
           <div class="sm-item-title">Buscar Actualizaciones</div>
-          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.8.3 (GitHub)</div>
+          <div class="sm-item-sub" id="smAppVersionLabel">Versión actual: v2.8.4 (GitHub)</div>
         </div>
       </button>
 
@@ -2998,7 +2998,7 @@ if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D
     this.arcTo(x + w, y, x + w, y + h, r);
     this.arcTo(x + w, y + h, x, y + h, r);
     this.arcTo(x, y + h, x, y, r);
-    this.arcTo(x, y + w, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
     this.closePath();
     return this;
   };
@@ -3320,14 +3320,27 @@ function isAudioTrackFiltered(track) {
 }
 
 function applyDeviceAudioFilters() {
-  // Aseguramos que todas las pistas actuales de tracks queden registradas en masterTracksPool
+  // Aseguramos que todas las pistas actuales de tracks queden registradas y sincronizadas en masterTracksPool
   tracks.forEach(t => {
-    const exists = masterTracksPool.some(m =>
+    const existing = masterTracksPool.find(m =>
       (m.id && m.id === t.id) ||
       (m.src && m.src === t.src) ||
       (m.driveId && t.driveId && m.driveId === t.driveId)
     );
-    if (!exists) masterTracksPool.push(t);
+    if (!existing) {
+      masterTracksPool.push(t);
+    } else if (existing !== t) {
+      if (t.fileName && !existing.fileName) existing.fileName = t.fileName;
+      if (t.driveName && !existing.driveName) existing.driveName = t.driveName;
+      if (t.driveId && !existing.driveId) existing.driveId = t.driveId;
+      if (t.cover && !existing.cover) existing.cover = t.cover;
+      if (t.downloaded) {
+        existing.downloaded = true;
+        existing.src = t.src;
+        if (t.filePath) existing.filePath = t.filePath;
+      }
+      if (t.liked) existing.liked = true;
+    }
   });
 
   const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
@@ -3526,6 +3539,9 @@ async function broadcastPlaybackSession(force = false) {
   const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
   const durSec = typeof nativeDurationMs === "number" && nativeDurationMs > 0 ? (nativeDurationMs / 1000) : (audio ? audio.duration || 0 : 0);
 
+  const portableCover = (t.cover && !String(t.cover).startsWith("file://") && !String(t.cover).startsWith("content://")) ? t.cover : "";
+  const portableSrc = (t.src && String(t.src).startsWith("http")) ? t.src : (t.driveId ? `https://drive.usercontent.google.com/download?id=${t.driveId}&export=download&confirm=t` : "");
+
   const sessionObj = {
     deviceId: myDeviceId,
     deviceType: hasNativeAndroid ? "android" : "web/desktop",
@@ -3534,8 +3550,8 @@ async function broadcastPlaybackSession(force = false) {
     title: t.title || "MaoMusic",
     artist: t.artist || "Desconocido",
     album: t.album || "",
-    cover: t.cover || "",
-    src: t.src || "",
+    cover: portableCover,
+    src: portableSrc,
     posSec: Math.max(0, curSec),
     duration: Math.max(0, durSec),
     isPlaying: isPlaying,
@@ -3621,15 +3637,18 @@ function resumeRemoteSessionTrack() {
 
   if (foundIdx === -1 && remote.driveId) {
     // Si es una canción de Google Drive no presente aún en la lista activa, añadirla
+    const safeCover = (remote.cover && !String(remote.cover).startsWith("file://") && !String(remote.cover).startsWith("content://")) ? remote.cover : null;
     const newTrack = {
       id: remote.trackId || ("gd_" + remote.driveId),
       driveId: remote.driveId,
+      fileName: remote.title || "",
+      driveName: remote.title || "",
       title: remote.title,
       artist: remote.artist || "Google Drive",
       album: remote.album || "Drive Stream",
       genre: "Cloud",
-      cover: remote.cover || null,
-      src: remote.src || `https://drive.google.com/uc?export=download&id=${remote.driveId}`,
+      cover: safeCover,
+      src: (remote.src && String(remote.src).startsWith("http")) ? remote.src : `https://drive.usercontent.google.com/download?id=${remote.driveId}&export=download&confirm=t`,
       liked: false,
       cloud: true,
       downloaded: false,
@@ -3740,9 +3759,17 @@ function loadPersistentState() {
       if (Array.isArray(st.cloudTracksOnly)) {
         st.cloudTracksOnly.forEach(ct => {
           ct.title = cleanTrackTitle(ct.title);
+          if (!ct.driveName && ct.fileName) ct.driveName = ct.fileName;
+          if (!ct.fileName && ct.title) ct.fileName = ct.title;
+          if (ct.driveId && (!ct.src || String(ct.src).startsWith("https://drive.google.com/uc?export=download"))) {
+            ct.src = `https://drive.usercontent.google.com/download?id=${ct.driveId}&export=download&confirm=t`;
+          }
           const normKey = normalizeFullTitle(ct.title);
           if (!tracks.some(x => x.id === ct.id || (ct.driveId && x.driveId === ct.driveId) || (normKey && normalizeFullTitle(x.title) === normKey))) {
             tracks.unshift(ct);
+          }
+          if (!masterTracksPool.some(x => x.id === ct.id || (ct.driveId && x.driveId === ct.driveId) || (normKey && normalizeFullTitle(x.title) === normKey))) {
+            masterTracksPool.unshift(ct);
           }
         });
       }
@@ -3845,19 +3872,24 @@ function mergeScannedDeviceTracks(savedList) {
       (normKey && normalizeFullTitle(t.title) === normKey)
     );
     if (existingMasterIdx >= 0) {
-      masterTracksPool[existingMasterIdx].src = item.src;
-      masterTracksPool[existingMasterIdx].downloaded = true;
-      masterTracksPool[existingMasterIdx].title = cleanTitle;
-      if (item.driveId && !masterTracksPool[existingMasterIdx].driveId) masterTracksPool[existingMasterIdx].driveId = item.driveId;
-      if (item.savedId && !masterTracksPool[existingMasterIdx].savedId) masterTracksPool[existingMasterIdx].savedId = item.savedId;
-      if (item.altId && !masterTracksPool[existingMasterIdx].altId) masterTracksPool[existingMasterIdx].altId = item.altId;
-      if (item.filePath && !masterTracksPool[existingMasterIdx].filePath) masterTracksPool[existingMasterIdx].filePath = item.filePath;
-      if (item.id && masterTracksPool[existingMasterIdx].id !== item.id) {
-        if (!masterTracksPool[existingMasterIdx].extraIds) masterTracksPool[existingMasterIdx].extraIds = [];
-        if (!masterTracksPool[existingMasterIdx].extraIds.includes(item.id)) masterTracksPool[existingMasterIdx].extraIds.push(item.id);
+      const existing = masterTracksPool[existingMasterIdx];
+      existing.src = item.src;
+      existing.downloaded = true;
+      if (!existing.title || cleanTitle.length >= existing.title.length) {
+        existing.title = cleanTitle;
       }
-      if (item.cover && !masterTracksPool[existingMasterIdx].cover) masterTracksPool[existingMasterIdx].cover = item.cover;
-      masterTracksPool[existingMasterIdx].artist = "Google Drive (Descargada) ✔";
+      if (item.driveId && !existing.driveId) existing.driveId = item.driveId;
+      if (item.savedId && !existing.savedId) existing.savedId = item.savedId;
+      if (item.altId && !existing.altId) existing.altId = item.altId;
+      if (item.filePath) existing.filePath = item.filePath;
+      if (item.fileName && !existing.fileName) existing.fileName = item.fileName;
+      if (item.driveName && !existing.driveName) existing.driveName = item.driveName;
+      if (item.id && existing.id !== item.id) {
+        if (!existing.extraIds) existing.extraIds = [];
+        if (!existing.extraIds.includes(item.id)) existing.extraIds.push(item.id);
+      }
+      if (item.cover) existing.cover = item.cover;
+      existing.artist = "Google Drive (Descargada) ✔";
     } else {
       masterTracksPool.unshift({
         id: item.id,
@@ -3865,6 +3897,8 @@ function mergeScannedDeviceTracks(savedList) {
         altId: item.altId || item.id,
         driveId: item.driveId || "",
         filePath: item.filePath || item.src,
+        fileName: item.fileName || item.title || "",
+        driveName: item.driveName || item.fileName || item.title || "",
         title: cleanTitle,
         artist: item.artist || "Carpeta SpotiLinux 📱",
         album: item.album || "Biblioteca Guardada",
@@ -3970,7 +4004,7 @@ function executePlayTrack(t) {
   resetSleepVinylIdleTimer();
   if (hasNativeAndroid) {
     updatePlayerUI();
-    window.AndroidMedia.playSource(t.src, t.title, t.artist, t.album, t.authToken || token, t.cover || "");
+    window.AndroidMedia.playSource(t.src, t.title, t.artist, t.album, t.authToken || token, getTrackCoverUrl(t));
   } else {
     audio.src = t.src;
     audio.play().then(() => {
@@ -4136,6 +4170,21 @@ function seekAudio(val) {
     audio.currentTime = (val / 1000) * dur;
     syncVinylVideoWithPlayback(audio.currentTime);
   }
+}
+
+function seekTo(sec) {
+  const targetSec = Math.max(0, Number(sec) || 0);
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.seekTo) {
+    window.AndroidMedia.seekTo(Math.floor(targetSec * 1000));
+    syncVinylVideoWithPlayback(targetSec);
+  } else if (audio) {
+    try { audio.currentTime = targetSec; } catch (_e) {}
+    syncVinylVideoWithPlayback(targetSec);
+  }
+}
+
+function formatTime(sec) {
+  return fmtTime(sec);
 }
 
 function showToast(msg) {
@@ -4402,19 +4451,67 @@ window.onPublicDriveVideosFetched = function(videoList) {
   videoList.forEach(v => {
     if (!v || !v.id) return;
     const cleanKey = cleanMediaName(v.name || v.id);
-    const directUrl = v.localSrc || `https://drive.google.com/uc?export=download&id=${v.id}`;
+    const streamUrl = `https://drive.usercontent.google.com/download?id=${v.id}&export=download&confirm=t`;
+    const directUrl = v.localSrc || streamUrl;
     cloudDriveVideos[v.id] = {
       id: v.id,
       driveId: v.id,
       name: v.name || "Video",
       cleanName: cleanKey,
       src: directUrl,
+      streamSrc: streamUrl,
       localSrc: v.localSrc || "",
-      fallbackSrc: `https://drive.google.com/uc?export=download&id=${v.id}`
+      fallbackSrc: `https://drive.google.com/uc?export=download&id=${v.id}&confirm=t`,
+      thumbnailUrl: `https://lh3.googleusercontent.com/d/${v.id}=w400`
     };
   });
   console.log("🎬 Videos de Google Drive registrados:", Object.keys(cloudDriveVideos).length);
+  // Asignar miniatura de respaldo para canciones en la nube que aún no están descargadas en este dispositivo (ej. tablet)
+  tracks.forEach(t => {
+    if (t && !t.cover) {
+      const mv = findMatchingVideo(t);
+      if (mv && mv.thumbnailUrl) {
+        t.fallbackCover = mv.thumbnailUrl;
+      }
+    }
+  });
+  renderTracks();
+  updatePlayerUI();
   updateVinylStandbyVideo();
+};
+
+function getTrackCoverUrl(t) {
+  if (!t) return "";
+  if (t.cover) return t.cover;
+  if (t.fallbackCover) return t.fallbackCover;
+  const mv = findMatchingVideo(t);
+  if (mv && mv.thumbnailUrl) {
+    t.fallbackCover = mv.thumbnailUrl;
+    return mv.thumbnailUrl;
+  }
+  return "";
+}
+
+window.handleTrackCoverError = function(imgEl, trackId) {
+  if (!imgEl) return;
+  const t = tracks.find(x => x.id === trackId) || masterTracksPool.find(x => x.id === trackId);
+  if (t) {
+    if (t.cover && imgEl.src === t.cover) {
+      t.cover = null;
+      const fb = getTrackCoverUrl(t);
+      if (fb && fb !== imgEl.src) {
+        imgEl.src = fb;
+        return;
+      }
+    } else {
+      t.fallbackCover = null;
+    }
+  }
+  const parent = imgEl.parentElement;
+  if (parent) {
+    parent.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
+    parent.classList.add("track-thumb-empty");
+  }
 };
 
 window.onDriveVideoReady = function(fileId, localFileUrl) {
@@ -4534,8 +4631,10 @@ function stopVinylStandbyVideo() {
   const videoEl = document.getElementById("vinylBgVideo");
   if (container) container.classList.remove("active");
   if (videoEl) {
+    isInternalVideoSync = true;
     try { videoEl.pause(); videoEl.removeAttribute("src"); videoEl.load(); } catch(_e){}
     videoEl.style.display = "none";
+    setTimeout(() => { isInternalVideoSync = false; }, 120);
   }
   currentPlayingVideoSource = "";
 }
@@ -4603,24 +4702,35 @@ function updateVinylStandbyVideo() {
     return;
   }
 
-  // Fuente de video: usar archivo en caché local si ya existe, o stream directo de Drive
-  const videoSrc = matchedVideo.localSrc || matchedVideo.src || matchedVideo.fallbackSrc;
+  // Fuente de video: usar archivo en caché local si ya existe, o stream directo HTTP 206 de Google Drive UserContent
+  const videoSrc = matchedVideo.localSrc || matchedVideo.streamSrc || matchedVideo.src || matchedVideo.fallbackSrc;
   if (!videoSrc) {
     stopVinylStandbyVideo();
     return;
   }
 
-  // Si no está descargado localmente en Android, solicitar descarga en segundo plano para caché local
-  if (!matchedVideo.localSrc && matchedVideo.id && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.prepareDriveVideo) {
-    const tok = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
-    const key = document.getElementById("gdApiKey") ? document.getElementById("gdApiKey").value.trim() : "";
-    window.AndroidMedia.prepareDriveVideo(matchedVideo.id, matchedVideo.name, tok, key);
-  }
-
   const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
 
-  // Manejadores estrictos para garantizar que NUNCA aparezca un icono de video roto
+  // Manejadores estrictos con fallback para garantizar que NUNCA aparezca un icono de video roto
   videoEl.onerror = () => {
+    if (matchedVideo.fallbackSrc && videoEl.src !== matchedVideo.fallbackSrc && !videoEl._triedFallback) {
+      videoEl._triedFallback = true;
+      isInternalVideoSync = true;
+      currentPlayingVideoSource = matchedVideo.fallbackSrc;
+      videoEl.src = matchedVideo.fallbackSrc;
+      if (isPlaying) {
+        const p = videoEl.play();
+        if (p !== undefined) p.catch(() => {});
+      }
+      setTimeout(() => { isInternalVideoSync = false; }, 120);
+      return;
+    }
+    // Si el streaming directo falló (ej. sin internet o restricción), preparar en caché local en segundo plano
+    if (!matchedVideo.localSrc && matchedVideo.id && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.prepareDriveVideo) {
+      const tok = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
+      const key = document.getElementById("gdApiKey") ? document.getElementById("gdApiKey").value.trim() : "";
+      window.AndroidMedia.prepareDriveVideo(matchedVideo.id, matchedVideo.name, tok, key);
+    }
     stopVinylStandbyVideo();
   };
 
@@ -4677,8 +4787,10 @@ function updateVinylStandbyVideo() {
     }
   };
 
+  isInternalVideoSync = true;
   if (currentPlayingVideoSource !== videoSrc) {
     currentPlayingVideoSource = videoSrc;
+    videoEl._triedFallback = false;
     videoEl.style.display = "none";
     container.classList.remove("active");
     videoEl.src = videoSrc;
@@ -4701,7 +4813,6 @@ function updateVinylStandbyVideo() {
     showVideo();
   }
 
-  isInternalVideoSync = true;
   try {
     if (isPlaying) {
       const playPromise = videoEl.play();
@@ -4717,7 +4828,7 @@ function updateVinylStandbyVideo() {
       videoEl.pause();
     }
   } finally {
-    setTimeout(() => { isInternalVideoSync = false; }, 100);
+    setTimeout(() => { isInternalVideoSync = false; }, 120);
   }
 }
 
@@ -4743,8 +4854,9 @@ function updateVinylStandbyUI() {
     
     const centerArt = document.getElementById("vinylCenterArt");
     if (centerArt) {
-      if (t.cover) {
-        centerArt.style.backgroundImage = `url("${t.cover}")`;
+      const cov = getTrackCoverUrl(t);
+      if (cov) {
+        centerArt.style.backgroundImage = `url("${cov}")`;
         centerArt.innerHTML = "";
       } else {
         centerArt.style.backgroundImage = "none";
@@ -4843,8 +4955,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 20;
-const CURRENT_APP_VERSION_NAME = "2.8.3";
+const CURRENT_APP_VERSION_CODE = 21;
+const CURRENT_APP_VERSION_NAME = "2.8.4";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -5301,9 +5413,10 @@ function updatePlayerUI() {
 
     const dockCover = document.getElementById("dockCover");
     if (dockCover) {
-      if (t.cover) {
+      const cov = getTrackCoverUrl(t);
+      if (cov) {
         dockCover.style.display = "flex";
-        dockCover.innerHTML = `<img src="${t.cover}" alt="cover" />`;
+        dockCover.innerHTML = `<img src="${cov}" alt="cover" onerror="this.parentElement.style.display='none'" />`;
       } else {
         dockCover.style.display = "none";
         dockCover.innerHTML = "";
@@ -5524,8 +5637,9 @@ function updateFullPlayerUI() {
 
   const fpPlCoverArt = document.getElementById("fpPlCoverArt");
   if (fpPlCoverArt) {
-    if (t.cover) {
-      fpPlCoverArt.innerHTML = `<img src="${t.cover}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px;" />`;
+    const cov = getTrackCoverUrl(t);
+    if (cov) {
+      fpPlCoverArt.innerHTML = `<img src="${cov}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px;" onerror="window.handleTrackCoverError(this, '${t.id}')" />`;
     } else {
       fpPlCoverArt.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
     }
@@ -5585,8 +5699,9 @@ function renderFullPlayerPlaylist() {
 
     const cloudIcon = t.cloud ? (t.downloaded ? `<span style="color:var(--green-bright); font-size:10px;">✔</span>` : `<span style="color:var(--muted); font-size:10px;">☁️</span>`) : "";
 
-    const coverThumb = t.cover
-      ? `<div class="fp-track-cover"><img src="${t.cover}" alt="cover" /></div>`
+    const covUrl = getTrackCoverUrl(t);
+    const coverThumb = covUrl
+      ? `<div class="fp-track-cover"><img src="${covUrl}" alt="cover" onerror="this.parentElement.style.display='none'" /></div>`
       : "";
 
     const memberPlaylists = getTrackPlaylists(t);
@@ -5687,7 +5802,7 @@ function getFilteredTracks() {
         if (!t.cloud) return false;
       } else {
         const pl = playlists.find(p => p.id === plId);
-        if (!pl || !pl.trackIds || !pl.trackIds.includes(t.id)) return false;
+        if (!pl || !pl.trackIds || !pl.trackIds.some(tid => trackMatchesPlaylistId(t, tid))) return false;
       }
     }
     if (q) {
@@ -5776,8 +5891,8 @@ function renderTracks() {
       <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Tu biblioteca está limpia</div>
       <div style="color:#aaa; max-width:280px; margin:0 auto 18px; line-height:1.4;">Escanea las canciones de tu teléfono o sincroniza tu carpeta «Musica» de Google Drive para disfrutar de tus temas.</div>
       <div style="display:flex; justify-content:center; gap:8px;">
-        <button class="btn-chip active" onclick="scanDeviceMusic()" style="padding:8px 16px;">📲 Escanear Teléfono</button>
-        <button class="btn-chip" onclick="switchNav('drive')" style="padding:8px 16px;">☁️ Conectar Drive</button>
+        <button class="btn-chip active" onclick="scanPhoneMusic()" style="padding:8px 16px;">📲 Escanear Teléfono</button>
+        <button class="btn-chip" onclick="switchTab('drive')" style="padding:8px 16px;">☁️ Conectar Drive</button>
       </div>
     `;
     listEl.appendChild(emptyDiv);
@@ -5809,10 +5924,11 @@ function renderTracks() {
     div.appendChild(cb);
 
     const thumb = document.createElement("div");
-    if (t.cover) {
+    const covUrl = getTrackCoverUrl(t);
+    if (covUrl) {
       thumb.className = "track-thumb";
       thumb.style.background = "#14141c";
-      thumb.innerHTML = `<img src="${t.cover}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />`;
+      thumb.innerHTML = `<img src="${covUrl}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" onerror="window.handleTrackCoverError(this, '${t.id}')" />`;
     } else {
       thumb.className = "track-thumb track-thumb-empty";
       thumb.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
@@ -7414,7 +7530,7 @@ window.onPublicDriveFolderFetched = function(filesList) {
       artist: "Google Drive (Musica) ☁️",
       album: "Google Drive • Musica",
       genre: "Cloud",
-      src: `https://drive.google.com/uc?export=download&id=${f.id}`,
+      src: `https://drive.usercontent.google.com/download?id=${f.id}&export=download&confirm=t`,
       liked: existingIdx >= 0 ? tracks[existingIdx].liked : false,
       cloud: true,
       downloaded: existingIdx >= 0 ? tracks[existingIdx].downloaded : false,
@@ -7423,15 +7539,23 @@ window.onPublicDriveFolderFetched = function(filesList) {
 
     if (existingIdx >= 0) {
       if (tracks[existingIdx].cover) trackObj.cover = tracks[existingIdx].cover;
+      if (tracks[existingIdx].savedId) trackObj.savedId = tracks[existingIdx].savedId;
+      if (tracks[existingIdx].altId) trackObj.altId = tracks[existingIdx].altId;
+      if (tracks[existingIdx].extraIds) trackObj.extraIds = tracks[existingIdx].extraIds;
+      if (tracks[existingIdx].filePath) trackObj.filePath = tracks[existingIdx].filePath;
       if (tracks[existingIdx].downloaded) {
         trackObj.downloaded = true;
         trackObj.src = tracks[existingIdx].src;
         trackObj.artist = tracks[existingIdx].artist || "Google Drive (Descargada) ✔";
       }
       tracks[existingIdx] = trackObj;
+      const mIdx = masterTracksPool.findIndex(x => x.id === cid || x.driveId === f.id || (normKey && normalizeFullTitle(x.title) === normKey));
+      if (mIdx >= 0) masterTracksPool[mIdx] = trackObj;
+      else masterTracksPool.unshift(trackObj);
       updated++;
     } else {
       tracks.unshift(trackObj);
+      masterTracksPool.unshift(trackObj);
       added++;
     }
 
@@ -7443,6 +7567,7 @@ window.onPublicDriveFolderFetched = function(filesList) {
   savePersistentState();
   renderTracks();
   renderHomePlaylists();
+  updateVinylStandbyVideo();
   if (st) {
     st.textContent = `✔ Sincronizadas ${filesList.length} canciones (${added} nuevas, ${updated} actualizadas • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
   }
@@ -7499,7 +7624,7 @@ async function autoDiscoverDriveMusic() {
   if (token || apiKey) {
     try {
       const q = `'${targetFolderId}' in parents and trashed = false`;
-      let url = `https://www.googleapis.com/drive/v3/files?pageSize=100&fields=files(id,name,mimeType)&q=${encodeURIComponent(q)}`;
+      let url = `https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id,name,mimeType)&q=${encodeURIComponent(q)}`;
       if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
 
       const resp = await fetch(url, { headers });
@@ -7516,7 +7641,8 @@ async function autoDiscoverDriveMusic() {
           let streamUrl = `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`;
           if (apiKey && !token) streamUrl += `&key=${encodeURIComponent(apiKey)}`;
 
-          const cleanTitle = cleanTrackTitle(f.name || f.id);
+          const fname = f.name || f.id;
+          const cleanTitle = cleanTrackTitle(fname);
           const normKey = normalizeFullTitle(cleanTitle);
           const cid = "gd_" + f.id;
           const existingIdx = tracks.findIndex(x =>
@@ -7528,6 +7654,8 @@ async function autoDiscoverDriveMusic() {
           const trackObj = {
             id: cid,
             driveId: f.id,
+            fileName: fname,
+            driveName: fname,
             title: cleanTitle,
             artist: "Google Drive (Musica) ☁️",
             album: "Google Drive • Musica",
@@ -7542,15 +7670,23 @@ async function autoDiscoverDriveMusic() {
 
           if (existingIdx >= 0) {
             if (tracks[existingIdx].cover) trackObj.cover = tracks[existingIdx].cover;
+            if (tracks[existingIdx].savedId) trackObj.savedId = tracks[existingIdx].savedId;
+            if (tracks[existingIdx].altId) trackObj.altId = tracks[existingIdx].altId;
+            if (tracks[existingIdx].extraIds) trackObj.extraIds = tracks[existingIdx].extraIds;
+            if (tracks[existingIdx].filePath) trackObj.filePath = tracks[existingIdx].filePath;
             if (tracks[existingIdx].downloaded) {
               trackObj.downloaded = true;
               trackObj.src = tracks[existingIdx].src;
               trackObj.artist = tracks[existingIdx].artist || "Google Drive (Descargada) ✔";
             }
             tracks[existingIdx] = trackObj;
+            const mIdx = masterTracksPool.findIndex(x => x.id === cid || x.driveId === f.id || (normKey && normalizeFullTitle(x.title) === normKey));
+            if (mIdx >= 0) masterTracksPool[mIdx] = trackObj;
+            else masterTracksPool.unshift(trackObj);
             skippedDup++;
           } else {
             tracks.unshift(trackObj);
+            masterTracksPool.unshift(trackObj);
             added++;
           }
 
@@ -7564,24 +7700,14 @@ async function autoDiscoverDriveMusic() {
           const vFolderId = await resolveVideosSubfolderId(rootFolderId, token, apiKey);
           if (vFolderId) {
             const vQuery = `'${vFolderId}' in parents and trashed = false`;
-            let vUrl = `https://www.googleapis.com/drive/v3/files?pageSize=100&fields=files(id,name,mimeType)&q=${encodeURIComponent(vQuery)}`;
+            let vUrl = `https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id,name,mimeType)&q=${encodeURIComponent(vQuery)}`;
             if (apiKey && !token) vUrl += `&key=${encodeURIComponent(apiKey)}`;
             const vResp = await fetch(vUrl, { headers });
             if (vResp.ok) {
               const vData = await vResp.json();
-              (vData.files || []).forEach(vf => {
-                const vk = normalizeTrackKey(vf.name);
-                if (vk) {
-                  let vSrc = `https://lh3.googleusercontent.com/d/${vf.id}`;
-                  let vFallback = `https://drive.google.com/uc?export=download&id=${vf.id}`;
-                  if (apiKey && !token) {
-                    vSrc += `?key=${apiKey}`;
-                    vFallback += `&key=${apiKey}`;
-                  }
-                  cloudDriveVideos[vk] = { id: vf.id, name: vf.name, src: vSrc, fallbackSrc: vFallback };
-                }
-              });
-              updateVinylStandbyVideo();
+              if (Array.isArray(vData.files) && vData.files.length > 0) {
+                window.onPublicDriveVideosFetched(vData.files);
+              }
             }
           }
         } catch (_ve) {}
@@ -7677,8 +7803,8 @@ async function refreshDriveCatalog() {
 
 window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped, coverUrl) {
   if (!ok || !savedPath) return;
-  const t = tracks.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
-  if (t) {
+  const updateFn = (t) => {
+    if (!t) return;
     t.src = savedPath;
     t.filePath = savedPath;
     t.downloaded = true;
@@ -7686,6 +7812,12 @@ window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped
     if (coverUrl) {
       t.cover = coverUrl;
     }
+  };
+  const t = tracks.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
+  const mt = masterTracksPool.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
+  updateFn(t);
+  updateFn(mt);
+  if (t) {
     if (duplicateSkipped) {
       showToast(`🛡️ Duplicado evitado: «${t.title}» ya existía`);
     } else {
@@ -8226,7 +8358,7 @@ function drawMaomaoStage(pose, beatPos, bass, mid, high, targetCanvas, targetCtx
       this.arcTo(x + w, y, x + w, y + h, r);
       this.arcTo(x + w, y + h, x, y + h, r);
       this.arcTo(x, y + h, x, y, r);
-      this.arcTo(x, y + w, x, y, r);
+      this.arcTo(x, y, x + w, y, r);
       this.closePath();
       return this;
     };
@@ -8462,7 +8594,7 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high, targetCanvas, targetC
       this.arcTo(x + w, y, x + w, y + h, r);
       this.arcTo(x + w, y + h, x, y + h, r);
       this.arcTo(x, y + h, x, y, r);
-      this.arcTo(x, y + w, x, y, r);
+      this.arcTo(x, y, x + w, y, r);
       this.closePath();
       return this;
     };

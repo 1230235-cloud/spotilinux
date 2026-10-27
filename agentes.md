@@ -2,7 +2,7 @@
 
 > **Destinatario**: Cualquier Agente de Inteligencia Artificial que continúe, mantenga, extienda o depure el ecosistema **MaoMusic** (anteriormente conocido como *SpotiLinux*).
 > **Fecha de última actualización**: Octubre 2026.
-> **Versión base**: v2.8.3 (versionCode 20).
+> **Versión base**: v2.8.4 (versionCode 21).
 
 ---
 

@@ -223,16 +223,16 @@ public class MainActivity extends Activity {
         t = t.replaceFirst("(?i)^(y2mate(\\.com|\\.is)?|y2meta(\\.com)?|snaptik(\\.[a-z]+)?|yt1s(\\.com)?)\\s*[-_–—:]\\s*", "");
         t = t.replaceAll("(?i)\\by2mate(\\.com)?\\s*[-_–—:]*\\s*", "");
         t = t.replace("⧸", " / ").replace("_", " ");
-        t = t.replaceFirst("(?i)^[「\\[]Nightcore[」\\]]\\s*[➼♡–—\\-]*\\s*", "Nightcore - ");
+        t = t.replaceFirst("(?i)^[「\\[【『]Nightcore[」\\]】』]\\s*[➼♡–—\\-]*\\s*", "Nightcore - ");
         t = t.replaceAll("(?i)\\s*/\\s*(lyrics|letras)\\b", "");
-        t = t.replaceAll("(?i)\\s*[\\[(]\\s*(video\\s*oficial|official\\s*(music\\s*)?video|video|lyrics|letras|letra|official|audio\\s*oficial|audio|amv)\\s*[\\])]", "");
+        t = t.replaceAll("(?i)\\s*[\\[(「【『]\\s*(video\\s*oficial|official\\s*(music\\s*)?video|music\\s*video|lyric\\s*video|video|lyrics|letras|letra|official|audio\\s*oficial|official\\s*audio|audio|amv|hd|4k|hq)\\s*[\\])」】』]", "");
         t = t.replaceFirst("(?i)\\s+(lyrics|letras)\\b.*$", "");
         t = t.replaceAll("\\s*#[a-zA-Z0-9_-]+", "");
-        t = t.replaceFirst("^[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\\s–—-]+", "");
-        t = t.replaceFirst("[💀⚔️♣️◼💖💞「」『』➼♬°•★☆✦✧\\s–—-]+$", "");
+        t = t.replaceFirst("^[💀⚔️♣️◼💖💞「」『』【】➼♬°•★☆✦✧\\s–—-]+", "");
+        t = t.replaceFirst("[💀⚔️♣️◼💖💞「」『』【】➼♬°•★☆✦✧\\s–—-]+$", "");
         t = t.replaceAll("[◼💖💞]+", "");
         t = t.replaceAll("\\s*°•[^\\s•]+•°\\s*", " ");
-        t = t.replaceAll("\\s*[\\[(]\\s*[\\])]", "");
+        t = t.replaceAll("\\s*[\\[(「【『]\\s*[\\])」】』]", "");
         t = t.replaceAll("\\s+", " ").trim();
         if (!t.isEmpty() && Character.isLowerCase(t.charAt(0))) {
             t = Character.toUpperCase(t.charAt(0)) + t.substring(1);
@@ -294,7 +294,7 @@ public class MainActivity extends Activity {
                             stem = cleanTrackTitle(stem);
                             String artist = fromDrive ? "Google Drive (Descargada) ✔" : "Carpeta SpotiLinux 📱";
                             String title = stem;
-                            if (stem.contains(" - ")) {
+                            if (!fromDrive && stem.contains(" - ")) {
                                 String[] parts = stem.split(" - ", 2);
                                 artist = parts[0].trim();
                                 title = cleanTrackTitle(parts[1].trim());
@@ -308,6 +308,7 @@ public class MainActivity extends Activity {
                             obj.put("altId", localSavedId);
                             obj.put("filePath", f.getAbsolutePath());
                             obj.put("fileName", f.getName());
+                            obj.put("driveName", stem);
                             obj.put("title", title);
                             obj.put("artist", artist);
                             obj.put("album", fromDrive ? "Google Drive Offline" : "Biblioteca Guardada");
@@ -327,10 +328,11 @@ public class MainActivity extends Activity {
                                 String mAlbum = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
                                 String mGenre = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE);
 
-                                if (mTitle != null && !mTitle.trim().isEmpty()) {
+                                // Para pistas de Google Drive conservamos el título íntegro del archivo para no perder versiones ni emparejamiento de video
+                                if (!fromDrive && mTitle != null && !mTitle.trim().isEmpty()) {
                                     obj.put("title", mTitle.trim());
                                 }
-                                if (mArtist != null && !mArtist.trim().isEmpty() && !mArtist.equalsIgnoreCase("<unknown>")) {
+                                if (!fromDrive && mArtist != null && !mArtist.trim().isEmpty() && !mArtist.equalsIgnoreCase("<unknown>")) {
                                     obj.put("artist", mArtist.trim());
                                 }
                                 if (mAlbum != null && !mAlbum.trim().isEmpty()) {
@@ -353,13 +355,13 @@ public class MainActivity extends Activity {
                                     opts.inSampleSize = sample;
                                     Bitmap bmp = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length, opts);
                                     if (bmp != null) {
-                                        File coversDir = new File(getCacheDir(), "covers");
+                                        File coversDir = new File(getAppMusicFolder(), "covers");
                                         if (!coversDir.exists()) coversDir.mkdirs();
-                                        String hash = Integer.toHexString(f.getAbsolutePath().hashCode());
+                                        String hash = (!driveId.isEmpty()) ? ("gd_" + driveId) : Integer.toHexString(f.getAbsolutePath().hashCode());
                                         File coverFile = new File(coversDir, hash + ".jpg");
                                         if (!coverFile.exists() || coverFile.length() < 100) {
                                             try (FileOutputStream fos = new FileOutputStream(coverFile)) {
-                                                bmp.compress(Bitmap.CompressFormat.JPEG, 80, fos);
+                                                bmp.compress(Bitmap.CompressFormat.JPEG, 82, fos);
                                             } catch (Throwable ignored) {
                                             }
                                         }
@@ -404,9 +406,13 @@ public class MainActivity extends Activity {
                 opts.inSampleSize = sample;
                 Bitmap bmp = BitmapFactory.decodeByteArray(rawArt, 0, rawArt.length, opts);
                 if (bmp != null) {
-                    File coversDir = new File(getCacheDir(), "covers");
+                    File coversDir = new File(getAppMusicFolder(), "covers");
                     if (!coversDir.exists()) coversDir.mkdirs();
+                    String fname = audioFile.getName();
                     String hash = Integer.toHexString(audioFile.getAbsolutePath().hashCode());
+                    if (fname.startsWith("gd_") && fname.contains("__")) {
+                        hash = fname.substring(0, fname.indexOf("__"));
+                    }
                     File coverFile = new File(coversDir, hash + ".jpg");
                     if (!coverFile.exists() || coverFile.length() < 100) {
                         try (FileOutputStream fos = new FileOutputStream(coverFile)) {
@@ -750,41 +756,16 @@ public class MainActivity extends Activity {
                         String safeName = sanitizeFilename("gd_" + fileId + "__" + title + ".mp3");
                         File outFile = new File(folder, safeName);
 
-                        String urlStr = "https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media";
-                        if (apiKey != null && !apiKey.isEmpty() && (authToken == null || authToken.isEmpty())) {
-                            urlStr += "&key=" + apiKey;
-                        }
+                        boolean ok = downloadDriveMediaFile(fileId, outFile, authToken, apiKey);
 
-                        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-                        conn.setConnectTimeout(15000);
-                        conn.setReadTimeout(30000);
-                        if (authToken != null && !authToken.isEmpty()) {
-                            conn.setRequestProperty("Authorization", "Bearer " + authToken);
-                        }
-
-                        int code = conn.getResponseCode();
-                        if (code != 200) {
-                            // Respaldo enlace directo
-                            conn = (HttpURLConnection) new URL("https://drive.google.com/uc?export=download&id=" + fileId).openConnection();
-                        }
-
-                        try (InputStream in = conn.getInputStream();
-                             FileOutputStream out = new FileOutputStream(outFile)) {
-                            byte[] buf = new byte[65536];
-                            int r;
-                            while ((r = in.read(buf)) > 0) {
-                                out.write(buf, 0, r);
-                            }
-                        }
-
-                        if (outFile.exists() && outFile.length() > 1024) {
+                        if (ok && outFile.exists() && outFile.length() > 1024) {
                             String escPath = outFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
                             String escId = fileId.replace("'", "\\'");
                             String coverUrl = extractAndSaveCover(outFile);
                             String escCover = coverUrl.replace("\\", "\\\\").replace("'", "\\'");
                             dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, false, '" + escCover + "');");
                         } else {
-                            outFile.delete();
+                            if (outFile.exists()) outFile.delete();
                             dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false, false);");
                         }
                     } catch (Exception e) {
@@ -997,24 +978,13 @@ public class MainActivity extends Activity {
                                         vf.put("localSrc", "file://" + vFile.getAbsolutePath());
                                         vf.put("src", "file://" + vFile.getAbsolutePath());
                                     } else {
-                                        vf.put("src", "https://drive.google.com/uc?export=download&id=" + vid);
+                                        vf.put("src", "https://drive.usercontent.google.com/download?id=" + vid + "&export=download&confirm=t");
                                     }
                                 }
                             } catch (Exception ignored) {}
                         }
 
                         dispatchJs("if(window.onPublicDriveVideosFetched) window.onPublicDriveVideosFetched(" + videoFilesArr.toString() + ");");
-
-                        // Encolar descargas en segundo plano de manera controlada y concurrente
-                        for (int i = 0; i < videoFilesArr.length(); i++) {
-                            try {
-                                JSONObject vf = videoFilesArr.getJSONObject(i);
-                                final String vid = vf.optString("id");
-                                if (!vid.isEmpty()) {
-                                    queueVideoDownload(vid, false, null, null);
-                                }
-                            } catch (Exception ignored) {}
-                        }
                     }
                 }
             }).start();
@@ -1060,7 +1030,7 @@ public class MainActivity extends Activity {
         }
 
         private boolean downloadDriveMediaFile(String fileId, File outFile, String authToken, String apiKey) {
-            String curUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
+            String curUrl = "https://drive.usercontent.google.com/download?id=" + fileId + "&export=download&confirm=t";
             String cookieHeader = "";
 
             for (int redirectCount = 0; redirectCount < 8; redirectCount++) {
@@ -1185,7 +1155,7 @@ public class MainActivity extends Activity {
                                 fos.write(buffer, 0, len);
                             }
                         }
-                        if (tmpFile.exists() && tmpFile.length() > 10240) {
+                        if (tmpFile.exists() && tmpFile.length() > 1024) {
                             if (outFile.exists()) outFile.delete();
                             tmpFile.renameTo(outFile);
                             return true;
@@ -1216,7 +1186,7 @@ public class MainActivity extends Activity {
                                 fos.write(buffer, 0, len);
                             }
                         }
-                        if (tmpFile.exists() && tmpFile.length() > 10240) {
+                        if (tmpFile.exists() && tmpFile.length() > 1024) {
                             if (outFile.exists()) outFile.delete();
                             tmpFile.renameTo(outFile);
                             return true;

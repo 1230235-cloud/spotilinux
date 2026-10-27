@@ -71,12 +71,14 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     private String currentAlbum = "SpotiLinux";
     private String currentSource = "";
     private String currentAuthToken = "";
+    private String currentCoverUrl = "";
     private boolean isPlaying = false;
     private boolean isPrepared = false;
     private boolean repeatOne = false;
     private boolean resumeOnFocusGain = false;
     private float[] currentEqGains = new float[]{0f, 0f, 0f, 0f, 0f};
     private Bitmap currentCoverBitmap = null;
+    private Bitmap defaultLauncherBitmap = null;
 
     private final Runnable progressRunnable = new Runnable() {
         @Override
@@ -104,6 +106,9 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     public void onCreate() {
         super.onCreate();
         instance = this;
+        try {
+            defaultLauncherBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
+        } catch (Throwable ignored) {}
         createNotificationChannel();
 
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
@@ -528,12 +533,20 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
     }
 
     public void loadAndPlaySource(String src, String title, String artist, String album, String authToken, String coverUrl) {
-        this.currentSource = src != null ? src : "";
-        this.currentTitle = title != null ? title : "SpotiLinux";
-        this.currentArtist = artist != null ? artist : "SpotiLinux Mobile";
-        this.currentAlbum = album != null ? album : "SpotiLinux";
+        String normalizedSrc = src != null ? src : "";
+        if (normalizedSrc.startsWith("https://drive.google.com/uc?export=download&id=")) {
+            String fid = normalizedSrc.substring("https://drive.google.com/uc?export=download&id=".length());
+            int amp = fid.indexOf('&');
+            if (amp > 0) fid = fid.substring(0, amp);
+            normalizedSrc = "https://drive.usercontent.google.com/download?id=" + fid + "&export=download&confirm=t";
+        }
+        this.currentSource = normalizedSrc;
+        this.currentTitle = title != null ? title : "MaoMusic";
+        this.currentArtist = artist != null ? artist : "MaoMusic Mobile";
+        this.currentAlbum = album != null ? album : "MaoMusic";
         this.currentAuthToken = authToken != null ? authToken : "";
-        updateCoverBitmap(coverUrl);
+        this.currentCoverUrl = coverUrl != null ? coverUrl : "";
+        updateCoverBitmap(this.currentCoverUrl);
 
         acquireLocks();
         if (mediaPlayer == null) {
@@ -602,7 +615,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         }
         // Si aún no había pista preparada, recargar la actual o pedir a la UI que inicie la pista 0
         if (!currentSource.isEmpty()) {
-            loadAndPlaySource(currentSource, currentTitle, currentArtist, currentAlbum, currentAuthToken);
+            loadAndPlaySource(currentSource, currentTitle, currentArtist, currentAlbum, currentAuthToken, currentCoverUrl);
         } else {
             MainActivity.dispatchMediaCommandToWeb("play");
         }
@@ -768,7 +781,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
 
     private void updateMediaSessionState(long posMs, long durMs) {
         if (mediaSession == null) return;
-        Bitmap art = currentCoverBitmap != null ? currentCoverBitmap : BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
+        Bitmap art = currentCoverBitmap != null ? currentCoverBitmap : defaultLauncherBitmap;
 
         MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, currentTitle)
@@ -823,7 +836,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         Notification.Action nextAction = new Notification.Action.Builder(
                 android.R.drawable.ic_media_next, "Siguiente", nextPending).build();
 
-        Bitmap largeIcon = currentCoverBitmap != null ? currentCoverBitmap : BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
+        Bitmap largeIcon = currentCoverBitmap != null ? currentCoverBitmap : defaultLauncherBitmap;
 
         Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
