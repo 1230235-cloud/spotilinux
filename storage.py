@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -74,6 +75,7 @@ class LibraryStore:
         self.gdrive_cache_dir = self.data_dir / "gdrive_cache"
         self.music_library_dir = base_dir / "music_library"
         self.db_path = self.data_dir / "library.json"
+        self.sqlite_path = self.data_dir / "library.sqlite"
         self.accounts_db_path = self.data_dir / "accounts_db.json"
 
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -101,7 +103,118 @@ class LibraryStore:
         self.eq_gains: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0]  # 60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz
         self.visualizer_mode: str = "bars"  # "bars" | "wave" | "radial"
 
+        self._init_sqlite()
         self.load()
+
+    def _init_sqlite(self) -> None:
+        """Inicializa el esquema SQLite para almacenamiento ACID indexado."""
+        try:
+            with sqlite3.connect(self.sqlite_path) as conn:
+                conn.execute("PRAGMA journal_mode = WAL")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS tracks (
+                        id TEXT PRIMARY KEY,
+                        filepath TEXT NOT NULL,
+                        title TEXT,
+                        artist TEXT,
+                        album TEXT,
+                        genre TEXT,
+                        year TEXT,
+                        duration REAL,
+                        cover_path TEXT,
+                        dominant_color TEXT,
+                        is_liked INTEGER DEFAULT 0,
+                        updated_at REAL
+                    )
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title)")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS playlists (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        description TEXT,
+                        track_ids TEXT,
+                        created_at REAL
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS kv_state (
+                        key TEXT PRIMARY KEY,
+                        value TEXT
+                    )
+                """)
+        except Exception:
+            pass
+
+    def _sync_to_sqlite(self) -> None:
+        """Sincroniza el estado actual en memoria hacia SQLite de forma segura."""
+        try:
+            with sqlite3.connect(self.sqlite_path) as conn:
+                # Actualizar pistas
+                now = time.time()
+                track_rows = [
+                    (
+                        t.id,
+                        t.filepath,
+                        t.title,
+                        t.artist,
+                        t.album,
+                        t.genre,
+                        t.year,
+                        float(t.duration),
+                        t.cover_path,
+                        json.dumps(t.dominant_color),
+                        1 if t.id in self.liked_ids else 0,
+                        now,
+                    )
+                    for t in self.tracks.values()
+                ]
+                conn.execute("DELETE FROM tracks")
+                conn.executemany("""
+                    INSERT OR REPLACE INTO tracks (
+                        id, filepath, title, artist, album, genre, year,
+                        duration, cover_path, dominant_color, is_liked, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, track_rows)
+
+                # Actualizar playlists
+                pl_rows = [
+                    (
+                        pl.id,
+                        pl.name,
+                        pl.description,
+                        json.dumps(pl.track_ids),
+                        pl.created_at,
+                    )
+                    for pl in self.playlists.values()
+                ]
+                conn.execute("DELETE FROM playlists")
+                conn.executemany("""
+                    INSERT OR REPLACE INTO playlists (id, name, description, track_ids, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, pl_rows)
+
+                # Guardar configuraciones y listas de IDs
+                state_items = [
+                    ("liked_ids", json.dumps(self.liked_ids)),
+                    ("recent_ids", json.dumps(self.recent_ids[:30])),
+                    ("watched_folders", json.dumps(self.watched_folders)),
+                    ("gdrive_config", json.dumps(self.gdrive_config.to_dict())),
+                    ("user_account", json.dumps(self.user_account)),
+                    ("player_state", json.dumps({
+                        "volume": self.volume,
+                        "shuffle": self.shuffle,
+                        "repeat_mode": self.repeat_mode,
+                        "eq_enabled": self.eq_enabled,
+                        "eq_preset": self.eq_preset,
+                        "eq_gains": self.eq_gains,
+                        "visualizer_mode": self.visualizer_mode,
+                    })),
+                ]
+                conn.executemany("INSERT OR REPLACE INTO kv_state (key, value) VALUES (?, ?)", state_items)
+        except Exception:
+            pass
 
     def load(self) -> None:
         if not self.db_path.exists():
@@ -176,6 +289,7 @@ class LibraryStore:
             "visualizer_mode": self.visualizer_mode,
         }
         self.db_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        self._sync_to_sqlite()
 
     def deduplicate_library(self) -> int:
         """

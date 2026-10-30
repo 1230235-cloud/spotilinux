@@ -1,0 +1,5795 @@
+
+// Polyfill Canvas roundRect para máxima compatibilidad con tabletas y versiones antiguas de Android WebView
+if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
+    if (typeof radii === "undefined") radii = 0;
+    if (typeof radii === "number") radii = [radii, radii, radii, radii];
+    const r = Math.min(radii[0] || 0, Math.abs(w) / 2, Math.abs(h) / 2);
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+    return this;
+  };
+}
+
+window.onerror = function(msg, url, line, col, error) {
+  console.error("SpotiLinuxJS-Catch:", msg, "at line", line, "col", col);
+  return false;
+};
+window.onunhandledrejection = function(event) {
+  console.error("SpotiLinuxJS-PromiseRejection:", event.reason);
+};
+
+const hasNativeAndroid = Boolean(window.AndroidMedia && typeof window.AndroidMedia.playSource === "function");
+
+const DEMO_TRACKS = [];
+
+let tracks = [];
+let masterTracksPool = [];
+let rawDeviceTracksList = [];
+let deviceFilterConfig = {
+  enabled: true,
+  filterWhatsApp: true,
+  filterRecordings: true,
+  filterShortAudios: true,
+  customRules: [
+    { type: "prefix", value: "PTT-" },
+    { type: "prefix", value: "AUD-" },
+    { type: "prefix", value: "REC_" },
+    { type: "prefix", value: "Call_" }
+  ]
+};
+let playlists = [];
+let selectedPlaylistId = null;
+let pendingTrackIdForPlaylist = null;
+
+let activePlaybackQueue = [...tracks];
+let activeQueueIndex = 0;
+let activeQueueName = "Toda la biblioteca";
+let isPlaylistListCollapsed = false;
+let isPlaylistExpandedFull = false;
+const playlistMaxVisibleCount = 4;
+
+let currentIndex = 0;
+let isPlaying = false;
+let shuffleMode = false;
+let repeatMode = "off"; // "off" | "all" | "one"
+let shufflePlayedStack = [];
+let shuffleUnplayedPool = [];
+let sleepVinylEnabled = true;
+let sleepVinylVideoEnabled = true;
+let currentPlayingVideoSource = "";
+let ytSearchResults = [];
+let pendingYtTargetTrack = null;
+let sleepVinylTimeout = null;
+const SLEEP_IDLE_DELAY_MS = 50000;
+let activeFilter = "all";
+let driveImportMode = "stream"; // "stream" | "download"
+let maomaoStyle = 0;
+const MAOMAO_STYLES = ["Imperial", "Hierbas 🌿", "Neko :3 🐾"];
+let visMode = 0;
+let nativeDurationMs = 28000;
+let currentEqValues = [0, 0, 0, 0, 0];
+
+const DEFAULT_MAOMUSIC_AVATAR = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBAYFBQUGBgYHCQ4JCQgICRINDQoOFRIWFhUSFBQXGiEcFxgfGRQUHScdHyIjJSUlFhwpLCgkKyEkJST/2wBDAQYGBgkICREJCREkGBQYJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCT/wAARCACMAIwDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5VooFLQAlFLXY+BfhnqfjORZ2zZ6aGw1w68v6hB3Pv0H6U0m9ENK+iOTtLO5v7hLa0t5biaQ4WOJSzMfYCvRvDvwL1rUAs2s3Eelwnny8eZMR9AcD8T+FeyeGvCejeDrU2umWscbniSf70sn+839Bge1au5F960VJnfRoUkr1XdnFaP8ABzwfpiqZLOTUZB/HdyEg/wDAVwP511dno2kaXD5Vnpun2wznMVuoI/HGatMyY9/SogAatUbm7xUaWkIofv29D0pkhEqlJFVl7hhkGnBKTYc9K3UFFHJOtOo9TF1Hwb4a1QE3uiWEjH+IRBG/NcGuL1z4HaHeAvpN1c6fJ2Rz5sf64Yfma9NMRPOQKiklitygdwN7BV+prNw5mU1TiveWp83eJvhr4h8LxtcXNqLi0Xrc2x3oo/2h1X8RXLV9fsVUfMQARjnvXnXjH4SaT4kinvtCEdjfjJKIMQzN6Efwk+o49RUToW2OSUeqPBaSrWpaZeaPey2OoW0ltcxHDxyDBH+I96q1zkC0lFFABRRXYfDbwQ3jDV91wrrptrhrhhxv9IwfU/oM+1NK+g0m3ZGx8MPhifEJTWNYRl0xT+6i6G5I/kg9e/Qd69yjSO3iWKGNI40UKqKMBQOgA7CiKBIIkihjSKONQiIowFUdAB6U7BJxXTCKidip2jawgkz7CpEIOKj8o571QvppJUdIWAjXjJOA3qSf7o/X6dSrWjTjzSFTpObsi1d6nHbKAo81z90A4B/H/Cud1PxReQt5cQjRs8kISPoPX9Ky9QvgA0cNyc9HaPq//AvT2FUjHbwnLMGYgZw+cdM446/pXMq1SWrdkTU5I6R3L8viLXJEJMSoMcS/MMfTnk1QfxPrVs4Au5TgfxPvzTbvWPtLxxrAbfYu0FpN7N7k9KouJAeCCG5yB/Sqpp/aMa1Vp2hK/mb1p8Q7+Li5t45x7Haalu/EsWsSoIhJG2MCNuoPsR3rlAgBw2c0NCV5U1005ODujJ1pP4j0UajNdKkZ67QXK9z7n+nStbRSos3PrI36YH9K8ut9au4Y/K3bwOhZsYrqPCPiPazWV7P8mNyMRnnPTj61q5xt7p0xqxnZSNXxn4AsfHWmstwFt7uIYt7sDlD/AHT6r6jt1FfNetaPeaBqlxpt/F5dxAxVgDkH0IPcHsa+oJdc8yVYLDZI7fxO2FrgvHvhK68X2Ul3uja7td4ikCbRJgbin09M9/qa56lNv3h1FGXwI8OopWUoxVgVYHBB6g0ma5jmJbW1mvbmK2t0Mk0ziNEHVmJwBX0/4T8NQeE9BttLiCl0G6aQf8tJT94/0HsBXkvwN8PLqPiKbVplzDpyZTI6ytkL+Q3H8q96KMVLBDtHU44Fa011OyhFRjz9SFRz61MOh6ACrS6bP9ia8KhYlGeep+lZjSC4nEf/ACzB+Yf3j6fTvWvuJOXY0lOo2oPqMnkd4HmAK26Drjl//rf/AFvWuS1+e6Y+TKpRBguo6KT0BPTOK6bVNcFuiwRBXbIYg9B6foM/U1h3+rXV6iqyRKEBz8uc5/8ArV4yqyqz9pJeh0YmMKcPZRevU5p4i5QKMk88enSlexlEXmhMgYJ+hrZtgVtJrxLcNtdY149ADn8TxWn/AGhZskirZiNW524BHtmtpV5LZHHHBxduaVro4q4tzGSki+4PqPWiEh0kWR9rhcg+uP61t39/5kH2ZlVIwxZQvUDuB+f5VhzRqR5kTHKnnPcetdVObktdDjqRUX7ruiFxv/nxTEfaTvzn+VWPL85I/JB8xjsCgdT2o1XSLjSWiW4kjMkq7iinJT610cxHs5OLl0RT8oMWJ9M8UW07W7o6EbgQeelOU4THc1I2nSpa/aShEY5weDt9fpTFBN7HT6X4nFy8dpd2trCHYATLHjYPp/Wum1bQ7Q6VcSbpt6R7w3mHkjuR0Oa8wjmIKiL5mU5UjrXrV6Uh8PSxswZlt8eueBTc9TuwsXUi79D518f6E1pdLqkUZENyxWQjoJPX8ev1BrkeK9o8SRDWtKubDywC4ypPZhyMfj/OvGGVlYqwIIOCD2rnmrMyrRSl7p9E/BzSU0zwNbzbcS30j3DfTO1f0X9a75tSk+wraEKsYOTgcsfesvQtP/sjQ7CyLA/Z7eOPg5xhRxU8hMp+Va6IxTSudMVyKxLfaxdTwLE8pMSABUAwD2FY+r3Is7QAH95IwiH48sfy/nWlLA7qBjlSCPzrktau/P1aNC3yo7AfUVjidIci6j57Nzvr0FLF5HZuS3J/H/8AVUAufMfyguN0wjz7Zx/Oi3laW+eNQWwwUgfTj+ddfp3hS1S3trq7acPjJgij3MxDZB9v8815c5RhubYfDzrO62RLoOjm68NXMAUebIDtHoykjH6Y/GsK60e4jEdxEjPBMhJwP9Ww+8D6f59K9F054JEfybZ7Y7izI6gEk9+CetXdgHbBriVdxk2e5PBwnCMX0R4lqWlyYMnlSkcP9w/Kf8/zqk1umzJUBWBGfT2+tezJJqks5w1oIifkDRsWx/31UeoeHrTUYWW4tYQ5/jiGP0rpjjWtGjhnk8ZX5XY8OgaSKR1VysifvFI6gjr+lMnDTbndi792Y5JrtNe8Ff2PcrMr7oznrzwRjr/jXHTAop6cGvUoVY1NYnhYvDVMO1CZRVyMkjHHJrbe7gfSVQyGXbCMq5wSfQew/pWJwrMCScflUk97NNteZhKQnkqWH3VAAGPpiujqjGlU5E/M0/B9ha6hqkcM5dGALAA/fI7Z/X8K9F1W3CaVc46CI4ArgvC2kz3dxb3NrKA0UxMpJ/1YGCPrnJ/Ku+1aYPpNyR0Meaet9D0MJZU3zHmjSNDIXU4YEkE15x8QdKGjeKbmJVxHOkdyn0kQMf1Jr0ssVimXYDuyuccj6Vp+NPh8niS80+92crYRRnHtn+hFZ1miI0JVIvl6HoC6XLbNtOGOOgHFSqgC/dwaspqIuYY5YwNsihx9CMimyMJOeQcY9qmNaX2kelUwUd6bK8jCJC5HQZrzW+ilhnt7mUHdOskw/wC+iMfoPzr0q4RntpVRcsUYD8q57xLawrYaczBc7sBiOQCvP9Kc3fc4K1Fpehy2h6j5evW00ijynfDDtg4HPr0Fe5gKeFAC14ha2UFpcXUM0T3AKssDxtjYTyG/QjFd6njKeKwsPKsLq7MkQVpYRkBxxj3OBmvIxsOZpwPWymdqTUmdksMaNuRQp6cU81zGj61rV/fIW04wWZ5eS4kw5/3VAH6102cjPSvPlFxdmesnfUY5SLLswXPGScCmfaIennR5/wB4Vn67ZT6haiKC+ls3U7g6DOT7+1cvdeHtVmXy38RXJQeikE/rVxjF7ysFp/Zjf7jX8c7f7AkuO8TA/gTXjupjyrmWM+xz+Veg6rp6aboj2SXNzP50geRp5CxKr+g7V57f77i6OEctIdqjqT/nivUy+yTtsfP53F8yutdP6/I1tH023e0814FkkfIYuMgD0HpxWJqNultJJbqP9XI3X07fpXYRCLS7Iyzr9njU87xyRjGPcn0rjLy5N9eTXAG3zHLAZ6egrsoSblJ9DmzCnTp0KcPtG74KvPsuoKu7Ec58twfXqp/z610+oRTw2Lq0pKyJ3PUZ6GuHtQ9tHHMFwu8KG/vEc13+o+fdWYeeNrYNjZGRySen4V1xnY5MNByVjiLa5jtLgyyRCXbnCk4GfWu4h1bUZoY2h+yQJsX5HIJ6V59KDljjnmumurpNOEETkfNCrKfUY/8ArGlyp6s3hUlBWTsbPw/1Iat4K0a737mNssbn/aT5D/6DXQqC3YmvLf2e9a+16NqOjPKoezlFxGrdSj8Nj6MB/wB9V65Hb5kUSSKgPILMMN9Kx54pXZ0UFUqRVie10yaZd7/ul7etc74x05PKs3Db0iuBuB9CCP512D3APy54A5x3rK1K1gvraWCQ4DjqP4T2NcarTm3c9KpgoezaW5wtvbRfam8uLzDAPnizzJGeuPcHpWtpGq2sFzPGkqrBKwcbjja3cEdu341jXOjaiZ1nt50JX5RKG2+YOoOO4z+f6023sZ4Lpby6EsDR8h48E5/UY9q5Z01JNORyYbGPD7K2up6XYKroHVg4P8QOQasQQziQmRsgenSue8P+LbWe8WyuHRN/+rkK7Bn+6R0z6H8K6W8vYLLBmngiU/8APR8H8B3rz5UpRdmj3I4uFVc0WE0WRWdLa/NmpU8Q2csuwrKkecCVwAv88ge5FXXjUjfkYxnNS4s1o4hPZnH61o8kqS3M0oWNV4AHYZwPz5J9q4DULqfTb2I6fHGpI2l2TeXOenr6n867fxXr6ybobY+bHHnJU8Ma4oWlzPMHE53PhVSM8t7DHb0r1cHBqN57Hj5pWj8MPi7mXeHUL64EuobiBkBXOwKPYdqkTTrZUEz+ZsX/AJZxqTk+7ECuiTw1FA+3cvn8LNKTkR8cqvq3r2FW10eyjXaqO2O5c5P5V0zxEY6J/ceHOk+ZuWr8zLt7iGWxs4bWG3hktn83cUy7t9PTHfoMCuiluJZ7iCDUJgo4O/pj0rnbu1isZ/MhwQuGADfMD9abdahc6mywNkySn7w6NjkD2x6V0xalHTqbYeulKz3007kWuw2rXjra3JuFVQA+AAcDGOP515x8Q/F97Pr0cUTIgtraOHCZx3Pr1+au8IhSNpLh2VAjFto5XA7/AK/lXiutam+r6rdX7gAzyFgMdB0A/ICnLRJGWJnd32ubHw88U/8ACIeK7PUpMm1JMNyo/iibhvy4P1FfThto76TfBOWhwCrdRtPIx7V8fV778EfHqanpY8Oag5N5ZLm3Yn/WQj+H6r/LHpWSTvob5fiFG9Oex6uZmtbVeHkVTsDdyayb25luH2s+1O6IeD7E9/5VTvNRCzXLRk+VbjaF7NITyf0A/OotPbfaqScnJyT65rhxEpRbUdjqrYtyfLEs45ySTVe/Q+Q+5hHGBl2IycewqYPvcjOET77e/p/jTIJVu73ypCBEmJGB9Bzg/U4rkine5zJcz5e5nQaOs2xrqIkyDO1jyqe49TWgVBbIwqjhQKHvhMtzLt2kHAOevt+FQiXMYGa0nKUty5ckXyx2GSqrq0ZzsYFSB6VjS6hqlqF0ue+uW09GLNGh5ZT79dvqPrWyTwKq31sLiIP/ABx8qfbuK1oySdpbGTlKPvQeq/qxX1cRRWaRq8a+agOQflUDpjHbsPzpNAhFlGbt/mvJflhBH+pTHJx+g+v1qhc2kkYilBZYXYM69ivf+nFWrRpLgzMG2oTtLDrgdh/PNd82uTQh1lKXOviNVZlLY649O1akFhavpz3l1dGLcD5aIRvP/wCuufjIBAhQsPUcD860LVGjIlk8oeigZP5158klqFKSv72pz13GyttdSjY45zVESPbvwxBVsgjsexFbGtOBKqxwgKFzuY8msK9njtYXubh/LjRSzMegA/nXp0ZOUU2ccrRloc/8QdeFrov2dHVbm7JjZV/u/wATfjwPxryutLxBrMmu6nLduCqfdjT+6g6D+v41m0m7hUqObuwqzp+oXWlXsN9ZTNBcwOHjkXqpFVhRSIPefDHjC28U6Wpj2xXSEGeAH7pA+8PUEnrXR29+LWzmHO/qua+bdM1O70e8jvLOVopk6EdCO4I7j2r1vw746tfEcCwMFgvsfPCx4bjqh7/TrWMqKehtGozvIroR2McYDbjyxPcnmmWjsLO8ucks52Kfpx/M/pVCec+SEj+ZzheO3FacIEemRRDHAUn65zWfIoq/c2p3k/QilfbFOAePNqa3kDQo3qMVTlOYrgn/AJ6D+QpbOfH7pj7is+S8bhKVpl8cnFLJHuUqO4IpLc5cj1FSZyDxyKxe5p0M1mE+nxozAOrYHvWXYM8UzKbV5lToFP3R9O+OlX7sLFK0PIBcOn0P/wBes6SV4pmYOVcE5IrvhG8Wl1OGbaaZsreQu2wSbW9GG3+dWA+B14x1rKS5F9C0blRJj5T61k3eoGztGkubhYIlB3MzfKMdv/rVmsPfTYtVLGuNRtEv2ubkGSKNcIOMfU15f8TviOfFbpplgixadbtuLDrM/r/ujt+fpWV4q8bzaurWVmTHZ9Gbo0v19B7fnXKV1NJJJdBe1lyuPcKKKKRmFLSUUAFOR2RgykqwOQQcEGm0CgDttC+Jd5aRrb6lGbmMLsEycSqPfs31PPvXqGm+LtG1m3jGnX0cjkgeUflkAAPVTz+VfPIpVYqQykgjoR2qZRUty41Gj6PMhImB6lgarbmU55BzxXimn+Ntf0xQsOoyOn9ybEg/Xmu18N+NdR1nC3UVr16ohB/nQo2HOXMel22owoUaQlTjnAq4ZElxJC6sD1ANc2p3Ip/Gquo6lPpsJmg27vfP9DWLw6eqKVZ2szotSgFxB5ij95HyPcdxWHdEBGlldY1xlnY4H5151q3xY8S+Y8EElrbgcb44QW/8ezXH3+r6hqj7r28nuD1AdyQPoOgrSknFWZFRqR6Rq3xD03TUKWZN7cDgFDiMH/e7/hXn+ueI9R8QTmW9myucrEnCL9B6+/WsyjvWrdzNKwUUGlpDENFFBoA//9k=";
+const DEFAULT_DRIVE_ROOT_FOLDER_ID = "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+const DEFAULT_MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T";
+const DEFAULT_DRIVE_SERVER_URL = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec";
+const DEFAULT_CLOUD_SERVER_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a";
+const DEFAULT_CLOUD_OBJECT_NAME = "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
+const CLOUD_DB_FILENAME = "spotilinux_database.json";
+let userAccount = null; // { username, email, passwordHash }
+let accountsDb = {}; // Mapa de cuentas sincronizado con spotilinux_database.json en Drive
+let accountFormMode = "register"; // "register" | "login"
+let googleUserProfile = null;
+let cachedMusicaFolderId = "";
+
+/* CONTROL DE REPRODUCCIÓN MULTI-DISPOSITIVO (CONTINUAR EN OTRO CEL O PC) */
+let crossDeviceSyncEnabled = true;
+let myDeviceId = localStorage.getItem("spotilinux_device_id");
+if (!myDeviceId) {
+  myDeviceId = "sp_dev_" + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+  localStorage.setItem("spotilinux_device_id", myDeviceId);
+}
+let currentPlaybackSession = null;
+let lastBroadcastTimeMs = 0;
+let lastCheckedSessionUpdatedAt = 0;
+let pendingRemoteSession = null;
+let crossDevicePollTimer = null;
+
+const audio = document.getElementById("audioPlayer");
+
+audio.ontimeupdate = function() {
+  if (hasNativeAndroid) return;
+  const cur = audio.currentTime || 0;
+  const dur = audio.duration || 28;
+  const curFmt = fmtTime(cur);
+  const durFmt = fmtTime(dur);
+  const progressRatio = Math.min(1000, Math.floor((cur / dur) * 1000));
+
+  const lblCur = document.getElementById("lblCurTime");
+  if (lblCur) lblCur.textContent = curFmt;
+  const lblDur = document.getElementById("lblDurTime");
+  if (lblDur) lblDur.textContent = durFmt;
+  const sBar = document.getElementById("seekBar");
+  if (sBar) sBar.value = progressRatio;
+
+  const playSvg = audio.paused ? ICONS.play : ICONS.pause;
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay) btnPlay.innerHTML = playSvg;
+
+  const fpCur = document.getElementById("fpCurTime");
+  if (fpCur) fpCur.textContent = curFmt;
+  const fpDur = document.getElementById("fpDurTime");
+  if (fpDur) fpDur.textContent = durFmt;
+  const fpSeek = document.getElementById("fpSeekBar");
+  if (fpSeek) fpSeek.value = progressRatio;
+  const fpPlay = document.getElementById("fpBtnPlay");
+  if (fpPlay) fpPlay.innerHTML = playSvg;
+
+  const vinylBtnPlay = document.getElementById("vinylBtnPlay");
+  if (vinylBtnPlay) vinylBtnPlay.innerHTML = playSvg;
+  const vinylDisc = document.getElementById("vinylDisc");
+  if (vinylDisc) vinylDisc.classList.toggle("playing", isPlaying);
+  const vinylTonearm = document.getElementById("vinylTonearm");
+  if (vinylTonearm) vinylTonearm.classList.toggle("playing", isPlaying);
+
+  if (isPlaying) {
+    broadcastPlaybackSession(false);
+  }
+};
+
+audio.onended = function() {
+  if (hasNativeAndroid) return;
+  handleTrackPlaybackEnded();
+};
+
+function cleanTrackTitle(name) {
+  let t = String(name || "").trim();
+  // 1. Quitar SOLO extensiones de audio reales
+  t = t.replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|webm|mp4)$/i, "");
+  // 2. Quitar prefijo de sitios de descarga: y2mate, y2meta, snaptik, yt1s, etc.
+  t = t.replace(/^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*/i, "");
+  t = t.replace(/\by2mate(\.com)?\s*[-_–—:]*\s*/gi, "");
+  // 3. Normalizar barras y caracteres raros
+  t = t.replace(/⧸/g, " / ").replace(/_/g, " ");
+  // 4. Quitar adornos Nightcore envolventes: 「Nightcore」➼ o [Nightcore] -> Nightcore -
+  t = t.replace(/^[「\[]Nightcore[」\]]\s*[➼♡–—\-]*\s*/i, "Nightcore - ");
+  // 5. Quitar / Lyrics o / Letras dentro o fuera de paréntesis
+  t = t.replace(/\s*\/\s*(lyrics|letras)\b/gi, "");
+  // 6. Quitar sufijos ruidosos de youtube (Video Oficial, Lyrics, etc.) en cualquier tipo de corchetes
+  t = t.replace(/\s*[\(\[\{「【『《〔〚]\s*(video\s*oficial|official\s*(music\s*)?video|video|lyrics|letras|letra|official|audio\s*oficial|audio|amv|mv|visualizer|clip|hd|4k)\s*[\)\]\}」】』》〕〛]/gi, "");
+  t = t.replace(/\s+(lyrics|letras)\b.*$/i, "");
+  t = t.replace(/\s*#[a-zA-Z0-9_-]+/g, "");
+  // 7. Quitar adornos iniciales y finales molestos
+  t = t.replace(/^[💀⚔️♣️◼💖💞「」『』【】《》〔〕〚〛➼♬°•★☆✦✧\s–—-]+/, "");
+  t = t.replace(/[💀⚔️♣️◼💖💞「」『』【】《》〔〕〚〛➼♬°•★☆✦✧\s–—-]+$/, "");
+  t = t.replace(/[◼💖💞]+/g, "");
+  t = t.replace(/\s*°•[^\s•]+•°\s*/g, " ");
+  t = t.replace(/\s*[\(\[\{「【『《〔〚]\s*[\)\]\}」】』》〕〛]/g, "");
+  t = t.replace(/\s+/g, " ").trim();
+  if (t && t[0] >= "a" && t[0] <= "z") {
+    t = t[0].toUpperCase() + t.slice(1);
+  }
+  return t || String(name || "Canción").trim();
+}
+
+function normalizeFullTitle(str) {
+  if (!str) return "";
+  let clean = cleanTrackTitle(str);
+  if (clean.startsWith("gd_") && clean.includes("__")) {
+    clean = clean.substring(clean.indexOf("__") + 2);
+  } else if (clean.startsWith("gd_")) {
+    clean = clean.substring(3);
+  }
+  return clean
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeTrackKey(str) {
+  return normalizeFullTitle(str);
+}
+
+function sha256Pure(ascii) {
+  function rightRotate(value, amount) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  var mathPow = Math.pow;
+  var maxWord = mathPow(2, 32);
+  var i, j;
+  var result = '';
+  var words = [];
+  var asciiBitLength = ascii.length * 8;
+  var hash = [];
+  var k = [];
+  var primeCounter = 0;
+  var isComposite = {};
+  for (var candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) isComposite[i] = candidate;
+      hash[primeCounter] = (mathPow(candidate, .5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+  ascii += '\x80';
+  while (ascii.length % 64 - 56) ascii += '\x00';
+  for (i = 0; i < ascii.length; i++) {
+    j = ascii.charCodeAt(i);
+    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+  }
+  words[words.length] = ((asciiBitLength / maxWord) | 0);
+  words[words.length] = (asciiBitLength | 0);
+  for (j = 0; j < words.length;) {
+    var w = words.slice(j, j += 16);
+    var oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (i = 0; i < 64; i++) {
+      var w15 = w[i - 15], w2 = w[i - 2];
+      var s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
+      var s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
+      var ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
+      var maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
+      var temp1 = hash[7] + (rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25)) + ch + k[i] + (w[i] = (i < 16) ? w[i] : (w[i - 16] + s0 + w[i - 7] + s1) | 0);
+      var temp2 = (rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22)) + maj;
+      hash = [(temp1 + temp2) | 0].concat(hash);
+      hash[4] = (hash[4] + temp1) | 0;
+    }
+    for (i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+  }
+  for (i = 0; i < 8; i++) {
+    for (var b = 3; b >= 0; b--) {
+      var byte = (hash[i] >> (b * 8)) & 255;
+      result += (byte < 16 ? '0' : '') + byte.toString(16);
+    }
+  }
+  return result;
+}
+
+function hashPassword(pw) {
+  return sha256Pure('spotilinux_v2:' + String(pw || '').trim());
+}
+
+function legacyPasswordHash(pw) {
+  let s = "spotilinux_salt_v1:" + String(pw || "");
+  let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length;
+  for (let i = 0, ch; i < s.length; i++) {
+    ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
+
+/* ========================================================================= */
+/* SISTEMA DE FILTRADO DE AUDIOS DEL DISPOSITIVO                            */
+/* ========================================================================= */
+function isAudioTrackFiltered(track) {
+  if (!deviceFilterConfig || !deviceFilterConfig.enabled) return false;
+  // Nunca filtrar pistas de Google Drive, nube o demo incorporadas
+  if (track.cloud || track.driveId || (track.id && String(track.id).startsWith("gd_")) || (track.id && String(track.id).startsWith("t") && track.id.length <= 3)) {
+    return false;
+  }
+
+  const rawTitle = (track.title || "").trim();
+  const filePath = (track.filePath || track.src || "").toLowerCase();
+  const titleLower = rawTitle.toLowerCase();
+  const baseName = filePath.split(/[/\\]/).pop() || "";
+  const baseNameLower = baseName.toLowerCase();
+
+  // 1. Predeterminado: WhatsApp & Telegram
+  if (deviceFilterConfig.filterWhatsApp) {
+    if (/^(ptt-|aud-|audio-)/i.test(rawTitle) || /^(ptt-|aud-|audio-)/i.test(baseName)) return true;
+    if (filePath.includes("whatsapp") || filePath.includes("telegram") || titleLower.includes("whatsapp audio") || titleLower.includes("voice note")) {
+      return true;
+    }
+  }
+
+  // 2. Predeterminado: Grabaciones y Llamadas
+  if (deviceFilterConfig.filterRecordings) {
+    if (/^(rec_|call_|voice_|grabaci[oó]n|callrec)/i.test(rawTitle) || /^(rec_|call_|voice_|grabaci[oó]n|callrec)/i.test(baseName)) return true;
+    if (filePath.includes("call_recordings") || filePath.includes("voice_recorder") || filePath.includes("sound_recorder") || filePath.includes("recordings")) {
+      return true;
+    }
+  }
+
+  // 3. Predeterminado: Audios cortos (< 30s) si hay metadata
+  if (deviceFilterConfig.filterShortAudios) {
+    if (typeof track.duration === "number" && track.duration > 0 && track.duration < 30) {
+      return true;
+    }
+  }
+
+  // 4. Reglas personalizadas por el usuario
+  if (Array.isArray(deviceFilterConfig.customRules)) {
+    for (const rule of deviceFilterConfig.customRules) {
+      if (!rule || !rule.value) continue;
+      const targetVal = rule.value.trim().toLowerCase();
+      if (!targetVal) continue;
+      if (rule.type === "prefix") {
+        if (titleLower.startsWith(targetVal) || baseNameLower.startsWith(targetVal)) {
+          return true;
+        }
+      } else {
+        // contains
+        if (titleLower.includes(targetVal) || baseNameLower.includes(targetVal)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function applyDeviceAudioFilters() {
+  // Aseguramos que todas las pistas actuales de tracks queden registradas y sincronizadas en masterTracksPool
+  tracks.forEach(t => {
+    const existing = masterTracksPool.find(m =>
+      (m.id && m.id === t.id) ||
+      (m.src && m.src === t.src) ||
+      (m.driveId && t.driveId && m.driveId === t.driveId)
+    );
+    if (!existing) {
+      masterTracksPool.push(t);
+    } else if (existing !== t) {
+      if (t.fileName && !existing.fileName) existing.fileName = t.fileName;
+      if (t.driveName && !existing.driveName) existing.driveName = t.driveName;
+      if (t.driveId && !existing.driveId) existing.driveId = t.driveId;
+      if (t.cover && !existing.cover) existing.cover = t.cover;
+      if (t.downloaded) {
+        existing.downloaded = true;
+        existing.src = t.src;
+        if (t.filePath) existing.filePath = t.filePath;
+      }
+      if (t.liked) existing.liked = true;
+    }
+  });
+
+  const curTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+
+  if (!deviceFilterConfig.enabled) {
+    tracks = [...masterTracksPool];
+  } else {
+    tracks = masterTracksPool.filter(t => !isAudioTrackFiltered(t));
+  }
+
+  if (curTrack) {
+    const newIdx = tracks.findIndex(t => t.id === curTrack.id || (t.driveId && t.driveId === curTrack.driveId) || t.src === curTrack.src);
+    if (newIdx >= 0) {
+      currentIndex = newIdx;
+    } else {
+      currentIndex = 0;
+    }
+  }
+
+  updateFilterUIState();
+  renderTracks();
+  renderHomePlaylists();
+
+  const summaryEl = document.getElementById("filterStatusSummary");
+  if (summaryEl) {
+    const totalRaw = masterTracksPool.length;
+    const activeCount = tracks.length;
+    const excludedCount = totalRaw - activeCount;
+    if (!deviceFilterConfig.enabled) {
+      summaryEl.textContent = `Filtro desactivado: mostrando los ${totalRaw} archivos de audio disponibles.`;
+      summaryEl.style.color = "#a0a0b0";
+      summaryEl.style.borderColor = "rgba(255, 255, 255, 0.15)";
+    } else {
+      summaryEl.textContent = `✔ ${excludedCount} audios no musicales excluidos. ${activeCount} canciones en tu biblioteca musical.`;
+      summaryEl.style.color = "var(--green-bright)";
+      summaryEl.style.borderColor = "rgba(30, 215, 96, 0.3)";
+    }
+  }
+}
+
+function updateFilterUIState() {
+  const masterChk = document.getElementById("chkMasterAudioFilter");
+  if (masterChk) masterChk.checked = deviceFilterConfig.enabled;
+  const modalMasterChk = document.getElementById("modalChkMasterFilter");
+  if (modalMasterChk) modalMasterChk.checked = deviceFilterConfig.enabled;
+
+  const subEl = document.getElementById("smFilterSubtitle");
+  if (subEl) {
+    if (!deviceFilterConfig.enabled) {
+      subEl.textContent = "Filtro desactivado (todos los audios visibles)";
+    } else {
+      const activeRulesCount = (deviceFilterConfig.filterWhatsApp ? 1 : 0) +
+                               (deviceFilterConfig.filterRecordings ? 1 : 0) +
+                               (deviceFilterConfig.filterShortAudios ? 1 : 0) +
+                               (deviceFilterConfig.customRules ? deviceFilterConfig.customRules.length : 0);
+      subEl.textContent = `Activo (${activeRulesCount} reglas) • WhatsApp y notas excluidas`;
+    }
+  }
+}
+
+function openDeviceAudioFilterModal() {
+  const modal = document.getElementById("deviceAudioFilterModal");
+  if (!modal) return;
+  modal.classList.add("active");
+
+  const modalMaster = document.getElementById("modalChkMasterFilter");
+  if (modalMaster) modalMaster.checked = deviceFilterConfig.enabled;
+  const modalWa = document.getElementById("modalChkWhatsApp");
+  if (modalWa) modalWa.checked = deviceFilterConfig.filterWhatsApp;
+  const modalRec = document.getElementById("modalChkRecordings");
+  if (modalRec) modalRec.checked = deviceFilterConfig.filterRecordings;
+  const modalShort = document.getElementById("modalChkShortAudios");
+  if (modalShort) modalShort.checked = deviceFilterConfig.filterShortAudios;
+
+  renderFilterChips();
+  applyDeviceAudioFilters();
+}
+
+function closeDeviceAudioFilterModal() {
+  const modal = document.getElementById("deviceAudioFilterModal");
+  if (modal) modal.classList.remove("active");
+  savePersistentState();
+}
+
+function toggleMasterAudioFilterSetting() {
+  const chk = document.getElementById("chkMasterAudioFilter");
+  if (!chk) return;
+  deviceFilterConfig.enabled = chk.checked;
+  applyDeviceAudioFilters();
+  savePersistentState();
+  showToast(deviceFilterConfig.enabled ? "Filtro de audios: ACTIVADO 🎵" : "Filtro de audios: DESACTIVADO 📱");
+}
+
+function onFilterModalSettingChanged() {
+  const modalMaster = document.getElementById("modalChkMasterFilter");
+  const modalWa = document.getElementById("modalChkWhatsApp");
+  const modalRec = document.getElementById("modalChkRecordings");
+  const modalShort = document.getElementById("modalChkShortAudios");
+
+  if (modalMaster) deviceFilterConfig.enabled = modalMaster.checked;
+  if (modalWa) deviceFilterConfig.filterWhatsApp = modalWa.checked;
+  if (modalRec) deviceFilterConfig.filterRecordings = modalRec.checked;
+  if (modalShort) deviceFilterConfig.filterShortAudios = modalShort.checked;
+
+  applyDeviceAudioFilters();
+  savePersistentState();
+}
+
+function renderFilterChips() {
+  const container = document.getElementById("filterRulesChipsContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!Array.isArray(deviceFilterConfig.customRules) || deviceFilterConfig.customRules.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#666; font-style:italic;">No hay reglas personalizadas añadidas. Agrega una arriba.</span>';
+    return;
+  }
+
+  deviceFilterConfig.customRules.forEach((rule, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "filter-chip";
+    const tagText = rule.type === "prefix" ? "Prefijo" : "Contiene";
+    chip.innerHTML = `
+      <span class="filter-chip-tag">${tagText}</span>
+      <span class="filter-chip-val">${escapeHtml(rule.value)}</span>
+      <button class="filter-chip-del" onclick="removeCustomFilterRule(${idx})" title="Eliminar regla">✕</button>
+    `;
+    container.appendChild(chip);
+  });
+}
+
+function addCustomFilterRule() {
+  const typeSelect = document.getElementById("customFilterType");
+  const inputEl = document.getElementById("customFilterInput");
+  if (!inputEl) return;
+  const val = inputEl.value.trim();
+  if (!val) {
+    showToast("Escribe una palabra o prefijo para filtrar");
+    return;
+  }
+  const type = typeSelect ? typeSelect.value : "prefix";
+  if (!Array.isArray(deviceFilterConfig.customRules)) deviceFilterConfig.customRules = [];
+
+  const already = deviceFilterConfig.customRules.some(r => r.type === type && r.value.toLowerCase() === val.toLowerCase());
+  if (already) {
+    showToast("Esta regla ya existe");
+    return;
+  }
+
+  deviceFilterConfig.customRules.push({ type, value: val });
+  inputEl.value = "";
+  renderFilterChips();
+  applyDeviceAudioFilters();
+  savePersistentState();
+  showToast(`Regla agregada: "${val}" (${type === "prefix" ? "Prefijo" : "Contiene"})`);
+}
+
+function removeCustomFilterRule(idx) {
+  if (!Array.isArray(deviceFilterConfig.customRules) || idx < 0 || idx >= deviceFilterConfig.customRules.length) return;
+  const removed = deviceFilterConfig.customRules.splice(idx, 1)[0];
+  renderFilterChips();
+  applyDeviceAudioFilters();
+  savePersistentState();
+  if (removed) {
+    showToast(`Regla eliminada: "${removed.value}"`);
+  }
+}
+
+/* ========================================================================= */
+/* CONTROL DE REPRODUCCIÓN MULTI-DISPOSITIVO (CONTINUAR EN OTRO CEL O PC)     */
+/* ========================================================================= */
+function toggleCrossDeviceSyncSetting() {
+  const chk = document.getElementById("chkCrossDeviceSync");
+  if (!chk) return;
+  crossDeviceSyncEnabled = chk.checked;
+  savePersistentState();
+  if (crossDeviceSyncEnabled) {
+    showToast("Vincular reproducción: ACTIVADO 📲");
+    broadcastPlaybackSession(true);
+    checkRemotePlaybackSession(false);
+  } else {
+    showToast("Vincular reproducción: Desactivado");
+    dismissRemoteSessionBanner();
+  }
+}
+
+async function broadcastPlaybackSession(force = false) {
+  if (!crossDeviceSyncEnabled) return;
+  const now = Date.now();
+  if (!force && (now - lastBroadcastTimeMs < 8000)) return; // Throttle 8s
+  lastBroadcastTimeMs = now;
+
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (!t) return;
+
+  const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
+  const durSec = typeof nativeDurationMs === "number" && nativeDurationMs > 0 ? (nativeDurationMs / 1000) : (audio ? audio.duration || 0 : 0);
+
+  const portableCover = (t.cover && !String(t.cover).startsWith("file://") && !String(t.cover).startsWith("content://")) ? t.cover : "";
+  const portableSrc = (t.src && String(t.src).startsWith("http")) ? t.src : (t.driveId ? `https://drive.usercontent.google.com/download?id=${t.driveId}&export=download&confirm=t` : "");
+
+  const sessionObj = {
+    deviceId: myDeviceId,
+    deviceType: hasNativeAndroid ? "android" : "web/desktop",
+    trackId: t.id || "",
+    driveId: t.driveId || "",
+    title: t.title || "MaoMusic",
+    artist: t.artist || "Desconocido",
+    album: t.album || "",
+    cover: portableCover,
+    src: portableSrc,
+    posSec: Math.max(0, curSec),
+    duration: Math.max(0, durSec),
+    isPlaying: isPlaying,
+    updatedAt: now
+  };
+  currentPlaybackSession = sessionObj;
+
+  try {
+    const wrap = {
+      name: DEFAULT_CLOUD_OBJECT_NAME,
+      data: {
+        playback_session: sessionObj,
+        updatedAt: now
+      }
+    };
+    fetch(DEFAULT_CLOUD_SERVER_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify(wrap)
+    }).catch(() => {});
+  } catch (_e) {}
+}
+
+async function checkRemotePlaybackSession(isStartup = false) {
+  if (!crossDeviceSyncEnabled) return;
+  try {
+    const res = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
+    if (!res.ok) return;
+    const body = await res.json();
+    const data = body.data || body;
+    const remote = data.playback_session;
+    if (!remote || !remote.title || !remote.updatedAt) return;
+
+    // Si la sesión la emitió este mismo dispositivo, ignorar
+    if (remote.deviceId === myDeviceId) return;
+
+    // Verificar que sea reciente (últimas 12 horas) y más reciente que la última procesada
+    const now = Date.now();
+    if (now - remote.updatedAt > 12 * 3600 * 1000) return;
+    if (remote.updatedAt <= lastCheckedSessionUpdatedAt) return;
+    
+    // Si este dispositivo ya está reproduciendo música localmente, no interrumpir con el banner
+    if (isPlaying) return;
+
+    pendingRemoteSession = remote;
+    lastCheckedSessionUpdatedAt = remote.updatedAt;
+
+    showCrossDeviceBanner(remote);
+  } catch (_e) {}
+}
+
+function showCrossDeviceBanner(remote) {
+  const banner = document.getElementById("crossDeviceBanner");
+  const infoEl = document.getElementById("cdbTrackInfo");
+  if (!banner || !infoEl) return;
+
+  const min = Math.floor((remote.posSec || 0) / 60);
+  const sec = Math.floor((remote.posSec || 0) % 60);
+  const timeStr = `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  const devLabel = remote.deviceType === "android" ? "Celular" : "Computadora";
+
+  infoEl.textContent = `${remote.title} • ${remote.artist} (${timeStr}) [${devLabel}]`;
+  banner.style.display = "flex";
+}
+
+function dismissRemoteSessionBanner() {
+  const banner = document.getElementById("crossDeviceBanner");
+  if (banner) banner.style.display = "none";
+}
+
+function resumeRemoteSessionTrack() {
+  dismissRemoteSessionBanner();
+  if (!pendingRemoteSession) return;
+  const remote = pendingRemoteSession;
+
+  // Buscar la canción en tracks por id, driveId o por título
+  const normTarget = normalizeFullTitle(cleanTrackTitle(remote.title));
+  let foundIdx = tracks.findIndex(t =>
+    (remote.driveId && t.driveId === remote.driveId) ||
+    (remote.trackId && t.id === remote.trackId) ||
+    (normTarget && normalizeFullTitle(cleanTrackTitle(t.title)) === normTarget)
+  );
+
+  if (foundIdx === -1 && remote.driveId) {
+    // Si es una canción de Google Drive no presente aún en la lista activa, añadirla
+    const safeCover = (remote.cover && !String(remote.cover).startsWith("file://") && !String(remote.cover).startsWith("content://")) ? remote.cover : null;
+    const newTrack = {
+      id: remote.trackId || ("gd_" + remote.driveId),
+      driveId: remote.driveId,
+      fileName: remote.title || "",
+      driveName: remote.title || "",
+      title: remote.title,
+      artist: remote.artist || "Google Drive",
+      album: remote.album || "Drive Stream",
+      genre: "Cloud",
+      cover: safeCover,
+      src: (remote.src && String(remote.src).startsWith("http")) ? remote.src : `https://drive.usercontent.google.com/download?id=${remote.driveId}&export=download&confirm=t`,
+      liked: false,
+      cloud: true,
+      downloaded: false,
+      color: "#00d2ff"
+    };
+    tracks.unshift(newTrack);
+    if (!masterTracksPool.some(m => m.id === newTrack.id)) masterTracksPool.unshift(newTrack);
+    renderTracks();
+    foundIdx = 0;
+  }
+
+  if (foundIdx >= 0) {
+    playTrackIndex(foundIdx);
+    const targetSec = Math.max(0, remote.posSec || 0);
+    // Posicionar en el segundo exacto
+    setTimeout(() => {
+      seekTo(targetSec);
+      showToast(`✔ Continuando "${remote.title}" desde ${formatTime(targetSec)}`);
+    }, 450);
+  } else {
+    showToast(`Canción sincronizada: "${remote.title}"`);
+  }
+}
+
+/* ---------------- PERSISTENCIA DE ESTADO Y PLAYLISTS ---------------- */
+function savePersistentState() {
+  const cloudTracksOnly = tracks.filter(t => t.cloud || t.driveId || String(t.id).startsWith("gd_"));
+  const likedIds = tracks.filter(t => t.liked).map(t => t.id);
+  const chkDedup = document.getElementById("chkVerifyDuplicates");
+  const stateObj = {
+    playlists,
+    likedIds,
+    cloudTracksOnly,
+    userAccount,
+    accountsDb,
+    repeatMode,
+    sleepVinylEnabled,
+    sleepVinylVideoEnabled,
+    crossDeviceSyncEnabled,
+    deviceFilterConfig,
+    rawDeviceTracksList,
+    gdToken: document.getElementById("gdToken").value.trim(),
+    gdClientId: document.getElementById("gdClientId").value.trim(),
+    gdFolder: document.getElementById("gdFolder").value.trim() || DEFAULT_DRIVE_ROOT_FOLDER_ID,
+    gdApiKey: document.getElementById("gdApiKey").value.trim(),
+    driveImportMode,
+    verifyDuplicates: chkDedup ? chkDedup.checked : true,
+    welcomeDone: localStorage.getItem("welcome_done") === "1"
+  };
+  const raw = JSON.stringify(stateObj);
+  localStorage.setItem("spotilinux_mobile_state", raw);
+  if (hasNativeAndroid && window.AndroidMedia.saveAppStateJson) {
+    try { window.AndroidMedia.saveAppStateJson(raw); } catch (_e) {}
+  }
+}
+
+function resetAllAppData() {
+  if (!confirm("¿Deseas restablecer MaoMusic a su estado limpio de fábrica? Se borrarán cuentas locales, playlists y canciones guardadas.")) return;
+  localStorage.removeItem("spotilinux_mobile_state");
+  localStorage.removeItem("welcome_done");
+  localStorage.setItem("spotilinux_clean_reset_ver", "13");
+  if (hasNativeAndroid && window.AndroidMedia) {
+    if (window.AndroidMedia.clearAppState) {
+      try { window.AndroidMedia.clearAppState(); } catch(_e){}
+    }
+    if (window.AndroidMedia.clearAllDownloadedMusic) {
+      try { window.AndroidMedia.clearAllDownloadedMusic(); } catch(_e){}
+    }
+  }
+  tracks = [];
+  masterTracksPool = [];
+  rawDeviceTracksList = [];
+  playlists = [];
+  userAccount = null;
+  accountsDb = {};
+  googleUserProfile = null;
+  cloudDriveVideos = {};
+  savePersistentState();
+  renderTracks();
+  renderHomePlaylists();
+  updateAccountUI();
+  updateFullPlayerUI();
+  showToast("🧹 Datos restablecidos a estado nuevo de fábrica");
+}
+
+function loadPersistentState() {
+  const CLEAN_RESET_VERSION_CODE = 13; // v2.7.3: Versión limpia para nuevo usuario
+  const lastReset = parseInt(localStorage.getItem("spotilinux_clean_reset_ver") || "0", 10);
+  if (lastReset < CLEAN_RESET_VERSION_CODE) {
+    localStorage.removeItem("spotilinux_mobile_state");
+    localStorage.removeItem("welcome_done");
+    localStorage.setItem("spotilinux_clean_reset_ver", String(CLEAN_RESET_VERSION_CODE));
+    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.clearAppState) {
+      try { window.AndroidMedia.clearAppState(); } catch(_e){}
+    }
+    return; // Comenzar 100% limpio como nuevo cliente
+  }
+
+  let raw = "";
+  if (hasNativeAndroid && window.AndroidMedia.loadAppStateJson) {
+    try { raw = window.AndroidMedia.loadAppStateJson(); } catch (_e) {}
+  }
+  if (!raw) raw = localStorage.getItem("spotilinux_mobile_state") || "";
+  if (raw) {
+    try {
+      const st = JSON.parse(raw);
+      if (Array.isArray(st.playlists) && st.playlists.length > 0) playlists = st.playlists;
+      if (Array.isArray(st.cloudTracksOnly)) {
+        st.cloudTracksOnly.forEach(ct => {
+          ct.title = cleanTrackTitle(ct.title);
+          if (!ct.driveName && ct.fileName) ct.driveName = ct.fileName;
+          if (!ct.fileName && ct.title) ct.fileName = ct.title;
+          if (ct.driveId && (!ct.src || String(ct.src).startsWith("https://drive.google.com/uc?export=download"))) {
+            ct.src = `https://drive.usercontent.google.com/download?id=${ct.driveId}&export=download&confirm=t`;
+          }
+          const normKey = normalizeFullTitle(ct.title);
+          if (!tracks.some(x => x.id === ct.id || (ct.driveId && x.driveId === ct.driveId) || (normKey && normalizeFullTitle(x.title) === normKey))) {
+            tracks.unshift(ct);
+          }
+          if (!masterTracksPool.some(x => x.id === ct.id || (ct.driveId && x.driveId === ct.driveId) || (normKey && normalizeFullTitle(x.title) === normKey))) {
+            masterTracksPool.unshift(ct);
+          }
+        });
+      }
+      if (Array.isArray(st.likedIds)) {
+        tracks.forEach(t => { if (st.likedIds.includes(t.id)) t.liked = true; });
+      }
+      if (st.userAccount) userAccount = st.userAccount;
+      if (st.accountsDb && typeof st.accountsDb === "object") accountsDb = st.accountsDb;
+      if (st.gdToken) document.getElementById("gdToken").value = st.gdToken;
+      if (st.gdClientId) document.getElementById("gdClientId").value = st.gdClientId;
+      document.getElementById("gdFolder").value = st.gdFolder || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+      if (st.gdApiKey) document.getElementById("gdApiKey").value = st.gdApiKey;
+      if (st.driveImportMode) setDriveImportMode(st.driveImportMode);
+      if (st.repeatMode !== undefined) {
+        if (st.repeatMode === true || st.repeatMode === "all") repeatMode = "all";
+        else if (st.repeatMode === "one") repeatMode = "one";
+        else repeatMode = "off";
+        updateRepeatUI();
+        if (hasNativeAndroid && window.AndroidMedia.setRepeat) {
+          try { window.AndroidMedia.setRepeat(repeatMode); } catch(_e){}
+        } else {
+          audio.loop = (repeatMode === "one");
+        }
+      }
+      if (typeof st.sleepVinylEnabled === "boolean") {
+        sleepVinylEnabled = st.sleepVinylEnabled;
+      }
+      const chkVinyl = document.getElementById("chkSleepVinyl");
+      if (chkVinyl) chkVinyl.checked = sleepVinylEnabled;
+
+      if (typeof st.sleepVinylVideoEnabled === "boolean") {
+        sleepVinylVideoEnabled = st.sleepVinylVideoEnabled;
+      }
+      const chkVideo = document.getElementById("chkSleepVinylVideo");
+      if (chkVideo) chkVideo.checked = sleepVinylVideoEnabled;
+
+      if (typeof st.crossDeviceSyncEnabled === "boolean") {
+        crossDeviceSyncEnabled = st.crossDeviceSyncEnabled;
+      }
+      const chkSync = document.getElementById("chkCrossDeviceSync");
+      if (chkSync) chkSync.checked = crossDeviceSyncEnabled;
+
+      if (st.deviceFilterConfig && typeof st.deviceFilterConfig === "object") {
+        deviceFilterConfig = {
+          enabled: st.deviceFilterConfig.enabled !== false,
+          filterWhatsApp: st.deviceFilterConfig.filterWhatsApp !== false,
+          filterRecordings: st.deviceFilterConfig.filterRecordings !== false,
+          filterShortAudios: Boolean(st.deviceFilterConfig.filterShortAudios),
+          customRules: Array.isArray(st.deviceFilterConfig.customRules) ? st.deviceFilterConfig.customRules : [
+            { type: "prefix", value: "PTT-" },
+            { type: "prefix", value: "AUD-" },
+            { type: "prefix", value: "REC_" },
+            { type: "prefix", value: "Call_" }
+          ]
+        };
+      }
+      if (Array.isArray(st.rawDeviceTracksList) && st.rawDeviceTracksList.length > 0) {
+        rawDeviceTracksList = st.rawDeviceTracksList;
+      }
+      updateFilterUIState();
+
+      const chkDedup = document.getElementById("chkVerifyDuplicates");
+      if (chkDedup && typeof st.verifyDuplicates === "boolean") chkDedup.checked = st.verifyDuplicates;
+      if (st.welcomeDone) localStorage.setItem("welcome_done", "1");
+    } catch (_e) {}
+  }
+
+  // Cargar canciones ya guardadas en la carpeta SpotiLinuxMusic del celular
+  if (hasNativeAndroid && window.AndroidMedia.getSavedTracks) {
+    try {
+      const savedJson = window.AndroidMedia.getSavedTracks();
+      mergeScannedDeviceTracks(JSON.parse(savedJson));
+    } catch (_e) {}
+  }
+
+  // Verificar sesión en otro dispositivo al iniciar
+  setTimeout(() => {
+    checkRemotePlaybackSession(true);
+  }, 1800);
+  if (!crossDevicePollTimer) {
+    crossDevicePollTimer = setInterval(() => {
+      checkRemotePlaybackSession(false);
+    }, 22000);
+  }
+}
+
+/* ---------------- ESCANEO AUTOMÁTICO DE MÚSICA DEL CELULAR Y CARPETA DE LA APP ---------------- */
+function mergeScannedDeviceTracks(savedList) {
+  if (!Array.isArray(savedList)) return;
+  rawDeviceTracksList = savedList;
+  let newCount = 0;
+  savedList.forEach(item => {
+    const cleanTitle = cleanTrackTitle(item.title || "");
+    const normKey = normalizeFullTitle(cleanTitle);
+
+    const existingMasterIdx = masterTracksPool.findIndex(t =>
+      t.src === item.src ||
+      t.id === item.id ||
+      (item.driveId && t.driveId === item.driveId) ||
+      (normKey && normalizeFullTitle(t.title) === normKey)
+    );
+    if (existingMasterIdx >= 0) {
+      const existing = masterTracksPool[existingMasterIdx];
+      existing.src = item.src;
+      existing.downloaded = true;
+      if (!existing.title || cleanTitle.length >= existing.title.length) {
+        existing.title = cleanTitle;
+      }
+      if (item.driveId && !existing.driveId) existing.driveId = item.driveId;
+      if (item.savedId && !existing.savedId) existing.savedId = item.savedId;
+      if (item.altId && !existing.altId) existing.altId = item.altId;
+      if (item.filePath) existing.filePath = item.filePath;
+      if (item.fileName && !existing.fileName) existing.fileName = item.fileName;
+      if (item.driveName && !existing.driveName) existing.driveName = item.driveName;
+      if (item.id && existing.id !== item.id) {
+        if (!existing.extraIds) existing.extraIds = [];
+        if (!existing.extraIds.includes(item.id)) existing.extraIds.push(item.id);
+      }
+      if (item.cover) existing.cover = item.cover;
+      existing.artist = "Google Drive (Descargada) ✔";
+    } else {
+      masterTracksPool.unshift({
+        id: item.id,
+        savedId: item.savedId || item.id,
+        altId: item.altId || item.id,
+        driveId: item.driveId || "",
+        filePath: item.filePath || item.src,
+        fileName: item.fileName || item.title || "",
+        driveName: item.driveName || item.fileName || item.title || "",
+        title: cleanTitle,
+        artist: item.artist || "Carpeta SpotiLinux 📱",
+        album: item.album || "Biblioteca Guardada",
+        genre: item.genre || "Local",
+        cover: item.cover || null,
+        src: item.src,
+        liked: false,
+        cloud: Boolean(item.cloud || item.driveId),
+        downloaded: true,
+        color: item.cloud ? "#00d2ff" : "#1db954"
+      });
+      newCount++;
+    }
+  });
+
+  applyDeviceAudioFilters();
+  savePersistentState();
+
+  if (newCount > 0) {
+    const banner = document.getElementById("scanBanner");
+    if (banner) {
+      banner.style.display = "block";
+      banner.textContent = `✔ ${savedList.length} archivos escaneados (${tracks.length} canciones tras aplicar el filtro de audios).`;
+    }
+  }
+}
+
+window.onDeviceMusicScanned = function(savedList) {
+  mergeScannedDeviceTracks(savedList);
+  savePersistentState();
+};
+
+function scanPhoneMusic() {
+  const banner = document.getElementById("scanBanner");
+  banner.style.display = "block";
+  banner.textContent = "🔍 Rastreando música del dispositivo y guardándola en la carpeta SpotiLinuxMusic...";
+  if (hasNativeAndroid && window.AndroidMedia.scanDeviceMusicAsync) {
+    window.AndroidMedia.scanDeviceMusicAsync();
+  } else {
+    document.getElementById("filePicker").click();
+  }
+}
+
+async function importLocalFiles(ev) {
+  const files = Array.from(ev.target.files || []);
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const url = URL.createObjectURL(f);
+    const cleanName = f.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    const coverArt = await extractId3Cover(f);
+    tracks.unshift({
+      id: "local_" + Date.now() + "_" + i,
+      title: cleanName,
+      artist: "Mi Celular 📱",
+      album: "Archivos Locales",
+      genre: "Local",
+      cover: coverArt || null,
+      src: url,
+      liked: false,
+      cloud: false,
+      downloaded: true,
+      color: "#1db954"
+    });
+  }
+  renderTracks();
+  savePersistentState();
+  if (files.length > 0) playTrackIndex(0);
+}
+
+/* ---------------- MOTOR DE REPRODUCCIÓN NATIVO ANDROID + CONTROLES CONTEXTUALES ---------------- */
+function playTrackFromQueue(queueList, indexInQueue, contextName) {
+  if (!queueList || !queueList.length) return;
+  activePlaybackQueue = [...queueList];
+  activeQueueIndex = Math.max(0, Math.min(indexInQueue, activePlaybackQueue.length - 1));
+  activeQueueName = contextName || "Playlist";
+  initOrSyncShufflePool(activeQueueIndex);
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.indexOf(t);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
+}
+
+function playTrackIndex(idx) {
+  if (idx < 0 || idx >= tracks.length) return;
+  const t = tracks[idx];
+  const qIdx = activePlaybackQueue ? activePlaybackQueue.findIndex(x => x.id === t.id) : -1;
+  if (qIdx >= 0) {
+    activeQueueIndex = qIdx;
+  } else {
+    activePlaybackQueue = [...tracks];
+    activeQueueIndex = idx;
+    activeQueueName = "Biblioteca";
+  }
+  initOrSyncShufflePool(activeQueueIndex);
+  currentIndex = idx;
+  executePlayTrack(t);
+}
+
+function executePlayTrack(t) {
+  const token = document.getElementById("gdToken").value.trim();
+  onTrackChangedForRhythm(t);
+  isPlaying = true;
+  resetSleepVinylIdleTimer();
+  if (hasNativeAndroid) {
+    updatePlayerUI();
+    window.AndroidMedia.playSource(t.src, t.title, t.artist, t.album, t.authToken || token, getTrackCoverUrl(t));
+  } else {
+    audio.src = t.src;
+    audio.play().then(() => {
+      isPlaying = true;
+      updatePlayerUI();
+    }).catch(() => {
+      isPlaying = true;
+      updatePlayerUI();
+    });
+  }
+  highlightPlayingTracks();
+  setTimeout(() => { broadcastPlaybackSession(true); }, 750);
+}
+
+function togglePlay() {
+  if (hasNativeAndroid) {
+    if (!isPlaying && currentIndex === 0 && document.getElementById("lblCurTime").textContent === "0:00") {
+      if (activePlaybackQueue.length > 0) {
+        executePlayTrack(activePlaybackQueue[activeQueueIndex]);
+      } else {
+        playTrackIndex(currentIndex);
+      }
+    } else {
+      window.AndroidMedia.togglePlayPause();
+      setTimeout(() => { broadcastPlaybackSession(true); }, 600);
+    }
+  } else {
+    if (!audio.src && tracks.length > 0) {
+      if (activePlaybackQueue.length > 0) {
+        executePlayTrack(activePlaybackQueue[activeQueueIndex]);
+      } else {
+        playTrackIndex(currentIndex);
+      }
+    } else {
+      if (audio.paused) { audio.play(); isPlaying = true; }
+      else { audio.pause(); isPlaying = false; }
+      updatePlayerUI();
+      setTimeout(() => { broadcastPlaybackSession(true); }, 500);
+    }
+  }
+  // Sincronización inmediata con video de fondo en reposo
+  setTimeout(() => { syncVinylVideoWithPlayback(); }, 50);
+}
+
+function initOrSyncShufflePool(forcedCurrentIdx = activeQueueIndex) {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    shufflePlayedStack = [];
+    shuffleUnplayedPool = [];
+    return;
+  }
+  
+  const curTrack = (forcedCurrentIdx >= 0 && forcedCurrentIdx < activePlaybackQueue.length)
+    ? activePlaybackQueue[forcedCurrentIdx]
+    : activePlaybackQueue[0];
+  const curId = curTrack ? curTrack.id : null;
+
+  if (curId) {
+    shufflePlayedStack = [curId];
+    shuffleUnplayedPool = activePlaybackQueue
+      .filter(t => t && t.id !== curId)
+      .map(t => t.id);
+  } else {
+    shufflePlayedStack = [];
+    shuffleUnplayedPool = activePlaybackQueue.filter(t => t).map(t => t.id);
+  }
+}
+
+function nextTrack(isAutoEnd = false) {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    activePlaybackQueue = [...tracks];
+  }
+  if (!activePlaybackQueue.length) return;
+
+  if (shuffleMode && activePlaybackQueue.length > 1) {
+    // Si la pila de pendientes se vació:
+    if (!Array.isArray(shuffleUnplayedPool) || shuffleUnplayedPool.length === 0) {
+      if (isAutoEnd && repeatMode === "off") {
+        isPlaying = false;
+        if (hasNativeAndroid && window.AndroidMedia.pause) {
+          try { window.AndroidMedia.pause(); } catch(e){}
+        } else {
+          audio.pause();
+        }
+        updatePlayerUI();
+        syncVinylVideoWithPlayback();
+        showToast("Todas las canciones del aleatorio fueron reproducidas ✔");
+        return;
+      }
+      // Reabastecer el pool excluyendo la canción actualmente en curso
+      const curT = activePlaybackQueue[activeQueueIndex];
+      const curId = curT ? curT.id : null;
+      shuffleUnplayedPool = activePlaybackQueue
+        .filter(t => t && t.id !== curId)
+        .map(t => t.id);
+      showToast("Ciclo aleatorio completado. Continuando lista 🔀");
+    }
+
+    const randomPoolPos = Math.floor(Math.random() * shuffleUnplayedPool.length);
+    const chosenId = shuffleUnplayedPool.splice(randomPoolPos, 1)[0];
+    shufflePlayedStack.push(chosenId);
+
+    const foundIdx = activePlaybackQueue.findIndex(t => t.id === chosenId);
+    activeQueueIndex = foundIdx >= 0 ? foundIdx : 0;
+  } else {
+    activeQueueIndex = (activeQueueIndex + 1) % activePlaybackQueue.length;
+    const curT = activePlaybackQueue[activeQueueIndex];
+    if (curT && shufflePlayedStack[shufflePlayedStack.length - 1] !== curT.id) {
+      shufflePlayedStack.push(curT.id);
+    }
+  }
+
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.findIndex(x => x.id === t.id);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
+}
+
+function prevTrack() {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    activePlaybackQueue = [...tracks];
+  }
+  if (!activePlaybackQueue.length) return;
+
+  // Regla estándar de reproductores: Si lleva más de 3 segundos, reiniciar al principio de la pista
+  const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
+  if (curSec > 3.0) {
+    seekAudio(0);
+    return;
+  }
+
+  if (shuffleMode && Array.isArray(shufflePlayedStack) && shufflePlayedStack.length > 1) {
+    // Sacar pista actual de la cima de la pila y regresarla a pendientes
+    const currentId = shufflePlayedStack.pop();
+    if (!shuffleUnplayedPool.includes(currentId)) {
+      shuffleUnplayedPool.unshift(currentId);
+    }
+    // La anterior es ahora la cima de la pila
+    const prevId = shufflePlayedStack[shufflePlayedStack.length - 1];
+    const foundIdx = activePlaybackQueue.findIndex(t => t.id === prevId);
+    activeQueueIndex = foundIdx >= 0 ? foundIdx : 0;
+  } else if (shuffleMode) {
+    // Primer tema de la sesión aleatoria: reiniciar pista actual
+    seekAudio(0);
+    showToast("Inicio de la lista aleatoria");
+    return;
+  } else {
+    activeQueueIndex = (activeQueueIndex - 1 + activePlaybackQueue.length) % activePlaybackQueue.length;
+  }
+
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.findIndex(x => x.id === t.id);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
+}
+
+function seekAudio(val) {
+  if (hasNativeAndroid) {
+    const targetMs = Math.floor((val / 1000) * nativeDurationMs);
+    window.AndroidMedia.seekTo(targetMs);
+    syncVinylVideoWithPlayback(targetMs / 1000);
+  } else {
+    const dur = audio.duration || 28;
+    audio.currentTime = (val / 1000) * dur;
+    syncVinylVideoWithPlayback(audio.currentTime);
+  }
+}
+
+function seekTo(sec) {
+  const targetSec = Math.max(0, Number(sec) || 0);
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.seekTo) {
+    window.AndroidMedia.seekTo(Math.floor(targetSec * 1000));
+    syncVinylVideoWithPlayback(targetSec);
+  } else if (audio) {
+    try { audio.currentTime = targetSec; } catch (_e) {}
+    syncVinylVideoWithPlayback(targetSec);
+  }
+}
+
+function formatTime(sec) {
+  return fmtTime(sec);
+}
+
+function showToast(msg) {
+  let t = document.getElementById("toastMessage");
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => {
+    t.classList.remove("show");
+  }, 1800);
+}
+
+/* ---------------- ICONOS VECTORIALES SVG DARK HECHOS A MEDIDA ---------------- */
+const ICONS = {
+  play: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>`,
+  pause: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4.5" height="16" rx="1.5"/><rect x="14.5" y="4" width="4.5" height="16" rx="1.5"/></svg>`,
+  prev: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>`,
+  next: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`,
+  shuffle: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17C8 17 11 7 16 7H20"/><polyline points="17 4 21 7 17 10"/><path d="M4 7C7.2 7 9.4 11.2 10.5 13"/><path d="M13.5 16.2C14.3 16.8 15.1 17 16 17H20"/><polyline points="17 14 21 17 17 20"/></svg>`,
+  repeat: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
+  repeatOne: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><path d="M11 10.5L12.5 9V15M11 15H14" stroke-width="2"/></svg>`,
+  likeOutline: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  likeFilled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" stroke="#1ed760" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`
+};
+
+function updateShuffleUI() {
+  const btn = document.getElementById("btnShuffle");
+  const fpBtn = document.getElementById("fpBtnShuffle");
+  if (btn) {
+    btn.classList.toggle("active", shuffleMode);
+    btn.setAttribute("title", shuffleMode ? "Aleatorio activado" : "Aleatorio desactivado");
+    btn.innerHTML = ICONS.shuffle + (shuffleMode ? `<span class="active-dot"></span>` : "");
+  }
+  if (fpBtn) {
+    fpBtn.classList.toggle("active", shuffleMode);
+    fpBtn.innerHTML = ICONS.shuffle;
+  }
+}
+
+function updateRepeatUI() {
+  const btn = document.getElementById("btnRepeat");
+  const fpBtn = document.getElementById("fpBtnRepeat");
+  const isActive = repeatMode === "all" || repeatMode === "one";
+  const icon = repeatMode === "one" ? ICONS.repeatOne : ICONS.repeat;
+  const title = repeatMode === "one"
+    ? "Repetir canción actual"
+    : (repeatMode === "all" ? "Repetir playlist completa" : "Repetición desactivada");
+
+  if (btn) {
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("title", title);
+    btn.innerHTML = icon + (isActive ? `<span class="active-dot"></span>` : "");
+  }
+  if (fpBtn) {
+    fpBtn.classList.toggle("active", isActive);
+    fpBtn.setAttribute("title", title);
+    fpBtn.innerHTML = icon;
+  }
+}
+
+function toggleShuffle(forcePlayIfOff = false) {
+  shuffleMode = !shuffleMode;
+  if (shuffleMode) {
+    initOrSyncShufflePool(activeQueueIndex);
+  }
+  updateShuffleUI();
+  showToast(shuffleMode ? "Aleatorio sin repetición: ACTIVADO 🔀" : "Modo aleatorio: Desactivado");
+  if (shuffleMode && forcePlayIfOff && !isPlaying && tracks.length > 0) {
+    nextTrack();
+  }
+}
+
+function toggleRepeat() {
+  if (repeatMode === "off") {
+    repeatMode = "all";
+    showToast("Repetir: Playlist completa 🔁");
+  } else if (repeatMode === "all") {
+    repeatMode = "one";
+    showToast("Repetir: Canción actual 🔂");
+  } else {
+    repeatMode = "off";
+    showToast("Repetición: Desactivada");
+  }
+  updateRepeatUI();
+  savePersistentState();
+
+  if (hasNativeAndroid) {
+    if (window.AndroidMedia.setRepeat) {
+      window.AndroidMedia.setRepeat(repeatMode);
+    }
+  } else {
+    audio.loop = (repeatMode === "one");
+  }
+}
+
+function handleTrackPlaybackEnded() {
+  if (repeatMode === "one") {
+    if (!activePlaybackQueue || !activePlaybackQueue.length) return;
+    const t = activePlaybackQueue[activeQueueIndex];
+    if (t) {
+      executePlayTrack(t);
+      return;
+    }
+  }
+
+  if (repeatMode === "all") {
+    nextTrack();
+    return;
+  }
+
+  // repeatMode === "off"
+  if (shuffleMode) {
+    if (shuffleUnplayedPool.length > 0) {
+      nextTrack();
+    } else {
+      isPlaying = false;
+      if (hasNativeAndroid && window.AndroidMedia.pause) {
+        try { window.AndroidMedia.pause(); } catch(e){}
+      } else {
+        audio.pause();
+      }
+      updatePlayerUI();
+      showToast("Fin de la lista (todas las canciones reproducidas)");
+    }
+  } else {
+    if (activeQueueIndex + 1 < activePlaybackQueue.length) {
+      nextTrack();
+    } else {
+      isPlaying = false;
+      if (hasNativeAndroid && window.AndroidMedia.pause) {
+        try { window.AndroidMedia.pause(); } catch(e){}
+      } else {
+        audio.pause();
+      }
+      updatePlayerUI();
+      showToast("Fin de la lista de reproducción");
+    }
+  }
+}
+
+function shufflePlayAll() {
+  shuffleMode = true;
+  initOrSyncShufflePool(activeQueueIndex);
+  updateShuffleUI();
+  showToast("Modo aleatorio sin repetición: ACTIVADO");
+  nextTrack();
+}
+
+/* ========================================================================= */
+/* CONTROLADOR DE MODO SUSPENSIÓN / REPOSO (DISCO DE VINILO OLED)            */
+/* ========================================================================= */
+function enterVinylStandbyMode() {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  if (!overlay) return;
+  overlay.classList.add("active");
+  updateVinylStandbyUI();
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.setKeepScreenOn) {
+    try { window.AndroidMedia.setKeepScreenOn(true); } catch(e){}
+  }
+}
+
+function exitVinylStandbyMode(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  if (!overlay) return;
+  overlay.classList.remove("active");
+  stopVinylStandbyVideo();
+  resetSleepVinylIdleTimer();
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.setKeepScreenOn) {
+    try { window.AndroidMedia.setKeepScreenOn(false); } catch(e){}
+  }
+}
+
+function toggleSleepVinylSetting() {
+  const chk = document.getElementById("chkSleepVinyl");
+  if (!chk) return;
+  sleepVinylEnabled = chk.checked;
+  savePersistentState();
+  if (sleepVinylEnabled) {
+    showToast("Modo Suspensión (Vinilo): ACTIVADO 💿");
+    resetSleepVinylIdleTimer();
+  } else {
+    showToast("Modo Suspensión: Desactivado");
+    if (sleepVinylTimeout) clearTimeout(sleepVinylTimeout);
+    exitVinylStandbyMode();
+  }
+}
+
+let cloudDriveVideos = {};
+const DEFAULT_VIDEOS_FOLDER_ID = "1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa";
+
+function cleanMediaName(str) {
+  if (!str) return "";
+  let s = String(str);
+  // 1. Decodificar entidades HTML comunes de nombres de archivos de Google Drive
+  s = s.replace(/&amp;/g, "&")
+       .replace(/&#39;/g, "'")
+       .replace(/&quot;/g, '"')
+       .replace(/&lt;/g, "<")
+       .replace(/&gt;/g, ">");
+  // 2. Quitar extensiones multimedia
+  s = s.replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "");
+  // 3. Quitar numeración de pista al inicio (ej. "01 - ", "01. ", "1. ", "01_")
+  s = s.replace(/^\s*\d{1,3}\s*[-._–—]\s*/, "");
+  // 4. Quitar prefijos y sufijos de páginas de descarga (y2mate, snaptik, yt1s, etc.)
+  s = s.replace(/^(y2mate(\.com|\.is)?|y2meta(\.com)?|snaptik(\.[a-z]+)?|yt1s(\.com)?)\s*[-_–—:]\s*/i, "");
+  s = s.replace(/\by2mate(\.com|\.is)?\b/gi, "");
+  // 5. Quitar etiquetas multimedia entre corchetes, paréntesis o comillas orientales
+  s = s.replace(/\s*[\(\[\{「【『《〔〚]\s*(official\s*(music\s*)?video|video\s*oficial|official\s*audio|audio\s*oficial|official|video|audio|lyric\s*video|lyrics|letra|anime\s*lyric\s*official|amv|mv|visualizer|clip|hd|4k|1080p|remix|nightcore|speed\s*up)\s*[\)\]\}」】』》〕〛]/gi, "");
+  // 6. Normalizar caracteres Unicode y remover diacríticos / tildes
+  s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // 7. Retener solo caracteres alfanuméricos limpios en minúsculas
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
+
+function normalizeTrackKey(str) {
+  return cleanMediaName(str);
+}
+
+const VIDEO_STOP_WORDS = new Set([
+  "nightcore", "version", "vercion", "versio", "remix", "cover", "lyrics", "lyric",
+  "audio", "video", "oficial", "official", "music", "cancion", "himno",
+  "el", "la", "los", "las", "de", "del", "un", "una", "unos", "unas",
+  "al", "lo", "se", "su", "sus", "mi", "mis", "tu", "tus", "yo", "me", "te",
+  "que", "por", "para", "con", "sin", "sobre", "tras", "en", "y", "e", "o", "u",
+  "the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for", "with", "from",
+  "prod", "by", "ft", "feat", "amv", "mv", "hd", "4k", "1080p", "clip", "visualizer",
+  "extended", "extendida", "completa", "full", "special", "original"
+]);
+
+function extractCoreTokens(str) {
+  if (!str) return new Set();
+  let s = String(str)
+    .replace(/&amp;/g, " ")
+    .replace(/&#39;/g, " ")
+    .replace(/&quot;/g, " ")
+    .replace(/\.(mp3|flac|wav|m4a|ogg|opus|aac|mp4|webm|mkv|avi|mov)$/i, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  s = s.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  const words = s.split(/\s+/).filter(w => w.length >= 2 && !VIDEO_STOP_WORDS.has(w));
+  return new Set(words);
+}
+
+function extractVersionTags(str) {
+  if (!str) return new Set();
+  const s = String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const tags = new Set();
+  if (/\bfemale\b/.test(s)) tags.add("female");
+  else if (/\bmale\b/.test(s)) tags.add("male");
+  if (s.includes("soft rock")) tags.add("soft rock");
+  else if (/\brock\b/.test(s)) tags.add("rock");
+  if (s.includes("hit")) tags.add("hits");
+  if (s.includes("switch")) tags.add("switching");
+  if (s.includes("sped up")) tags.add("sped up");
+  if (s.includes("slowed")) tags.add("slowed");
+  if (s.includes("espanol") || s.includes("traducida")) tags.add("espanol");
+  return tags;
+}
+
+window.onPublicDriveVideosFetched = function(videoList) {
+  if (!Array.isArray(videoList)) return;
+  videoList.forEach(v => {
+    if (!v || !v.id) return;
+    const cleanKey = cleanMediaName(v.name || v.id);
+    const streamUrl = `https://drive.usercontent.google.com/download?id=${v.id}&export=download&confirm=t`;
+    const directUrl = v.localSrc || streamUrl;
+    cloudDriveVideos[v.id] = {
+      id: v.id,
+      driveId: v.id,
+      name: v.name || "Video",
+      cleanName: cleanKey,
+      src: directUrl,
+      streamSrc: streamUrl,
+      localSrc: v.localSrc || "",
+      fallbackSrc: `https://drive.google.com/uc?export=download&id=${v.id}&confirm=t`,
+      thumbnailUrl: `https://lh3.googleusercontent.com/d/${v.id}=w400`
+    };
+  });
+  console.log("🎬 Videos de Google Drive registrados:", Object.keys(cloudDriveVideos).length);
+  // Asignar miniatura de respaldo para canciones en la nube que aún no están descargadas en este dispositivo (ej. tablet)
+  tracks.forEach(t => {
+    if (t && !t.cover) {
+      const mv = findMatchingVideo(t);
+      if (mv && mv.thumbnailUrl) {
+        t.fallbackCover = mv.thumbnailUrl;
+      }
+    }
+  });
+  renderTracks();
+  updatePlayerUI();
+  updateVinylStandbyVideo();
+};
+
+function getTrackCoverUrl(t) {
+  if (!t) return "";
+  if (t.cover) return t.cover;
+  if (t.fallbackCover) return t.fallbackCover;
+  const mv = findMatchingVideo(t);
+  if (mv && mv.thumbnailUrl) {
+    t.fallbackCover = mv.thumbnailUrl;
+    return mv.thumbnailUrl;
+  }
+  return "";
+}
+
+window.handleTrackCoverError = function(imgEl, trackId) {
+  if (!imgEl) return;
+  const t = tracks.find(x => x.id === trackId) || masterTracksPool.find(x => x.id === trackId);
+  if (t) {
+    if (t.cover && imgEl.src === t.cover) {
+      t.cover = null;
+      const fb = getTrackCoverUrl(t);
+      if (fb && fb !== imgEl.src) {
+        imgEl.src = fb;
+        return;
+      }
+    } else {
+      t.fallbackCover = null;
+    }
+  }
+  const parent = imgEl.parentElement;
+  if (parent) {
+    parent.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
+    parent.classList.add("track-thumb-empty");
+  }
+};
+
+window.onDriveVideoReady = function(fileId, localFileUrl) {
+  if (!fileId || !localFileUrl) return;
+  for (const [k, v] of Object.entries(cloudDriveVideos)) {
+    if (v.id === fileId || v.driveId === fileId) {
+      v.src = localFileUrl;
+      v.localSrc = localFileUrl;
+      break;
+    }
+  }
+  updateVinylStandbyVideo();
+};
+
+function findMatchingVideo(track) {
+  if (!track) return null;
+  if (track.videoSrc) return { src: track.videoSrc, name: track.title, fallbackSrc: "" };
+
+  const videoEntries = Object.values(cloudDriveVideos);
+  if (videoEntries.length === 0) return null;
+
+  const tSearchStr = `${track.title || ""} ${track.driveName || ""} ${track.fileName || ""} ${track.name || ""} ${track.artist || ""}`;
+  const tCore = extractCoreTokens(tSearchStr);
+  const tVersions = extractVersionTags(tSearchStr);
+
+  if (tCore.size === 0) return null;
+
+  const cleanTitle = cleanMediaName(track.title || "");
+  const cleanFull = cleanMediaName((track.artist || "") + " " + (track.title || ""));
+  const cleanDriveName = track.driveName ? cleanMediaName(track.driveName) : "";
+  const cleanFileName = track.fileName ? cleanMediaName(track.fileName) : "";
+  const cleanName = track.name ? cleanMediaName(track.name) : "";
+
+  // 1. Coincidencia exacta por nombre limpio (título, archivo Drive o artista + título)
+  for (const v of videoEntries) {
+    if (!v.cleanName) v.cleanName = cleanMediaName(v.name);
+    const vk = v.cleanName;
+    if (vk && (vk === cleanTitle || vk === cleanDriveName || vk === cleanFileName || vk === cleanName || vk === cleanFull)) {
+      return v;
+    }
+  }
+
+  // 2. Coincidencia semántica con desambiguación estricta de versiones (Nightcore, Rock, Female/Male)
+  let bestVideo = null;
+  let bestScore = 0;
+
+  for (const v of videoEntries) {
+    const vCore = extractCoreTokens(v.name);
+    const vVersions = extractVersionTags(v.name);
+
+    // Intersección de palabras clave principales
+    const overlap = [];
+    for (const w of tCore) {
+      if (vCore.has(w)) overlap.push(w);
+    }
+    if (overlap.length === 0) continue;
+
+    let score = 0;
+    overlap.forEach(w => { score += w.length * 10; });
+
+    // Incompatibilidad estricta de género/versión (ej. female vs male)
+    if ((tVersions.has("female") && vVersions.has("male")) || (tVersions.has("male") && vVersions.has("female"))) {
+      continue;
+    }
+
+    // Bonificación por versiones coincidentes
+    tVersions.forEach(vtag => {
+      if (vVersions.has(vtag)) score += 50;
+      else score -= 20;
+    });
+
+    // Leve penalización si el video tiene versión extra pero no hay conflicto
+    vVersions.forEach(vtag => {
+      if (!tVersions.has(vtag)) score -= 8;
+    });
+
+    // Desambiguación para títulos cortos como "Blue" (evitar confundir "Blue Da Ba Dee" con "I'm Good Blue")
+    if (tCore.size === 1 && tCore.has("blue")) {
+      if (vCore.has("good") && !tCore.has("good")) score -= 60;
+      if (vCore.has("dee") || vCore.has("daba") || vCore.has("baba")) score += 50;
+    }
+
+    // Filtrar coincidencias accidentales de palabras sueltas cortas
+    const totalOverlapLen = overlap.reduce((acc, w) => acc + w.length, 0);
+    if (totalOverlapLen < 3 && overlap.length < 2) continue;
+
+    if (score > bestScore && score >= 25) {
+      bestScore = score;
+      bestVideo = v;
+    }
+  }
+
+  return bestVideo;
+}
+
+function toggleSleepVinylVideoSetting(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  const chk = document.getElementById("chkSleepVinylVideo");
+  if (chk && e && e.target === chk) {
+    sleepVinylVideoEnabled = chk.checked;
+  } else {
+    sleepVinylVideoEnabled = !sleepVinylVideoEnabled;
+    if (chk) chk.checked = sleepVinylVideoEnabled;
+  }
+  savePersistentState();
+  if (sleepVinylVideoEnabled) {
+    showToast("🎬 Video de fondo en reposo: ACTIVADO");
+    updateVinylStandbyVideo();
+  } else {
+    showToast("Video de fondo en reposo: Desactivado");
+    stopVinylStandbyVideo();
+  }
+}
+
+function stopVinylStandbyVideo() {
+  const container = document.getElementById("vinylVideoBgContainer");
+  const videoEl = document.getElementById("vinylBgVideo");
+  if (container) container.classList.remove("active");
+  if (videoEl) {
+    isInternalVideoSync = true;
+    try { videoEl.pause(); videoEl.removeAttribute("src"); videoEl.load(); } catch(_e){}
+    videoEl.style.display = "none";
+    setTimeout(() => { isInternalVideoSync = false; }, 120);
+  }
+  currentPlayingVideoSource = "";
+}
+
+let isInternalVideoSync = false;
+
+function syncVinylVideoWithPlayback(overrideCurSec = null) {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  const container = document.getElementById("vinylVideoBgContainer");
+  const videoEl = document.getElementById("vinylBgVideo");
+  if (!overlay || !overlay.classList.contains("active") || !videoEl || !videoEl.src) return;
+
+  if (!sleepVinylVideoEnabled) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  const curSec = (overrideCurSec !== null && !isNaN(overrideCurSec))
+    ? overrideCurSec
+    : (typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0));
+
+  isInternalVideoSync = true;
+  try {
+    if (isPlaying) {
+      if (videoEl.paused) {
+        const p = videoEl.play();
+        if (p !== undefined) p.catch(() => {});
+      }
+      if (Math.abs(videoEl.currentTime - curSec) > 1.2) {
+        try { videoEl.currentTime = curSec; } catch(_e){}
+      }
+    } else {
+      if (!videoEl.paused) {
+        videoEl.pause();
+      }
+    }
+  } finally {
+    setTimeout(() => { isInternalVideoSync = false; }, 100);
+  }
+}
+
+function updateVinylStandbyVideo() {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  const container = document.getElementById("vinylVideoBgContainer");
+  const videoEl = document.getElementById("vinylBgVideo");
+  if (!overlay || !overlay.classList.contains("active") || !container || !videoEl) return;
+
+  if (!sleepVinylVideoEnabled) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (!t) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  // Buscar vídeo correspondiente (local o subcarpeta 'videos' de Google Drive)
+  const matchedVideo = findMatchingVideo(t);
+
+  // SI NO HAY VIDEO EN LA SUBCARPETA VIDEOS O LOCAL, NO SE PONE NADA (PANTALLA OLED NEGRA LIMPIA)
+  if (!matchedVideo) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  // Fuente de video: usar archivo en caché local si ya existe, o stream directo HTTP 206 de Google Drive UserContent
+  const videoSrc = matchedVideo.localSrc || matchedVideo.streamSrc || matchedVideo.src || matchedVideo.fallbackSrc;
+  if (!videoSrc) {
+    stopVinylStandbyVideo();
+    return;
+  }
+
+  const curSec = typeof getSmoothPlaybackSec === "function" ? getSmoothPlaybackSec() : (audio ? audio.currentTime || 0 : 0);
+
+  // Manejadores estrictos con fallback para garantizar que NUNCA aparezca un icono de video roto
+  videoEl.onerror = () => {
+    if (matchedVideo.fallbackSrc && videoEl.src !== matchedVideo.fallbackSrc && !videoEl._triedFallback) {
+      videoEl._triedFallback = true;
+      isInternalVideoSync = true;
+      currentPlayingVideoSource = matchedVideo.fallbackSrc;
+      videoEl.src = matchedVideo.fallbackSrc;
+      if (isPlaying) {
+        const p = videoEl.play();
+        if (p !== undefined) p.catch(() => {});
+      }
+      setTimeout(() => { isInternalVideoSync = false; }, 120);
+      return;
+    }
+    // Si el streaming directo falló (ej. sin internet o restricción), preparar en caché local en segundo plano
+    if (!matchedVideo.localSrc && matchedVideo.id && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.prepareDriveVideo) {
+      const tok = document.getElementById("gdToken") ? document.getElementById("gdToken").value.trim() : "";
+      const key = document.getElementById("gdApiKey") ? document.getElementById("gdApiKey").value.trim() : "";
+      window.AndroidMedia.prepareDriveVideo(matchedVideo.id, matchedVideo.name, tok, key);
+    }
+    stopVinylStandbyVideo();
+  };
+
+  videoEl.oncanplay = () => {
+    if (videoEl.src && videoEl.src !== "") {
+      videoEl.style.display = "block";
+      container.classList.add("active");
+    }
+  };
+
+  // VINCULACIÓN BIDIRECCIONAL: cuando el video se pausa por interacción externa o controles, el audio también se pausa
+  videoEl.onpause = () => {
+    if (isInternalVideoSync) return;
+    const ov = document.getElementById("vinylStandbyOverlay");
+    if (!ov || !ov.classList.contains("active")) return;
+    if (isPlaying) {
+      if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.pause) {
+        try { window.AndroidMedia.pause(); } catch(e){}
+      } else if (audio) {
+        audio.pause();
+      }
+      isPlaying = false;
+      updatePlayerUI();
+      const playSvg = ICONS.play;
+      const vPlay = document.getElementById("vinylBtnPlay");
+      if (vPlay) vPlay.innerHTML = playSvg;
+      const vDisc = document.getElementById("vinylDisc");
+      if (vDisc) vDisc.classList.remove("playing");
+      const vArm = document.getElementById("vinylTonearm");
+      if (vArm) vArm.classList.remove("playing");
+    }
+  };
+
+  // VINCULACIÓN BIDIRECCIONAL: cuando el video se reanuda, el audio también se reanuda
+  videoEl.onplay = () => {
+    if (isInternalVideoSync) return;
+    const ov = document.getElementById("vinylStandbyOverlay");
+    if (!ov || !ov.classList.contains("active")) return;
+    if (!isPlaying) {
+      if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.resume) {
+        try { window.AndroidMedia.resume(); } catch(e){}
+      } else if (audio) {
+        audio.play().catch(() => {});
+      }
+      isPlaying = true;
+      updatePlayerUI();
+      const playSvg = ICONS.pause;
+      const vPlay = document.getElementById("vinylBtnPlay");
+      if (vPlay) vPlay.innerHTML = playSvg;
+      const vDisc = document.getElementById("vinylDisc");
+      if (vDisc) vDisc.classList.add("playing");
+      const vArm = document.getElementById("vinylTonearm");
+      if (vArm) vArm.classList.add("playing");
+    }
+  };
+
+  isInternalVideoSync = true;
+  if (currentPlayingVideoSource !== videoSrc) {
+    currentPlayingVideoSource = videoSrc;
+    videoEl._triedFallback = false;
+    videoEl.style.display = "none";
+    container.classList.remove("active");
+    videoEl.src = videoSrc;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.setAttribute("playsinline", "true");
+    videoEl.setAttribute("webkit-playsinline", "true");
+  }
+
+  const showVideo = () => {
+    if (videoEl.src && videoEl.src !== "") {
+      videoEl.style.display = "block";
+      container.classList.add("active");
+    }
+  };
+  videoEl.oncanplay = showVideo;
+  videoEl.onloadeddata = showVideo;
+  videoEl.onplaying = showVideo;
+  if (videoEl.readyState >= 2) {
+    showVideo();
+  }
+
+  try {
+    if (isPlaying) {
+      const playPromise = videoEl.play();
+      if (playPromise !== undefined) {
+        playPromise.then(showVideo).catch((err) => {
+          console.warn("Video play deferred/buffered:", err);
+        });
+      }
+      if (Math.abs(videoEl.currentTime - curSec) > 1.2) {
+        try { videoEl.currentTime = curSec; } catch(_e){}
+      }
+    } else {
+      videoEl.pause();
+    }
+  } finally {
+    setTimeout(() => { isInternalVideoSync = false; }, 120);
+  }
+}
+
+function resetSleepVinylIdleTimer() {
+  if (sleepVinylTimeout) clearTimeout(sleepVinylTimeout);
+  if (!sleepVinylEnabled || !isPlaying) return;
+  sleepVinylTimeout = setTimeout(() => {
+    if (isPlaying && sleepVinylEnabled) {
+      enterVinylStandbyMode();
+    }
+  }, SLEEP_IDLE_DELAY_MS);
+}
+
+function updateVinylStandbyUI() {
+  const overlay = document.getElementById("vinylStandbyOverlay");
+  if (!overlay) return;
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (t) {
+    const titleEl = document.getElementById("vinylTrackTitle");
+    if (titleEl) titleEl.textContent = t.title || "MaoMusic";
+    const artEl = document.getElementById("vinylTrackArtist");
+    if (artEl) artEl.textContent = t.artist || "MaoMusic Mobile";
+    
+    const centerArt = document.getElementById("vinylCenterArt");
+    if (centerArt) {
+      const cov = getTrackCoverUrl(t);
+      if (cov) {
+        centerArt.style.backgroundImage = `url("${cov}")`;
+        centerArt.innerHTML = "";
+      } else {
+        centerArt.style.backgroundImage = "none";
+        centerArt.innerHTML = `<span style="font-size:32px;">🎵</span>`;
+      }
+    }
+  }
+
+  const disc = document.getElementById("vinylDisc");
+  if (disc) disc.classList.toggle("playing", isPlaying);
+
+  const tonearm = document.getElementById("vinylTonearm");
+  if (tonearm) tonearm.classList.toggle("playing", isPlaying);
+
+  const btnPlay = document.getElementById("vinylBtnPlay");
+  if (btnPlay) {
+    btnPlay.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
+  }
+
+  const clock = document.getElementById("vinylClock");
+  if (clock) {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    clock.textContent = `${hh}:${mm}`;
+  }
+
+  updateVinylStandbyVideo();
+}
+
+// Monitoreo de toques para posponer reposo cuando el usuario interactúa
+["touchstart", "pointerdown", "mousedown", "keydown"].forEach(evtName => {
+  window.addEventListener(evtName, () => {
+    const overlay = document.getElementById("vinylStandbyOverlay");
+    if (!overlay || !overlay.classList.contains("active")) {
+      resetSleepVinylIdleTimer();
+    }
+  }, { passive: true });
+});
+
+/* Callbacks desde MediaPlaybackService nativo de Android */
+window.onNativeProgress = function(posMs, durMs, playingState) {
+  isPlaying = Boolean(playingState);
+  nativeDurationMs = durMs > 0 ? durMs : 28000;
+  syncSmoothClockFromNative(posMs, isPlaying);
+  const curFmt = fmtTime(posMs / 1000);
+  const durFmt = fmtTime(nativeDurationMs / 1000);
+  const progressRatio = Math.min(1000, Math.floor((posMs / nativeDurationMs) * 1000));
+
+  document.getElementById("lblCurTime").textContent = curFmt;
+  document.getElementById("lblDurTime").textContent = durFmt;
+  document.getElementById("seekBar").value = progressRatio;
+  
+  const playSvg = isPlaying ? ICONS.pause : ICONS.play;
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay) btnPlay.innerHTML = playSvg;
+
+  const fpCur = document.getElementById("fpCurTime");
+  if (fpCur) fpCur.textContent = curFmt;
+  const fpDur = document.getElementById("fpDurTime");
+  if (fpDur) fpDur.textContent = durFmt;
+  const fpSeek = document.getElementById("fpSeekBar");
+  if (fpSeek) fpSeek.value = progressRatio;
+  const fpPlay = document.getElementById("fpBtnPlay");
+  if (fpPlay) fpPlay.innerHTML = playSvg;
+
+  const vinylBtnPlay = document.getElementById("vinylBtnPlay");
+  if (vinylBtnPlay) vinylBtnPlay.innerHTML = playSvg;
+  const vinylDisc = document.getElementById("vinylDisc");
+  if (vinylDisc) vinylDisc.classList.toggle("playing", isPlaying);
+  const vinylTonearm = document.getElementById("vinylTonearm");
+  if (vinylTonearm) vinylTonearm.classList.toggle("playing", isPlaying);
+
+  // Sincronización continua y estrecha del video de vinilo con el audio nativo
+  syncVinylVideoWithPlayback(posMs / 1000);
+
+  if (isPlaying) {
+    broadcastPlaybackSession(false);
+  }
+};
+
+window.onNativeMediaCommand = function(cmd) {
+  if (cmd === "ended_next") {
+    handleTrackPlaybackEnded();
+  } else if (cmd === "next") {
+    nextTrack();
+  } else if (cmd === "prev") {
+    prevTrack();
+  } else if (cmd === "play") {
+    playTrackIndex(currentIndex);
+  } else if (cmd === "toggle") {
+    togglePlay();
+  }
+};
+
+/* ========================================================================= */
+/* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
+/* ========================================================================= */
+const CURRENT_APP_VERSION_CODE = 21;
+const CURRENT_APP_VERSION_NAME = "2.8.4";
+const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
+let pendingRemoteUpdate = null;
+
+function getInstalledAppVersionCode() {
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.getAppVersionCode) {
+    try {
+      const code = window.AndroidMedia.getAppVersionCode();
+      if (typeof code === "number" && code > 0) return code;
+    } catch (e) {}
+  }
+  return CURRENT_APP_VERSION_CODE;
+}
+
+function getInstalledAppVersionName() {
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.getAppVersionName) {
+    try {
+      const name = window.AndroidMedia.getAppVersionName();
+      if (name) return name;
+    } catch (e) {}
+  }
+  return CURRENT_APP_VERSION_NAME;
+}
+
+async function checkForAppUpdates(manualUserClick = false) {
+  if (manualUserClick) {
+    showToast("Buscando actualizaciones en GitHub...");
+  }
+  try {
+    const url = `${GITHUB_VERSION_URL}?_t=${Date.now()}`;
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) {
+      if (manualUserClick) showToast("No se pudo conectar a GitHub para verificar versiones");
+      return;
+    }
+    const info = await resp.json();
+    const localCode = getInstalledAppVersionCode();
+    const isNewer = info.versionCode > localCode;
+
+    if (isNewer) {
+      pendingRemoteUpdate = info;
+      showAppUpdateModal(info);
+    } else {
+      if (manualUserClick) {
+        showToast(`✔ MaoMusic ya está al día (v${getInstalledAppVersionName()})`);
+      }
+    }
+  } catch (err) {
+    if (manualUserClick) {
+      showToast("Error al verificar actualizaciones");
+    }
+  }
+}
+
+function showAppUpdateModal(info) {
+  const modal = document.getElementById("appUpdateModal");
+  if (!modal) return;
+  const badge = document.getElementById("updateVersionBadge");
+  if (badge) badge.textContent = `v${info.versionName || "Nueva"} • Publicada el ${info.releaseDate || ""}`;
+  
+  const box = document.getElementById("updateChangelogBox");
+  if (box) {
+    let html = "";
+    if (Array.isArray(info.changelog) && info.changelog.length > 0) {
+      html = `<ul style="margin:0; padding-left:18px;">` +
+        info.changelog.map(item => `<li style="margin-bottom:4px;">${escapeHtml(item)}</li>`).join("") +
+        `</ul>`;
+    } else {
+      html = "Mejoras de rendimiento y corrección de errores.";
+    }
+    box.innerHTML = html;
+  }
+
+  const pBox = document.getElementById("updateProgressBox");
+  if (pBox) pBox.style.display = "none";
+  const actions = document.getElementById("updateActionsRow");
+  if (actions) actions.style.display = "flex";
+
+  modal.classList.add("open");
+}
+
+function closeAppUpdateModal() {
+  const modal = document.getElementById("appUpdateModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function startAppUpdateDownload() {
+  if (!pendingRemoteUpdate || !pendingRemoteUpdate.apkUrl) {
+    showToast("URL de actualización no disponible");
+    return;
+  }
+
+  const pBox = document.getElementById("updateProgressBox");
+  if (pBox) pBox.style.display = "block";
+  const pBar = document.getElementById("updateProgressBar");
+  if (pBar) pBar.style.width = "0%";
+  const pStatus = document.getElementById("updateProgressStatus");
+  if (pStatus) pStatus.textContent = "Conectando con GitHub...";
+  const actions = document.getElementById("updateActionsRow");
+  if (actions) actions.style.display = "none";
+
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.downloadAndInstallUpdate) {
+    try {
+      window.AndroidMedia.downloadAndInstallUpdate(pendingRemoteUpdate.apkUrl);
+    } catch (e) {
+      showToast("Error al iniciar descarga nativa: " + e.message);
+      if (actions) actions.style.display = "flex";
+      if (pBox) pBox.style.display = "none";
+    }
+  } else {
+    // Si se ejecuta en navegador o escritorio
+    window.open(pendingRemoteUpdate.apkUrl, "_blank");
+    showToast("Descargando archivo desde GitHub...");
+    setTimeout(() => {
+      closeAppUpdateModal();
+    }, 2000);
+  }
+}
+
+window.onNativeUpdateProgress = function(status, percent, downloaded, total, error) {
+  const pBox = document.getElementById("updateProgressBox");
+  const pBar = document.getElementById("updateProgressBar");
+  const pStatus = document.getElementById("updateProgressStatus");
+  const pPercent = document.getElementById("updateProgressPercent");
+  const pDetail = document.getElementById("updateProgressDetail");
+  const actions = document.getElementById("updateActionsRow");
+
+  if (status === "downloading") {
+    if (pBox) pBox.style.display = "block";
+    if (pStatus) pStatus.textContent = "Descargando actualización...";
+    if (percent >= 0) {
+      if (pBar) pBar.style.width = percent + "%";
+      if (pPercent) pPercent.textContent = percent + "%";
+    }
+    if (pDetail) {
+      const downMb = (downloaded / (1024 * 1024)).toFixed(1);
+      const totMb = total > 0 ? (total / (1024 * 1024)).toFixed(1) + " MB" : "...";
+      pDetail.textContent = `${downMb} MB / ${totMb}`;
+    }
+  } else if (status === "completed") {
+    if (pStatus) pStatus.textContent = "✔ Descarga completa. Abriendo instalador...";
+    if (pBar) pBar.style.width = "100%";
+    if (pPercent) pPercent.textContent = "100%";
+    showToast("Iniciando instalador de paquetes de Android...");
+    setTimeout(() => {
+      closeAppUpdateModal();
+    }, 1500);
+  } else if (status === "error") {
+    if (pStatus) pStatus.textContent = "❌ Error: " + (error || "Descarga fallida");
+    if (actions) actions.style.display = "flex";
+    showToast("Error de actualización: " + error);
+  }
+};
+
+function javaHashCode(str) {
+  if (!str) return 0;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function trackMatchesPlaylistId(track, tid) {
+  if (!track || !tid) return false;
+  if (track.id === tid) return true;
+  if (track.savedId && track.savedId === tid) return true;
+  if (track.altId && track.altId === tid) return true;
+  if (Array.isArray(track.extraIds) && track.extraIds.includes(tid)) return true;
+  if (track.driveId) {
+    if (track.driveId === tid) return true;
+    if (`gd_${track.driveId}` === tid) return true;
+  }
+  if (typeof tid === "string") {
+    if (tid.startsWith("gd_")) {
+      const raw = tid.slice(3);
+      if (track.driveId === raw || track.id === raw) return true;
+    }
+    if (track.id && typeof track.id === "string" && track.id.startsWith("gd_")) {
+      const raw = track.id.slice(3);
+      if (tid === raw) return true;
+    }
+    if (track.src) {
+      if (track.src.includes(tid)) return true;
+      if (("saved_" + javaHashCode(track.src)) === tid) return true;
+    }
+    if (track.savedPath) {
+      if (track.savedPath.includes(tid)) return true;
+      if (("saved_" + javaHashCode(track.savedPath)) === tid) return true;
+    }
+    if (track.filePath) {
+      if (track.filePath.includes(tid)) return true;
+      if (("saved_" + javaHashCode(track.filePath)) === tid) return true;
+    }
+  }
+  return false;
+}
+
+function findTrackByPlaylistId(tid) {
+  if (!tid) return null;
+  // 1. Coincidencia directa en tracks de la biblioteca
+  let found = tracks.find(t => trackMatchesPlaylistId(t, tid));
+  if (found) return found;
+
+  // 2. Si accountsDb tiene metadatos de esta pista, emparejar por título normalizado
+  if (accountsDb && typeof accountsDb === "object") {
+    for (const accKey in accountsDb) {
+      const acc = accountsDb[accKey];
+      if (acc && Array.isArray(acc.drive_tracks)) {
+        const dt = acc.drive_tracks.find(d => d.id === tid || d.file_id === tid || ("gd_" + d.file_id) === tid);
+        if (dt) {
+          const normTitle = normalizeFullTitle(cleanTrackTitle(dt.title));
+          const match = tracks.find(t => normalizeFullTitle(t.title) === normTitle);
+          if (match) {
+            if (!match.extraIds) match.extraIds = [];
+            if (!match.extraIds.includes(tid)) match.extraIds.push(tid);
+            return match;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function getPlaylistTracks(pl) {
+  if (!pl || !Array.isArray(pl.trackIds)) return [];
+  const matched = [];
+  const matchedIds = new Set();
+  for (const tid of pl.trackIds) {
+    const t = findTrackByPlaylistId(tid);
+    if (t && !matchedIds.has(t.id)) {
+      matched.push(t);
+      matchedIds.add(t.id);
+    }
+  }
+  return matched;
+}
+
+function getTrackPlaylists(track) {
+  if (!track || !Array.isArray(playlists)) return [];
+  const res = [];
+  for (const pl of playlists) {
+    if (!pl || !Array.isArray(pl.trackIds)) continue;
+    const isMember = pl.trackIds.some(tid => trackMatchesPlaylistId(track, tid));
+    if (isMember) {
+      res.push(pl);
+    }
+  }
+  return res;
+}
+
+function getTrackPlaylistName(track) {
+  if (!track) return "Biblioteca";
+  const pls = getTrackPlaylists(track);
+  if (pls.length > 0) {
+    return pls.map(p => p.name).join(", ");
+  }
+  if (activeQueueName && activeQueueName !== "Toda la biblioteca" && activeQueueName !== "Biblioteca" && activeQueueName !== "Playlist Actual") {
+    return activeQueueName;
+  }
+  if (track.liked) return "Tus Me Gusta 💚";
+  if (track.cloud) return "Google Drive (Musica)";
+  return "Biblioteca";
+}
+
+function startRandomPlayback() {
+  const sourceTracks = tracks.filter(t => t.src || t.cloud);
+  if (!sourceTracks.length) {
+    showToast("No hay canciones disponibles para reproducir");
+    return;
+  }
+  const shuffled = [...sourceTracks].sort(() => Math.random() - 0.5);
+  shuffleMode = true;
+  activePlaybackQueue = shuffled;
+  activeQueueIndex = 0;
+  activeQueueName = "Modo Aleatorio";
+  initOrSyncShufflePool(0);
+  executePlayTrack(shuffled[0]);
+  updatePlayerUI();
+  updateFullPlayerUI();
+  setFullPlayerTab("visualizer");
+  openFullPlayer();
+  showToast(`Modo aleatorio sin repetición (${shuffled.length} canciones)`);
+}
+
+function playPlaylistShuffle(plId) {
+  let plTracks = [];
+  let plName = "Playlist";
+  if (plId === "pl_liked") {
+    plTracks = tracks.filter(t => t.liked);
+    plName = "Tus Me Gusta";
+  } else if (plId === "pl_cloud") {
+    plTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const pl = playlists.find(p => p.id === plId);
+    if (!pl) return;
+    plTracks = getPlaylistTracks(pl);
+    plName = pl.name;
+  }
+
+  if (!plTracks.length) {
+    showToast(`La playlist «${plName}» no contiene canciones aún`);
+    return;
+  }
+
+  const shuffled = [...plTracks].sort(() => Math.random() - 0.5);
+  shuffleMode = true;
+  activePlaybackQueue = shuffled;
+  activeQueueIndex = 0;
+  activeQueueName = plName;
+  initOrSyncShufflePool(0);
+  executePlayTrack(shuffled[0]);
+  updatePlayerUI();
+  updateFullPlayerUI();
+  setFullPlayerTab("visualizer");
+  openFullPlayer();
+  showToast(`Reproduciendo «${plName}» en aleatorio sin repetición`);
+}
+
+function handleProfilePhotoPicked(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rawDataUrl = e.target.result;
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement("canvas");
+      const maxDim = 180;
+      let w = img.width;
+      let h = img.height;
+      if (w > h) {
+        if (w > maxDim) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        }
+      } else {
+        if (h > maxDim) {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      localStorage.setItem("spotiCustomAvatar", compressedDataUrl);
+      updateSideMenuProfile();
+      showToast("Foto de perfil actualizada ✨");
+    };
+    img.src = rawDataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeCustomProfilePhoto() {
+  localStorage.removeItem("spotiCustomAvatar");
+  updateSideMenuProfile();
+  showToast("Foto de perfil restablecida");
+}
+
+function extractId3Cover(file) {
+  return new Promise((resolve) => {
+    if (!file || file.size < 128) return resolve(null);
+    const slice = file.slice(0, Math.min(file.size, 1024 * 512));
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const view = new DataView(e.target.result);
+        if (view.getUint8(0) !== 0x49 || view.getUint8(1) !== 0x44 || view.getUint8(2) !== 0x33) {
+          return resolve(null);
+        }
+        const version = view.getUint8(3);
+        const tagSize = ((view.getUint8(6) & 0x7f) << 21) |
+                        ((view.getUint8(7) & 0x7f) << 14) |
+                        ((view.getUint8(8) & 0x7f) << 7) |
+                        (view.getUint8(9) & 0x7f);
+        let offset = 10;
+        const maxOffset = Math.min(tagSize + 10, view.byteLength - 10);
+        while (offset < maxOffset) {
+          const frameId = String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3));
+          let frameSize = 0;
+          if (version === 4) {
+            frameSize = ((view.getUint8(offset + 4) & 0x7f) << 21) |
+                        ((view.getUint8(offset + 5) & 0x7f) << 14) |
+                        ((view.getUint8(offset + 6) & 0x7f) << 7) |
+                        (view.getUint8(offset + 7) & 0x7f);
+          } else {
+            frameSize = view.getUint32(offset + 4, false);
+          }
+          if (frameSize <= 0 || offset + 10 + frameSize > view.byteLength) break;
+          if (frameId === "APIC") {
+            const dataOffset = offset + 10;
+            const encoding = view.getUint8(dataOffset);
+            let p = dataOffset + 1;
+            let mime = "";
+            while (p < dataOffset + frameSize && view.getUint8(p) !== 0) {
+              mime += String.fromCharCode(view.getUint8(p));
+              p++;
+            }
+            p++; // skip null
+            p++; // skip pic type
+            if (encoding === 0 || encoding === 3) {
+              while (p < dataOffset + frameSize && view.getUint8(p) !== 0) p++;
+              p++;
+            } else {
+              while (p < dataOffset + frameSize - 1 && !(view.getUint8(p) === 0 && view.getUint8(p + 1) === 0)) p += 2;
+              p += 2;
+            }
+            const imgBytes = new Uint8Array(e.target.result, p, (dataOffset + frameSize) - p);
+            let binary = "";
+            const len = imgBytes.byteLength;
+            for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(imgBytes[i]);
+            }
+            const b64 = btoa(binary);
+            const mimeType = mime || "image/jpeg";
+            return resolve(`data:${mimeType};base64,${b64}`);
+          }
+          offset += 10 + frameSize;
+        }
+        resolve(null);
+      } catch (err) {
+        resolve(null);
+      }
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsArrayBuffer(slice);
+  });
+}
+
+function updatePlayerUI() {
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (t) {
+    const badge = t.cloud ? (t.downloaded ? " ✔" : " ☁️") : "";
+    const titleEl = document.getElementById("nowTitle");
+    if (titleEl) titleEl.textContent = (t.title || "Canción") + badge;
+    const artEl = document.getElementById("nowArtist");
+    if (artEl) artEl.textContent = t.artist || "Artista";
+    const plName = getTrackPlaylistName(t);
+    const plBadge = document.getElementById("nowPlaylist");
+    const plText = document.getElementById("nowPlaylistText");
+    if (plBadge) {
+      if (plName && plName !== "Biblioteca") {
+        plBadge.style.display = "inline-flex";
+        if (plText) plText.textContent = plName;
+      } else {
+        plBadge.style.display = "none";
+      }
+    }
+
+    const dockCover = document.getElementById("dockCover");
+    if (dockCover) {
+      const cov = getTrackCoverUrl(t);
+      if (cov) {
+        dockCover.style.display = "flex";
+        dockCover.innerHTML = `<img src="${cov}" alt="cover" onerror="this.parentElement.style.display='none'" />`;
+      } else {
+        dockCover.style.display = "none";
+        dockCover.innerHTML = "";
+      }
+    }
+  }
+  const playSvg = isPlaying ? ICONS.pause : ICONS.play;
+  const btnPlay = document.getElementById("btnPlay");
+  if (btnPlay) btnPlay.innerHTML = playSvg;
+
+  // Actualización instantánea sin reconstruir el árbol DOM entero (tasa de refresco ultra fluida)
+  highlightPlayingTracks();
+  updateFullPlayerUI();
+  updateVinylStandbyUI();
+}
+
+/* ---------------- MENÚ DESPLEGABLE ÚNICO (CUENTA + ACCIONES) ---------------- */
+function openSideMenu() {
+  const backdrop = document.getElementById("sideMenuBackdrop");
+  const drawer = document.getElementById("sideMenuDrawer");
+  if (backdrop) backdrop.classList.add("open");
+  if (drawer) drawer.classList.add("open");
+  updateSideMenuProfile();
+}
+
+function closeSideMenu() {
+  const backdrop = document.getElementById("sideMenuBackdrop");
+  const drawer = document.getElementById("sideMenuDrawer");
+  if (backdrop) backdrop.classList.remove("open");
+  if (drawer) drawer.classList.remove("open");
+}
+
+function toggleSideMenu() {
+  const drawer = document.getElementById("sideMenuDrawer");
+  if (drawer && drawer.classList.contains("open")) {
+    closeSideMenu();
+  } else {
+    openSideMenu();
+  }
+}
+
+function updateSideMenuProfile() {
+  const avatar = document.getElementById("smAvatar");
+  const topAvatar = document.getElementById("topMenuAvatar");
+  const dAvatar = document.getElementById("driveAvatar");
+  const username = document.getElementById("smUsername");
+  const topName = document.getElementById("topMenuName");
+  const status = document.getElementById("smStatus");
+  const btnRemove = document.getElementById("btnRemoveAvatar");
+
+  const name = userAccount ? userAccount.username : (googleUserProfile ? (googleUserProfile.name || "Usuario Google") : "Cuenta MaoMusic");
+  if (username) username.textContent = name;
+  if (topName) topName.textContent = userAccount ? userAccount.username : "Menú";
+
+  const isConnected = Boolean((document.getElementById("gdToken") && document.getElementById("gdToken").value.trim()) || userAccount);
+  if (status) {
+    status.textContent = isConnected ? "Google Drive • Conectado" : "Nube Desconectada";
+    status.style.color = isConnected ? "var(--green-bright)" : "var(--muted)";
+  }
+
+  const customPhoto = localStorage.getItem("spotiCustomAvatar");
+  if (btnRemove) btnRemove.style.display = customPhoto ? "inline-block" : "none";
+
+  const fallbackAvatar = (typeof DEFAULT_MAOMUSIC_AVATAR !== "undefined" && DEFAULT_MAOMUSIC_AVATAR) ? DEFAULT_MAOMUSIC_AVATAR : "";
+  const photoSrc = customPhoto || (googleUserProfile && (googleUserProfile.picture || googleUserProfile.photoLink)) || fallbackAvatar;
+  if (photoSrc) {
+    const imgHtml = `<img src="${photoSrc}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" alt="avatar" />`;
+    if (avatar) avatar.innerHTML = imgHtml + `<div class="sm-avatar-badge">📷</div>`;
+    if (topAvatar) topAvatar.innerHTML = imgHtml;
+    if (dAvatar) dAvatar.innerHTML = imgHtml;
+  } else {
+    const defaultSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    if (avatar) avatar.innerHTML = defaultSvg + `<div class="sm-avatar-badge">📷</div>`;
+    if (topAvatar) topAvatar.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    if (dAvatar) dAvatar.innerHTML = `👤`;
+  }
+}
+
+function setMaomaoDanceStyle(idx) {
+  maomaoStyle = idx;
+  const name = MAOMAO_STYLES[maomaoStyle];
+  const lbl1 = document.getElementById("lblDanceStyle");
+  if (lbl1) lbl1.textContent = name;
+  const lbl2 = document.getElementById("fpLblDanceStyle");
+  if (lbl2) lbl2.textContent = name;
+  const lblBtn = document.getElementById("lblDanceStyleBtn");
+  if (lblBtn) lblBtn.textContent = name;
+  [0, 1, 2].forEach(i => {
+    const btn = document.getElementById("btnDance" + i);
+    if (btn) btn.classList.toggle("active", i === idx);
+  });
+  showToast(`Paso de baile: ${name}`);
+}
+
+/* ---------------- REPRODUCTOR DE PANTALLA COMPLETA Y PLAYLIST DESPLEGABLE ---------------- */
+let isFullPlayerOpen = false;
+let fullPlayerTab = "visualizer"; // "visualizer" | "playlist"
+let fullMmCanvas = null;
+let fullMmCtx = null;
+let fullVCanvas = null;
+let fullVCtx = null;
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function initFullPlayer() {
+  if (!fullMmCanvas) {
+    fullMmCanvas = document.getElementById("fullMaomaoCanvas");
+    if (fullMmCanvas) fullMmCtx = fullMmCanvas.getContext("2d");
+  }
+  if (!fullVCanvas) {
+    fullVCanvas = document.getElementById("fullVisCanvas");
+    if (fullVCanvas) fullVCtx = fullVCanvas.getContext("2d");
+  }
+}
+
+function openFullPlayer() {
+  initFullPlayer();
+  isFullPlayerOpen = true;
+  const overlay = document.getElementById("fullPlayerView");
+  if (overlay) overlay.classList.add("open");
+  updateFullPlayerUI();
+  setTimeout(syncCanvasDimensions, 80);
+}
+
+function closeFullPlayer() {
+  isFullPlayerOpen = false;
+  const overlay = document.getElementById("fullPlayerView");
+  if (overlay) overlay.classList.remove("open");
+}
+
+function setFullPlayerTab(tab) {
+  fullPlayerTab = tab;
+  const tabVis = document.getElementById("fpTabVisualizer");
+  const tabPl = document.getElementById("fpTabPlaylist");
+  const paneVis = document.getElementById("fpVisualizerPane");
+  const panePl = document.getElementById("fpPlaylistPane");
+  const queueIcon = document.getElementById("fpQueueIcon");
+  const miniRow = document.getElementById("fpMiniTrackRow");
+
+  if (tab === "visualizer") {
+    if (tabVis) tabVis.classList.add("active");
+    if (tabPl) tabPl.classList.remove("active");
+    if (paneVis) paneVis.classList.add("active");
+    if (panePl) panePl.classList.remove("active");
+    if (queueIcon) queueIcon.textContent = "📜";
+    if (miniRow) miniRow.style.display = "none";
+    syncCanvasDimensions();
+    setTimeout(syncCanvasDimensions, 60);
+  } else {
+    if (tabVis) tabVis.classList.remove("active");
+    if (tabPl) tabPl.classList.add("active");
+    if (paneVis) paneVis.classList.remove("active");
+    if (panePl) panePl.classList.add("active");
+    if (queueIcon) queueIcon.textContent = "🌿";
+    if (miniRow) miniRow.style.display = "flex";
+    renderFullPlayerPlaylist();
+  }
+}
+
+function toggleFullPlayerViewMode() {
+  setFullPlayerTab(fullPlayerTab === "visualizer" ? "playlist" : "visualizer");
+}
+
+function updateFullPlayerUI() {
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (!t) return;
+
+  // Auto-recuperar carátula incrustada si no existe aún en el dispositivo actual
+  if (!t.cover && hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.extractTrackCover) {
+    const localTarget = t.filePath || (t.src && t.src.startsWith("/") ? t.src : (t.src && t.src.startsWith("file://") ? t.src : ""));
+    if (localTarget) {
+      try {
+        const cov = window.AndroidMedia.extractTrackCover(localTarget);
+        if (cov) {
+          t.cover = cov;
+          savePersistentState();
+        }
+      } catch(_e){}
+    }
+  }
+
+  const fpTitle = document.getElementById("fpTitle");
+  if (fpTitle) fpTitle.textContent = t.title;
+
+  const fpArtist = document.getElementById("fpArtist");
+  if (fpArtist) fpArtist.textContent = `${t.artist} • ${t.album || t.genre || 'Música'}`;
+
+  const fpMiniTitle = document.getElementById("fpMiniTitle");
+  if (fpMiniTitle) fpMiniTitle.textContent = t.title;
+  const fpMiniArtist = document.getElementById("fpMiniArtist");
+  if (fpMiniArtist) fpMiniArtist.textContent = `• ${t.artist}`;
+
+  const plName = getTrackPlaylistName(t);
+
+  const fpHeaderPl = document.getElementById("fpHeaderPlaylist");
+  if (fpHeaderPl) fpHeaderPl.textContent = plName;
+
+  const fpTrackPl = document.getElementById("fpTrackPlaylist");
+  const fpTrackPlText = document.getElementById("fpTrackPlaylistText");
+  if (fpTrackPl) {
+    if (plName && plName !== "Biblioteca") {
+      fpTrackPl.style.display = "inline-flex";
+      if (fpTrackPlText) fpTrackPlText.textContent = plName;
+    } else {
+      fpTrackPl.style.display = "none";
+    }
+  }
+
+  const fpPlName = document.getElementById("fpPlName");
+  if (fpPlName) fpPlName.textContent = plName;
+
+  const fpPlCoverArt = document.getElementById("fpPlCoverArt");
+  if (fpPlCoverArt) {
+    const cov = getTrackCoverUrl(t);
+    if (cov) {
+      fpPlCoverArt.innerHTML = `<img src="${cov}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px;" onerror="window.handleTrackCoverError(this, '${t.id}')" />`;
+    } else {
+      fpPlCoverArt.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+    }
+  }
+
+  const fpPlDetails = document.getElementById("fpPlDetails");
+  if (fpPlDetails) {
+    const qLen = activePlaybackQueue ? activePlaybackQueue.length : tracks.length;
+    fpPlDetails.textContent = `${qLen} canciones • Lista en reproducción`;
+  }
+
+  const fpLikeBtn = document.getElementById("fpLikeBtn");
+  if (fpLikeBtn) {
+    fpLikeBtn.classList.toggle("liked", Boolean(t.liked));
+    fpLikeBtn.innerHTML = t.liked ? ICONS.likeFilled : ICONS.likeOutline;
+  }
+
+  const fpBtnPlay = document.getElementById("fpBtnPlay");
+  if (fpBtnPlay) fpBtnPlay.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
+
+  updateShuffleUI();
+  updateRepeatUI();
+
+  const fpBpmBadge = document.getElementById("fpBpmBadge");
+  if (fpBpmBadge) fpBpmBadge.textContent = `♩ ${Math.round(currentBpm)} BPM`;
+
+  const fpCountBadge = document.getElementById("fpPlaylistCountBadge");
+  if (fpCountBadge) {
+    const total = activePlaybackQueue ? activePlaybackQueue.length : tracks.length;
+    fpCountBadge.textContent = `(${total} canciones)`;
+  }
+
+  if (fullPlayerTab === "playlist") {
+    renderFullPlayerPlaylist();
+  }
+}
+
+function renderFullPlayerPlaylist() {
+  const container = document.getElementById("fpPlTracksList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const list = (activePlaybackQueue && activePlaybackQueue.length > 0) ? activePlaybackQueue : tracks;
+  const currentTrack = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+
+  list.forEach((t, idx) => {
+    const isThisPlaying = isPlaying && currentTrack && (currentTrack.id === t.id);
+    const row = document.createElement("div");
+    row.className = "fp-track-row" + (isThisPlaying ? " playing" : "");
+    row.onclick = () => {
+      playActiveQueueIndex(idx);
+    };
+
+    const numOrEq = isThisPlaying
+      ? `<div class="eq-anim-icon"><span></span><span></span><span></span></div>`
+      : `<span class="fp-track-num">${idx + 1}</span>`;
+
+    const cloudIcon = t.cloud ? (t.downloaded ? `<span style="color:var(--green-bright); font-size:10px;">✔</span>` : `<span style="color:var(--muted); font-size:10px;">☁️</span>`) : "";
+
+    const covUrl = getTrackCoverUrl(t);
+    const coverThumb = covUrl
+      ? `<div class="fp-track-cover"><img src="${covUrl}" alt="cover" onerror="this.parentElement.style.display='none'" /></div>`
+      : "";
+
+    const memberPlaylists = getTrackPlaylists(t);
+    const plBadgeHtml = memberPlaylists.length > 0
+      ? memberPlaylists.map(pl => `<span class="track-badge-pl"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl.name)}</span>`).join("")
+      : "";
+
+    row.innerHTML = `
+      <div style="width:24px; display:flex; justify-content:center; align-items:center;">
+        ${numOrEq}
+      </div>
+      ${coverThumb}
+      <div class="fp-track-info">
+        <div class="fp-track-title">${escapeHtml(t.title)} ${cloudIcon}</div>
+        <div class="fp-track-artist">${escapeHtml(t.artist || 'Artista')}${plBadgeHtml}</div>
+      </div>
+      <button class="like-btn ${t.liked ? 'liked' : ''}" style="font-size:16px; display:flex; align-items:center;" onclick="event.stopPropagation(); toggleTrackLike('${t.id}')">
+        ${t.liked ? ICONS.likeFilled : ICONS.likeOutline}
+      </button>
+      <div class="fp-track-dur">${t.cloud && !t.downloaded ? 'Nube' : '3:20'}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function playActiveQueueIndex(idx) {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) {
+    activePlaybackQueue = [...tracks];
+  }
+  if (idx < 0 || idx >= activePlaybackQueue.length) return;
+  activeQueueIndex = idx;
+  const t = activePlaybackQueue[activeQueueIndex];
+  currentIndex = tracks.indexOf(t);
+  if (currentIndex < 0) currentIndex = 0;
+  executePlayTrack(t);
+  updatePlayerUI();
+  updateFullPlayerUI();
+}
+
+function toggleCurrentTrackLike() {
+  const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+  if (!t) return;
+  t.liked = !t.liked;
+  savePersistentState();
+  updatePlayerUI();
+  updateFullPlayerUI();
+  showToast(t.liked ? "Añadida a Tus Me Gusta 💚" : "Eliminada de Tus Me Gusta");
+  if (userAccount && cachedDriveDbFileId) {
+    setTimeout(pushCloudDatabaseToDrive, 200);
+  }
+}
+
+function playCurrentFullPlaylistShuffle() {
+  if (!activePlaybackQueue || !activePlaybackQueue.length) return;
+  shuffleMode = true;
+  updateShuffleUI();
+  const randIdx = Math.floor(Math.random() * activePlaybackQueue.length);
+  initOrSyncShufflePool(randIdx);
+  playActiveQueueIndex(randIdx);
+  showToast("Modo aleatorio sin repetición activado");
+}
+
+function highlightPlayingTracks() {
+  const currentId = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) ? activePlaybackQueue[activeQueueIndex].id : (tracks[currentIndex] ? tracks[currentIndex].id : null);
+  document.querySelectorAll(".track-item").forEach(el => {
+    const tid = el.getAttribute("data-track-id");
+    if (tid) {
+      el.classList.toggle("playing", tid === currentId);
+    }
+  });
+}
+
+function fmtTime(sec) {
+  if (!sec || isNaN(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m + ":" + (s < 10 ? "0" : "") + s;
+}
+
+/* ---------------- VARIABLES DE SELECCIÓN MÚLTIPLE Y PERFIL GOOGLE ---------------- */
+let selectedTrackIds = new Set();
+let isMultiSelectMode = false;
+let multiPickerSelectedIds = new Set();
+
+/* ---------------- RENDERIZADO DE CANCIONES Y ACCIONES ---------------- */
+function getFilteredTracks() {
+  const q = (document.getElementById("searchInput").value || "").toLowerCase().trim();
+  return tracks.filter(t => {
+    if (!t) return false;
+    if (activeFilter === "saved" && !t.downloaded) return false;
+    if (activeFilter === "liked" && !t.liked) return false;
+    if (activeFilter === "cloud" && !t.cloud) return false;
+    if (activeFilter.startsWith("pl:")) {
+      const plId = activeFilter.replace("pl:", "");
+      if (plId === "pl_liked") {
+        if (!t.liked) return false;
+      } else if (plId === "pl_cloud") {
+        if (!t.cloud) return false;
+      } else {
+        const pl = playlists.find(p => p.id === plId);
+        if (!pl || !pl.trackIds || !pl.trackIds.some(tid => trackMatchesPlaylistId(t, tid))) return false;
+      }
+    }
+    if (q) {
+      const title = (t.title || "").toLowerCase();
+      const artist = (t.artist || "").toLowerCase();
+      const album = (t.album || "").toLowerCase();
+      if (!title.includes(q) && !artist.includes(q) && !album.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function toggleMultiSelectMode() {
+  isMultiSelectMode = !isMultiSelectMode;
+  selectedTrackIds.clear();
+  const btn = document.getElementById("btnToggleMultiSelect");
+  if (btn) {
+    btn.classList.toggle("active", isMultiSelectMode);
+    btn.textContent = isMultiSelectMode ? "✕ Salir" : "☑️ Seleccionar Varias";
+  }
+  const bar = document.getElementById("multiSelectBar");
+  if (bar) bar.classList.toggle("show", isMultiSelectMode);
+  updateMultiSelectBar();
+  renderTracks();
+}
+
+function exitMultiSelectMode() {
+  isMultiSelectMode = false;
+  selectedTrackIds.clear();
+  const btn = document.getElementById("btnToggleMultiSelect");
+  if (btn) {
+    btn.classList.remove("active");
+    btn.textContent = "☑️ Seleccionar Varias";
+  }
+  const bar = document.getElementById("multiSelectBar");
+  if (bar) bar.classList.remove("show");
+  renderTracks();
+}
+
+function toggleTrackSelection(id, ev) {
+  if (ev) ev.stopPropagation();
+  if (selectedTrackIds.has(id)) {
+    selectedTrackIds.delete(id);
+  } else {
+    selectedTrackIds.add(id);
+  }
+  updateMultiSelectBar();
+  renderTracks();
+}
+
+function selectAllVisibleTracks() {
+  const filtered = getFilteredTracks();
+  if (selectedTrackIds.size === filtered.length && filtered.length > 0) {
+    selectedTrackIds.clear();
+  } else {
+    filtered.forEach(t => selectedTrackIds.add(t.id));
+  }
+  updateMultiSelectBar();
+  renderTracks();
+}
+
+function updateMultiSelectBar() {
+  const countEl = document.getElementById("multiSelectCount");
+  if (countEl) countEl.textContent = `${selectedTrackIds.size} seleccionada${selectedTrackIds.size === 1 ? '' : 's'}`;
+}
+
+function openAddSelectedToPlaylistModal() {
+  if (selectedTrackIds.size === 0) {
+    showToast("Selecciona al menos una canción primero");
+    return;
+  }
+  openAddToPlaylistModal(Array.from(selectedTrackIds));
+}
+
+function renderTracks() {
+  const listEl = document.getElementById("trackList");
+  if (!listEl) return;
+  const filtered = getFilteredTracks();
+  listEl.innerHTML = "";
+
+  if (filtered.length === 0) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.style.cssText = "text-align:center; padding:45px 20px; color:#888; font-size:13px;";
+    emptyDiv.innerHTML = `
+      <div style="font-size:38px; margin-bottom:12px;">🎵</div>
+      <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Tu biblioteca está limpia</div>
+      <div style="color:#aaa; max-width:280px; margin:0 auto 18px; line-height:1.4;">Escanea las canciones de tu teléfono o sincroniza tu carpeta «Musica» de Google Drive para disfrutar de tus temas.</div>
+      <div style="display:flex; justify-content:center; gap:8px;">
+        <button class="btn-chip active" onclick="scanPhoneMusic()" style="padding:8px 16px;">📲 Escanear Teléfono</button>
+        <button class="btn-chip" onclick="switchTab('drive')" style="padding:8px 16px;">☁️ Conectar Drive</button>
+      </div>
+    `;
+    listEl.appendChild(emptyDiv);
+    return;
+  }
+
+  const curTrack = tracks[currentIndex];
+
+  filtered.forEach((t) => {
+    const isSelected = selectedTrackIds.has(t.id);
+    const isThisPlaying = isPlaying && ((activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id) || (tracks[currentIndex]?.id === t.id));
+    const div = document.createElement("div");
+    div.className = "track-item" + (isThisPlaying ? " playing" : "") + (isSelected ? " selected" : "");
+    div.setAttribute("data-track-id", t.id);
+    div.onclick = (ev) => {
+      if (isMultiSelectMode) {
+        toggleTrackSelection(t.id, ev);
+      } else {
+        const idxInFiltered = filtered.indexOf(t);
+        playTrackFromQueue(filtered, idxInFiltered >= 0 ? idxInFiltered : 0, activeFilter === "all" ? "Biblioteca" : "Canciones");
+      }
+    };
+
+    // Checkbox de selección múltiple
+    const cb = document.createElement("div");
+    cb.className = "track-checkbox" + (isSelected ? " checked" : "") + (isMultiSelectMode ? " visible" : "");
+    cb.textContent = isSelected ? "✓" : "";
+    cb.onclick = (ev) => toggleTrackSelection(t.id, ev);
+    div.appendChild(cb);
+
+    const thumb = document.createElement("div");
+    const covUrl = getTrackCoverUrl(t);
+    if (covUrl) {
+      thumb.className = "track-thumb";
+      thumb.style.background = "#14141c";
+      thumb.innerHTML = `<img src="${covUrl}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" onerror="window.handleTrackCoverError(this, '${t.id}')" />`;
+    } else {
+      thumb.className = "track-thumb track-thumb-empty";
+      thumb.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
+    }
+
+    const memberPlaylists = getTrackPlaylists(t);
+    const plBadgeHtml = memberPlaylists.length > 0
+      ? memberPlaylists.map(pl => `<span class="track-badge-pl" title="En playlist: ${escapeHtml(pl.name)}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl.name)}</span>`).join("")
+      : `<span class="track-badge-unassigned" title="Aún no añadida a ninguna playlist"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Sin playlist</span>`;
+    const modeBadge = t.cloud ? (t.downloaded ? " • Guardada Offline ✔" : " • En línea ☁️") : "";
+    const meta = document.createElement("div");
+    meta.className = "track-meta";
+    meta.innerHTML = `<div class="track-title">${escapeHtml(t.title || 'Canción')}</div>
+                      <div class="track-sub">${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.album || 'Música')}${modeBadge}${plBadgeHtml}</div>`;
+
+    div.appendChild(thumb);
+    div.appendChild(meta);
+
+    if (!isMultiSelectMode) {
+      // Si es una pista de Google Drive en línea aún no descargada, mostrar botón ⬇️ Descargar
+      if (t.cloud && !t.downloaded && t.driveId) {
+        const dlBtn = document.createElement("button");
+        dlBtn.className = "icon-action-btn";
+        dlBtn.textContent = "⬇️";
+        dlBtn.title = "Descargar a la carpeta de la aplicación";
+        dlBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          downloadSingleDriveTrack(t, dlBtn);
+        };
+        div.appendChild(dlBtn);
+      }
+
+      // Botón ＋ para agregar a Playlist individual
+      const plBtn = document.createElement("button");
+      plBtn.className = "icon-action-btn";
+      plBtn.innerHTML = ICONS.plus;
+      plBtn.title = "Añadir a Playlist";
+      plBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        openAddToPlaylistModal(t.id);
+      };
+      div.appendChild(plBtn);
+
+      // Botón Favorito
+      const likeBtn = document.createElement("button");
+      likeBtn.className = "like-btn" + (t.liked ? " liked" : "");
+      likeBtn.innerHTML = t.liked ? ICONS.likeFilled : ICONS.likeOutline;
+      likeBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        t.liked = !t.liked;
+        savePersistentState();
+        renderTracks();
+        renderHomePlaylists();
+        uploadPlaylistsToDrive();
+      };
+      div.appendChild(likeBtn);
+    }
+
+    listEl.appendChild(div);
+  });
+}
+
+/* ---------------- GESTIÓN DE PLAYLISTS DISPONIBLES EN INICIO Y DETALLE ---------------- */
+let currentDetailPlaylistId = null;
+
+function renderHomePlaylists() {
+  const grid = document.getElementById("homePlaylistGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  // 1. Tarjeta Especial: Canciones que te gustan
+  const likedList = tracks.filter(t => t.liked);
+  const likedCard = document.createElement("div");
+  likedCard.className = "playlist-card";
+  likedCard.style.background = "linear-gradient(135deg, #2b1754 0%, #150f28 100%)";
+  likedCard.onclick = () => openPlaylistDetailModal("pl_liked");
+  likedCard.innerHTML = `
+    <div class="playlist-card-badge">FAVORITOS</div>
+    <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+      ${ICONS.likeFilled}
+    </div>
+    <div class="playlist-card-title">Tus Favoritos</div>
+    <div class="playlist-card-sub">${likedList.length} canciones</div>
+    <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_liked')" title="Reproducir en aleatorio">
+      ${ICONS.shuffle}
+    </button>
+    <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('pl_liked')" title="Reproducir">${ICONS.play}</div>
+  `;
+  grid.appendChild(likedCard);
+
+  // 2. Tarjeta Especial: Google Drive Cloud
+  const cloudList = tracks.filter(t => t.cloud);
+  const cloudCard = document.createElement("div");
+  cloudCard.className = "playlist-card";
+  cloudCard.style.background = "linear-gradient(135deg, #0d261e 0%, #0a1410 100%)";
+  cloudCard.onclick = () => openPlaylistDetailModal("pl_cloud");
+  cloudCard.innerHTML = `
+    <div class="playlist-card-badge">NUBE</div>
+    <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+    </div>
+    <div class="playlist-card-title">Google Drive</div>
+    <div class="playlist-card-sub">${cloudList.length} canciones</div>
+    <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_cloud')" title="Reproducir en aleatorio">
+      ${ICONS.shuffle}
+    </button>
+    <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('pl_cloud')" title="Reproducir">${ICONS.play}</div>
+  `;
+  grid.appendChild(cloudCard);
+
+  // 3. Playlists del usuario
+  playlists.forEach(pl => {
+    const card = document.createElement("div");
+    card.className = "playlist-card";
+    const plTracks = getPlaylistTracks(pl);
+    card.onclick = () => openPlaylistDetailModal(pl.id);
+    card.innerHTML = `
+      <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </div>
+      <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
+      <div class="playlist-card-sub">${plTracks.length} canciones</div>
+      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
+        ${ICONS.shuffle}
+      </button>
+      <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function playPlaylistDirect(plId) {
+  let plTracks = [];
+  let plName = "Playlist";
+  if (plId === "pl_liked") {
+    plTracks = tracks.filter(t => t.liked);
+    plName = "Tus Me Gusta";
+  } else if (plId === "pl_cloud") {
+    plTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const pl = playlists.find(p => p.id === plId);
+    if (!pl) return;
+    plTracks = getPlaylistTracks(pl);
+    plName = pl.name;
+  }
+  if (!plTracks.length) {
+    showToast(`La playlist «${plName}» no contiene canciones aún`);
+    return;
+  }
+  activePlaybackQueue = [...plTracks];
+  activeQueueIndex = 0;
+  activeQueueName = plName;
+  executePlayTrack(plTracks[0]);
+  updatePlayerUI();
+  updateFullPlayerUI();
+  setFullPlayerTab("visualizer");
+  openFullPlayer();
+}
+
+/* ========================================================================= */
+/* BUSCADOR DE CANCIONES POR PLAYLIST (MODAL ELEGANTE + FILTRADO EN VIVO)     */
+/* ========================================================================= */
+function openPlaylistDetailModal(plId) {
+  currentDetailPlaylistId = plId;
+  selectedPlaylistId = plId;
+  const modal = document.getElementById("playlistDetailModal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("plDetailTitle");
+  const statsEl = document.getElementById("plDetailStats");
+  const coverEl = document.getElementById("plDetailCover");
+  const btnDel = document.getElementById("btnDeletePlDetail");
+  const btnAdd = document.getElementById("btnAddTracksPlDetail");
+  const searchInput = document.getElementById("plDetailSearchInput");
+
+  if (searchInput) searchInput.value = "";
+
+  if (plId === "pl_liked") {
+    if (titleEl) titleEl.textContent = "Canciones Favoritas ♥";
+    if (coverEl) {
+      coverEl.style.background = "linear-gradient(135deg, #4b1764, #1b0a2a)";
+      coverEl.innerHTML = ICONS.likeFilled;
+    }
+    if (btnDel) btnDel.style.display = "none";
+    if (btnAdd) btnAdd.style.display = "none";
+  } else if (plId === "pl_cloud") {
+    if (titleEl) titleEl.textContent = "Google Drive ☁️";
+    if (coverEl) {
+      coverEl.style.background = "linear-gradient(135deg, #0f4b36, #091a13)";
+      coverEl.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1ed760" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
+    }
+    if (btnDel) btnDel.style.display = "none";
+    if (btnAdd) btnAdd.style.display = "none";
+  } else {
+    const pl = playlists.find(p => p.id === plId);
+    if (titleEl) titleEl.textContent = pl ? pl.name : "Playlist";
+    if (coverEl) {
+      coverEl.style.background = "linear-gradient(135deg, #1db954, #121218)";
+      coverEl.innerHTML = `🎵`;
+    }
+    if (btnDel) btnDel.style.display = "inline-block";
+    if (btnAdd) btnAdd.style.display = "inline-block";
+  }
+
+  renderDetailPlaylistTracks("");
+  modal.classList.add("open");
+}
+
+function closePlaylistDetailModal() {
+  const modal = document.getElementById("playlistDetailModal");
+  if (modal) modal.classList.remove("open");
+  currentDetailPlaylistId = null;
+}
+
+function filterCurrentDetailPlaylist(query) {
+  renderDetailPlaylistTracks(query);
+}
+
+function renderDetailPlaylistTracks(query = "") {
+  const listEl = document.getElementById("plDetailTrackList");
+  const statsEl = document.getElementById("plDetailStats");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+
+  let allPlTracks = [];
+  let plName = "Playlist";
+
+  if (currentDetailPlaylistId === "pl_liked") {
+    allPlTracks = tracks.filter(t => t.liked);
+    plName = "Tus Favoritos";
+  } else if (currentDetailPlaylistId === "pl_cloud") {
+    allPlTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const pl = playlists.find(p => p.id === currentDetailPlaylistId);
+    if (pl) {
+      allPlTracks = getPlaylistTracks(pl);
+      plName = pl.name;
+    }
+  }
+
+  const q = String(query || "").toLowerCase().trim();
+  const filtered = q
+    ? allPlTracks.filter(t => {
+        const title = (t.title || "").toLowerCase();
+        const artist = (t.artist || "").toLowerCase();
+        const album = (t.album || "").toLowerCase();
+        return title.includes(q) || artist.includes(q) || album.includes(q);
+      })
+    : allPlTracks;
+
+  if (statsEl) {
+    statsEl.textContent = q
+      ? `${filtered.length} de ${allPlTracks.length} canciones encontradas`
+      : `${allPlTracks.length} canciones`;
+  }
+
+  if (filtered.length === 0) {
+    const emptyRow = document.createElement("div");
+    emptyRow.style.cssText = "padding: 24px 12px; text-align: center; color: var(--muted); font-size: 12px;";
+    emptyRow.innerHTML = q
+      ? `No se encontraron canciones en esta playlist para «<b>${escapeHtml(q)}</b>»`
+      : `Esta playlist aún no tiene canciones guardadas.`;
+    listEl.appendChild(emptyRow);
+    return;
+  }
+
+  filtered.forEach((t, idx) => {
+    const isThisPlaying = isPlaying && (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id);
+    const row = document.createElement("div");
+    row.className = "track-item" + (isThisPlaying ? " playing" : "");
+    row.setAttribute("data-track-id", t.id);
+    row.onclick = () => {
+      closePlaylistDetailModal();
+      playTrackFromQueue(allPlTracks, allPlTracks.indexOf(t) >= 0 ? allPlTracks.indexOf(t) : 0, plName);
+    };
+
+    const numSpan = document.createElement("div");
+    numSpan.style.cssText = `font-size:11px; font-weight:800; color:${isThisPlaying ? 'var(--green-bright)' : 'var(--muted)'}; width:20px; text-align:center;`;
+    numSpan.textContent = isThisPlaying ? "▶" : String(idx + 1);
+    row.appendChild(numSpan);
+
+    const thumb = document.createElement("div");
+    if (t.cover) {
+      thumb.className = "track-thumb";
+      thumb.style.background = "#14141c";
+      thumb.innerHTML = `<img src="${t.cover}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:6px;" />`;
+    } else {
+      thumb.className = "track-thumb track-thumb-empty";
+      thumb.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
+    }
+    row.appendChild(thumb);
+
+    const meta = document.createElement("div");
+    meta.className = "track-meta";
+    meta.innerHTML = `<div class="track-title">${escapeHtml(t.title || 'Canción')}</div>
+                      <div class="track-sub">${escapeHtml(t.artist || 'Artista')}</div>`;
+    row.appendChild(meta);
+
+    // Botón para quitar de la playlist (solo para playlists creadas por el usuario)
+    if (currentDetailPlaylistId !== "pl_liked" && currentDetailPlaylistId !== "pl_cloud") {
+      const rmBtn = document.createElement("button");
+      rmBtn.className = "icon-action-btn";
+      rmBtn.textContent = "✕";
+      rmBtn.title = "Quitar de esta playlist";
+      rmBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        const pl = playlists.find(p => p.id === currentDetailPlaylistId);
+        if (pl && pl.trackIds) {
+          pl.trackIds = pl.trackIds.filter(tid => tid !== t.id);
+          savePersistentState();
+          renderHomePlaylists();
+          renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
+          uploadPlaylistsToDrive();
+          showToast(`Canción retirada de «${pl.name}»`);
+        }
+      };
+      row.appendChild(rmBtn);
+    }
+
+    listEl.appendChild(row);
+  });
+}
+
+function playCurrentDetailPlaylist() {
+  if (!currentDetailPlaylistId) return;
+  closePlaylistDetailModal();
+  playPlaylistDirect(currentDetailPlaylistId);
+}
+
+function shuffleCurrentDetailPlaylist() {
+  if (!currentDetailPlaylistId) return;
+  closePlaylistDetailModal();
+  playPlaylistShuffle(currentDetailPlaylistId);
+}
+
+function deleteCurrentDetailPlaylist() {
+  if (!currentDetailPlaylistId || currentDetailPlaylistId === "pl_liked" || currentDetailPlaylistId === "pl_cloud") return;
+  const pl = playlists.find(p => p.id === currentDetailPlaylistId);
+  const name = pl ? pl.name : "Playlist";
+  playlists = playlists.filter(p => p.id !== currentDetailPlaylistId);
+  savePersistentState();
+  renderHomePlaylists();
+  closePlaylistDetailModal();
+  uploadPlaylistsToDrive();
+  showToast(`🗑 Playlist «${name}» eliminada`);
+}
+
+/* ========================================================================= */
+/* SELECTOR DE FILTRO DE PLAYLIST PARA LA PESTAÑA CANCIONES                  */
+/* ========================================================================= */
+function openPlaylistSelectFilterModal() {
+  const modal = document.getElementById("playlistSelectFilterModal");
+  const choices = document.getElementById("playlistFilterModalChoices");
+  if (!modal || !choices) return;
+  choices.innerHTML = "";
+
+  const makeFilterBtn = (text, filterVal, isActive) => {
+    const btn = document.createElement("button");
+    btn.className = "btn-chip" + (isActive ? " active" : "");
+    btn.style.textAlign = "left";
+    btn.style.padding = "10px 14px";
+    btn.style.display = "flex";
+    btn.style.justifyContent = "space-between";
+    btn.style.alignItems = "center";
+    btn.innerHTML = text;
+    btn.onclick = () => {
+      closePlaylistSelectFilterModal();
+      setFilter(filterVal);
+    };
+    return btn;
+  };
+
+  // Opción 1: Ver todas las canciones
+  choices.appendChild(makeFilterBtn(`<span>🎵 Todas las canciones</span><span style="font-size:10px; opacity:0.7;">${tracks.length}</span>`, "all", activeFilter === "all"));
+
+  // Opción 2: Favoritos
+  const likedCount = tracks.filter(t => t.liked).length;
+  choices.appendChild(makeFilterBtn(`<span>♥ Tus Favoritos</span><span style="font-size:10px; opacity:0.7;">${likedCount}</span>`, "pl:pl_liked", activeFilter === "pl:pl_liked"));
+
+  // Opción 3: Google Drive
+  const cloudCount = tracks.filter(t => t.cloud).length;
+  choices.appendChild(makeFilterBtn(`<span>☁️ Google Drive</span><span style="font-size:10px; opacity:0.7;">${cloudCount}</span>`, "pl:pl_cloud", activeFilter === "pl:pl_cloud"));
+
+  // Playlists del usuario
+  playlists.forEach(pl => {
+    const plTracks = getPlaylistTracks(pl);
+    choices.appendChild(makeFilterBtn(`<span>📁 ${escapeHtml(pl.name)}</span><span style="font-size:10px; opacity:0.7;">${plTracks.length}</span>`, "pl:" + pl.id, activeFilter === ("pl:" + pl.id)));
+  });
+
+  modal.classList.add("open");
+}
+
+function closePlaylistSelectFilterModal() {
+  const modal = document.getElementById("playlistSelectFilterModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function togglePlaylistCollapse() {
+  isPlaylistListCollapsed = !isPlaylistListCollapsed;
+  const container = document.getElementById("plTracksCollapsibleContainer");
+  const summary = document.getElementById("plCollapsedSummary");
+  const btn = document.getElementById("btnTogglePlCollapse");
+  if (container && summary && btn) {
+    container.style.display = isPlaylistListCollapsed ? "none" : "block";
+    summary.style.display = isPlaylistListCollapsed ? "block" : "none";
+    btn.textContent = isPlaylistListCollapsed ? "➕ Mostrar lista" : "➖ Reducir lista";
+    btn.classList.toggle("active", isPlaylistListCollapsed);
+  }
+}
+
+function togglePlaylistExpandFull() {
+  isPlaylistExpandedFull = !isPlaylistExpandedFull;
+  if (selectedPlaylistId === "pl_liked" || selectedPlaylistId === "pl_cloud") {
+    const specialList = selectedPlaylistId === "pl_liked" ? tracks.filter(t => t.liked) : tracks.filter(t => t.cloud);
+    const specialName = selectedPlaylistId === "pl_liked" ? "💜 Canciones que te gustan" : "☁️ Mi Google Drive";
+    const specialDesc = selectedPlaylistId === "pl_liked" ? "Tus temas favoritos" : "Nube privada Google Drive";
+    selectAndDisplaySpecialPlaylist(selectedPlaylistId, specialName, specialDesc, specialList);
+  } else {
+    renderActivePlaylistDetail();
+  }
+}
+
+function selectAndDisplaySpecialPlaylist(id, name, desc, trackList) {
+  selectedPlaylistId = id;
+  renderHomePlaylists();
+  const activeBox = document.getElementById("activePlaylistBox");
+  if (!activeBox) return;
+  activeBox.style.display = "block";
+  document.getElementById("plViewTitle").textContent = name;
+  document.getElementById("plViewDesc").textContent = desc;
+  const badgeEl = document.getElementById("plTrackCountBadge");
+  if (badgeEl) badgeEl.textContent = `${trackList.length} canciones`;
+
+  const container = document.getElementById("plTracksCollapsibleContainer");
+  const summary = document.getElementById("plCollapsedSummary");
+  const btn = document.getElementById("btnTogglePlCollapse");
+  if (container && summary && btn) {
+    container.style.display = isPlaylistListCollapsed ? "none" : "block";
+    summary.style.display = isPlaylistListCollapsed ? "block" : "none";
+    btn.textContent = isPlaylistListCollapsed ? "➕ Mostrar lista" : "➖ Reducir lista";
+    btn.classList.toggle("active", isPlaylistListCollapsed);
+  }
+
+  const plListEl = document.getElementById("playlistTracksList");
+  plListEl.innerHTML = "";
+
+  if (trackList.length === 0) {
+    plListEl.innerHTML = `<div style="padding:14px; text-align:center; color:var(--muted); font-size:12px;">No hay canciones en esta lista.</div>`;
+    const expandBar = document.getElementById("plExpandMoreBar");
+    if (expandBar) expandBar.style.display = "none";
+    return;
+  }
+
+  const maxVisible = isPlaylistExpandedFull ? trackList.length : playlistMaxVisibleCount;
+  const visibleList = trackList.slice(0, maxVisible);
+
+  visibleList.forEach((t, idxInFull) => {
+    const isThisPlaying = isPlaying && (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id);
+    const row = document.createElement("div");
+    row.className = "track-item" + (isThisPlaying ? " playing" : "");
+    row.setAttribute("data-track-id", t.id);
+    row.onclick = () => playTrackFromQueue(trackList, idxInFull, name);
+    row.innerHTML = `
+      <div style="font-size:11px; font-weight:800; color:${isThisPlaying ? 'var(--green-bright)' : 'var(--muted)'}; width:18px; text-align:center;">
+        ${isThisPlaying ? '▶' : (idxInFull + 1)}
+      </div>
+      <div class="track-thumb" style="width:36px;height:36px;font-size:14px;background:linear-gradient(135deg,${t.color || '#1db954'},#181824)">♪</div>
+      <div class="track-meta">
+        <div class="track-title">${t.title}</div>
+        <div class="track-sub">${t.artist}</div>
+      </div>
+    `;
+    plListEl.appendChild(row);
+  });
+
+  const expandBar = document.getElementById("plExpandMoreBar");
+  if (expandBar) {
+    if (trackList.length > playlistMaxVisibleCount) {
+      expandBar.style.display = "block";
+      document.getElementById("btnExpandMoreTracks").textContent = isPlaylistExpandedFull
+        ? "▲ Reducir lista a 4 canciones"
+        : `▼ Ver todas las canciones (${trackList.length - playlistMaxVisibleCount} más)`;
+    } else {
+      expandBar.style.display = "none";
+    }
+  }
+}
+
+function renderActivePlaylistDetail() {
+  const activeBox = document.getElementById("activePlaylistBox");
+  if (!activeBox) return;
+  if (selectedPlaylistId === "pl_liked" || selectedPlaylistId === "pl_cloud") return;
+
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  if (!curPl) {
+    if (playlists.length > 0) {
+      selectedPlaylistId = playlists[0].id;
+      return renderActivePlaylistDetail();
+    }
+    activeBox.style.display = "none";
+    return;
+  }
+
+  const plTracks = getPlaylistTracks(curPl);
+  activeBox.style.display = "block";
+  document.getElementById("plViewTitle").textContent = "🎵 " + curPl.name;
+  document.getElementById("plViewDesc").textContent = curPl.desc || "Playlist personalizada";
+  const badgeEl = document.getElementById("plTrackCountBadge");
+  if (badgeEl) badgeEl.textContent = `${plTracks.length} canciones`;
+
+  const container = document.getElementById("plTracksCollapsibleContainer");
+  const summary = document.getElementById("plCollapsedSummary");
+  const btn = document.getElementById("btnTogglePlCollapse");
+  if (container && summary && btn) {
+    container.style.display = isPlaylistListCollapsed ? "none" : "block";
+    summary.style.display = isPlaylistListCollapsed ? "block" : "none";
+    btn.textContent = isPlaylistListCollapsed ? "➕ Mostrar lista" : "➖ Reducir lista";
+    btn.classList.toggle("active", isPlaylistListCollapsed);
+  }
+
+  const plListEl = document.getElementById("playlistTracksList");
+  plListEl.innerHTML = "";
+
+  if (plTracks.length === 0) {
+    plListEl.innerHTML = `
+      <div style="padding:14px; text-align:center; color:var(--muted); font-size:12px;">
+        Esta playlist aún no tiene canciones.<br>
+        <button class="btn-chip active" style="margin-top:8px; font-size:11px;" onclick="openMultiTrackPickerForCurrentPlaylist()">＋ Añadir varias canciones ahora</button>
+      </div>
+    `;
+    const expandBar = document.getElementById("plExpandMoreBar");
+    if (expandBar) expandBar.style.display = "none";
+    return;
+  }
+
+  const maxVisible = isPlaylistExpandedFull ? plTracks.length : playlistMaxVisibleCount;
+  const visibleList = plTracks.slice(0, maxVisible);
+
+  visibleList.forEach((t, idxInFull) => {
+    const isThisPlaying = isPlaying && (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id);
+    const row = document.createElement("div");
+    row.className = "track-item" + (isThisPlaying ? " playing" : "");
+    row.setAttribute("data-track-id", t.id);
+    row.onclick = () => playTrackFromQueue(plTracks, idxInFull, curPl.name);
+    row.innerHTML = `
+      <div style="font-size:11px; font-weight:800; color:${isThisPlaying ? 'var(--green-bright)' : 'var(--muted)'}; width:18px; text-align:center;">
+        ${isThisPlaying ? '▶' : (idxInFull + 1)}
+      </div>
+      <div class="track-thumb" style="width:36px;height:36px;font-size:14px;background:linear-gradient(135deg,${t.color || '#1db954'},#181824)">♪</div>
+      <div class="track-meta">
+        <div class="track-title">${t.title}</div>
+        <div class="track-sub">${t.artist}</div>
+      </div>
+    `;
+    const rmBtn = document.createElement("button");
+    rmBtn.className = "icon-action-btn";
+    rmBtn.textContent = "✕";
+    rmBtn.title = "Quitar de esta Playlist";
+    rmBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      curPl.trackIds = curPl.trackIds.filter(id => id !== t.id);
+      savePersistentState();
+      renderHomePlaylists();
+      uploadPlaylistsToDrive();
+    };
+    row.appendChild(rmBtn);
+    plListEl.appendChild(row);
+  });
+
+  const expandBar = document.getElementById("plExpandMoreBar");
+  if (expandBar) {
+    if (plTracks.length > playlistMaxVisibleCount) {
+      expandBar.style.display = "block";
+      document.getElementById("btnExpandMoreTracks").textContent = isPlaylistExpandedFull
+        ? "▲ Reducir lista a 4 canciones"
+        : `▼ Ver todas las canciones (${plTracks.length - playlistMaxVisibleCount} más)`;
+    } else {
+      expandBar.style.display = "none";
+    }
+  }
+}
+
+/* ---------------- SELECCIÓN MÚLTIPLE DESDE DENTRO DE UNA PLAYLIST ---------------- */
+function openMultiTrackPickerForCurrentPlaylist() {
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  if (!curPl) return;
+  document.getElementById("multiPickerTitle").textContent = `＋ Añadir canciones a «${curPl.name}»`;
+  document.getElementById("multiPickerSearch").value = "";
+  multiPickerSelectedIds.clear();
+  // Pre-marcar canciones que ya están en la playlist
+  curPl.trackIds.forEach(id => multiPickerSelectedIds.add(id));
+  renderMultiPickerTracks();
+  document.getElementById("multiTrackPickerModal").classList.add("open");
+}
+
+function closeMultiTrackPickerModal() {
+  document.getElementById("multiTrackPickerModal").classList.remove("open");
+}
+
+function renderMultiPickerTracks() {
+  const container = document.getElementById("multiPickerList");
+  const q = (document.getElementById("multiPickerSearch").value || "").toLowerCase().trim();
+  container.innerHTML = "";
+
+  const available = tracks.filter(t => {
+    if (!t) return false;
+    if (!q) return true;
+    return (t.title || "").toLowerCase().includes(q) || (t.artist || "").toLowerCase().includes(q);
+  });
+
+  available.forEach(t => {
+    const isChecked = multiPickerSelectedIds.has(t.id);
+    const row = document.createElement("div");
+    row.className = "track-item" + (isChecked ? " selected" : "");
+    row.style.padding = "6px 8px";
+    row.onclick = () => {
+      if (multiPickerSelectedIds.has(t.id)) {
+        multiPickerSelectedIds.delete(t.id);
+      } else {
+        multiPickerSelectedIds.add(t.id);
+      }
+      renderMultiPickerTracks();
+    };
+
+    const cb = document.createElement("div");
+    cb.className = "track-checkbox visible" + (isChecked ? " checked" : "");
+    cb.textContent = isChecked ? "✓" : "";
+    row.appendChild(cb);
+
+    const meta = document.createElement("div");
+    meta.className = "track-meta";
+    meta.innerHTML = `<div class="track-title" style="font-size:12px;">${t.title}</div>
+                      <div class="track-sub" style="font-size:10px;">${t.artist}</div>`;
+    row.appendChild(meta);
+    container.appendChild(row);
+  });
+
+  const countEl = document.getElementById("multiPickerCount");
+  if (countEl) countEl.textContent = `${multiPickerSelectedIds.size} seleccionada${multiPickerSelectedIds.size === 1 ? '' : 's'}`;
+}
+
+function toggleSelectAllInPicker() {
+  const q = (document.getElementById("multiPickerSearch").value || "").toLowerCase().trim();
+  const available = tracks.filter(t => !q || (t.title || "").toLowerCase().includes(q) || (t.artist || "").toLowerCase().includes(q));
+  if (multiPickerSelectedIds.size >= available.length && available.length > 0) {
+    multiPickerSelectedIds.clear();
+  } else {
+    available.forEach(t => multiPickerSelectedIds.add(t.id));
+  }
+  renderMultiPickerTracks();
+}
+
+function confirmMultiPickerAdd() {
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  if (!curPl) return;
+  curPl.trackIds = Array.from(multiPickerSelectedIds);
+  savePersistentState();
+  closeMultiTrackPickerModal();
+  renderHomePlaylists();
+  uploadPlaylistsToDrive();
+  showToast(`✔ Playlist «${curPl.name}» actualizada con ${curPl.trackIds.length} canciones`);
+}
+
+function openCreatePlaylistModal() {
+  document.getElementById("newPlName").value = "";
+  document.getElementById("newPlDesc").value = "";
+  document.getElementById("createPlaylistModal").classList.add("open");
+}
+
+function closeCreatePlaylistModal() {
+  document.getElementById("createPlaylistModal").classList.remove("open");
+}
+
+function confirmCreatePlaylist() {
+  const name = document.getElementById("newPlName").value.trim() || ("Mi Playlist #" + (playlists.length + 1));
+  const desc = document.getElementById("newPlDesc").value.trim();
+  let initialIds = [];
+  if (pendingTrackIdForPlaylist) {
+    if (Array.isArray(pendingTrackIdForPlaylist)) initialIds = [...pendingTrackIdForPlaylist];
+    else initialIds = [pendingTrackIdForPlaylist];
+  }
+  const newPl = {
+    id: "pl_" + Date.now(),
+    name,
+    desc,
+    trackIds: initialIds
+  };
+  pendingTrackIdForPlaylist = null;
+  playlists.unshift(newPl);
+  selectedPlaylistId = newPl.id;
+  savePersistentState();
+  closeCreatePlaylistModal();
+  renderHomePlaylists();
+  uploadPlaylistsToDrive();
+  showToast(`✔ Playlist «${newPl.name}» creada`);
+}
+
+function openAddToPlaylistModal(trackIdsOrId) {
+  const targetIds = Array.isArray(trackIdsOrId) ? trackIdsOrId : [trackIdsOrId];
+  pendingTrackIdForPlaylist = targetIds;
+  const count = targetIds.length;
+  document.getElementById("addTrackToPlSubtitle").textContent = count > 1 ? `Añadir las ${count} canciones seleccionadas a:` : "Selecciona la playlist:";
+  const container = document.getElementById("modalPlaylistChoices");
+  container.innerHTML = "";
+
+  playlists.forEach(pl => {
+    const btn = document.createElement("button");
+    btn.className = "btn-chip";
+    btn.style.textAlign = "left";
+    btn.style.padding = "9px 12px";
+    btn.textContent = `🎵 ${pl.name} (${pl.trackIds.length})`;
+    btn.onclick = () => {
+      let addedCnt = 0;
+      targetIds.forEach(id => {
+        if (!pl.trackIds.includes(id)) {
+          pl.trackIds.push(id);
+          addedCnt++;
+        }
+      });
+      pendingTrackIdForPlaylist = null;
+      savePersistentState();
+      renderHomePlaylists();
+      uploadPlaylistsToDrive();
+      closeAddToPlaylistModal();
+      exitMultiSelectMode();
+      showToast(`✔ ${addedCnt} canciones añadidas a «${pl.name}»`);
+    };
+    container.appendChild(btn);
+  });
+  document.getElementById("addToPlaylistModal").classList.add("open");
+}
+
+function closeAddToPlaylistModal() {
+  document.getElementById("addToPlaylistModal").classList.remove("open");
+}
+
+function closeAddToPlaylistAndCreateNew() {
+  closeAddToPlaylistModal();
+  openCreatePlaylistModal();
+}
+
+function playSelectedPlaylist() {
+  let list = [];
+  let name = "";
+  if (selectedPlaylistId === "pl_liked") {
+    list = tracks.filter(t => t.liked);
+    name = "Canciones que te gustan";
+  } else if (selectedPlaylistId === "pl_cloud") {
+    list = tracks.filter(t => t.cloud);
+    name = "Mi Google Drive";
+  } else {
+    const curPl = playlists.find(p => p.id === selectedPlaylistId);
+    if (!curPl) {
+      showToast("Esta playlist no existe");
+      return;
+    }
+    list = getPlaylistTracks(curPl);
+    name = curPl.name;
+  }
+  if (!list.length) {
+    showToast("Esta playlist no tiene canciones disponibles");
+    return;
+  }
+  playTrackFromQueue(list, 0, name);
+  showToast(`▶ Reproduciendo playlist «${name}» (${list.length} canciones)`);
+}
+
+function shufflePlaySelectedPlaylist() {
+  let list = [];
+  let name = "";
+  if (selectedPlaylistId === "pl_liked") {
+    list = tracks.filter(t => t.liked);
+    name = "Canciones que te gustan";
+  } else if (selectedPlaylistId === "pl_cloud") {
+    list = tracks.filter(t => t.cloud);
+    name = "Mi Google Drive";
+  } else {
+    const curPl = playlists.find(p => p.id === selectedPlaylistId);
+    if (!curPl) {
+      showToast("Esta playlist no existe");
+      return;
+    }
+    list = getPlaylistTracks(curPl);
+    name = curPl.name;
+  }
+  if (!list.length) {
+    showToast("Esta playlist no tiene canciones disponibles");
+    return;
+  }
+  shuffleMode = true;
+  updateShuffleUI();
+  const rnd = Math.floor(Math.random() * list.length);
+  playTrackFromQueue(list, rnd, name);
+  showToast(`Modo aleatorio activado en «${name}»`);
+}
+
+function deleteSelectedPlaylist() {
+  if (playlists.length <= 1) return;
+  const curPl = playlists.find(p => p.id === selectedPlaylistId);
+  const name = curPl ? curPl.name : "Playlist";
+  playlists = playlists.filter(p => p.id !== selectedPlaylistId);
+  selectedPlaylistId = playlists[0] ? playlists[0].id : "";
+  savePersistentState();
+  renderHomePlaylists();
+  uploadPlaylistsToDrive();
+  showToast(`🗑 Playlist «${name}» eliminada`);
+}
+
+/* ---------------- SISTEMA DE CUENTAS (USUARIO, CORREO, CONTRASEÑA) + GOOGLE DRIVE «MUSICA» ---------------- */
+function setDriveImportMode(mode) {
+  driveImportMode = mode;
+  document.getElementById("modeStreamBtn").classList.toggle("active", mode === "stream");
+  document.getElementById("modeDownloadBtn").classList.toggle("active", mode === "download");
+}
+
+function setAccountFormMode(mode) {
+  accountFormMode = mode;
+  const regBtn = document.getElementById("tabAccRegisterBtn");
+  const logBtn = document.getElementById("tabAccLoginBtn");
+  const emailGrp = document.getElementById("accEmailGroup");
+  const lblUser = document.getElementById("lblAccUsername");
+  const submitBtn = document.getElementById("btnSubmitAccount");
+  if (regBtn) regBtn.classList.toggle("active", mode === "register");
+  if (logBtn) logBtn.classList.toggle("active", mode === "login");
+  if (mode === "register") {
+    if (emailGrp) emailGrp.style.display = "block";
+    if (lblUser) lblUser.textContent = "Nombre de Usuario:";
+    if (submitBtn) submitBtn.textContent = "✨ Crear Cuenta y Guardar en Drive";
+  } else {
+    if (emailGrp) emailGrp.style.display = "none";
+    if (lblUser) lblUser.textContent = "Usuario o Correo electrónico:";
+    if (submitBtn) submitBtn.textContent = "🔑 Iniciar Sesión y Recuperar Playlists";
+  }
+}
+
+function collectCurrentDriveTracksForAccount() {
+  return tracks.filter(t => t.cloud || t.driveId || String(t.id).startsWith("gd_")).map(t => ({
+    id: t.id,
+    file_id: t.driveId || String(t.id).replace(/^gd_/, ""),
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    genre: t.genre || "Cloud",
+    src: t.src
+  }));
+}
+
+function applyAccountRecordToState(acc) {
+  if (!acc) return;
+  if (Array.isArray(acc.drive_tracks)) {
+    acc.drive_tracks.forEach(dt => {
+      const fid = dt.file_id || String(dt.id || "").replace(/^gd_/, "");
+      if (!fid) return;
+      const cid = "gd_" + fid;
+      const cleanTitle = cleanTrackTitle(dt.title || "");
+      const normKey = normalizeFullTitle(cleanTitle);
+      const existing = tracks.find(x =>
+        x.id === cid ||
+        x.driveId === fid ||
+        (normKey && normalizeFullTitle(x.title) === normKey)
+      );
+      if (existing) {
+        if (!existing.driveId) existing.driveId = fid;
+        if (!existing.altId) existing.altId = cid;
+        if (dt.id && existing.id !== dt.id) {
+          if (!existing.extraIds) existing.extraIds = [];
+          if (!existing.extraIds.includes(dt.id)) existing.extraIds.push(dt.id);
+        }
+      } else {
+        tracks.unshift({
+          id: cid,
+          altId: dt.id || cid,
+          driveId: fid,
+          title: cleanTitle || ("Canción Drive " + fid.substring(0, 6)),
+          artist: dt.artist || "Google Drive Cloud ☁️",
+          album: dt.album || "Google Drive (Musica)",
+          genre: dt.genre || "Cloud",
+          src: `https://drive.google.com/uc?export=download&id=${fid}`,
+          liked: false,
+          cloud: true,
+          downloaded: false,
+          color: "#00d2ff"
+        });
+      }
+    });
+  }
+  const cloudPls = Array.isArray(acc.playlists)
+    ? acc.playlists
+    : (acc.playlists && typeof acc.playlists === "object" ? Object.values(acc.playlists) : []);
+  cloudPls.forEach(cPl => {
+    if (!cPl) return;
+    const tIds = cPl.trackIds || cPl.track_ids || [];
+    const localPl = playlists.find(p => p.id === cPl.id || (p.name && cPl.name && p.name.toLowerCase() === cPl.name.toLowerCase()));
+    if (localPl) {
+      localPl.trackIds = Array.from(new Set([...localPl.trackIds, ...tIds]));
+    } else {
+      playlists.push({
+        id: cPl.id || ("pl_" + Date.now()),
+        name: cPl.name || "Playlist Sincronizada",
+        desc: cPl.desc || cPl.description || "Sincronizada desde tu cuenta MaoMusic",
+        trackIds: tIds
+      });
+    }
+  });
+  const likedArr = acc.likedIds || acc.liked_ids || [];
+  if (Array.isArray(likedArr)) {
+    tracks.forEach(t => { if (likedArr.includes(t.id)) t.liked = true; });
+  }
+}
+
+async function submitSpotiAccountForm() {
+  const userInp = (document.getElementById("accUsername").value || "").trim();
+  const emailInp = (document.getElementById("accEmail").value || "").trim().toLowerCase();
+  const passInp = document.getElementById("accPassword").value || "";
+  const stEl = document.getElementById("accFormStatus");
+
+  if (accountFormMode === "register") {
+    if (!userInp || !emailInp || !passInp) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa Usuario, Correo electrónico y Contraseña.";
+      return;
+    }
+    if (!emailInp.includes("@")) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa un correo electrónico válido.";
+      return;
+    }
+  } else {
+    if (!userInp || !passInp) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa tu Usuario (o Correo) y tu Contraseña.";
+      return;
+    }
+  }
+
+  if (stEl) stEl.textContent = "☁️ Conectando con el servidor de Google Drive...";
+  await pullCloudDatabaseFromDrive();
+
+  // Si estamos iniciando sesión y la base aún no tiene cuentas, reintentar directo al Servidor Cloud
+  if (accountFormMode === "login" && (!accountsDb || Object.keys(accountsDb).length === 0)) {
+    try {
+      const sRes = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        const payload = (sData && sData.data && typeof sData.data === "object" && sData.data.accounts) ? sData.data : sData;
+        if (payload.accounts && typeof payload.accounts === "object") {
+          Object.assign(accountsDb, payload.accounts);
+        }
+      }
+    } catch (_e) {}
+  }
+
+  const pwHash = hashPassword(passInp);
+  const oldHash = legacyPasswordHash(passInp);
+
+  if (accountFormMode === "register") {
+    const existing = accountsDb[emailInp];
+    if (existing && (existing.password_hash || existing.passwordHash)) {
+      const exHash = existing.password_hash || existing.passwordHash;
+      if (exHash !== pwHash && exHash !== oldHash) {
+        if (stEl) stEl.textContent = "⚠️ Ese correo ya está registrado con otra contraseña. Usa «Iniciar Sesión».";
+        return;
+      }
+    }
+    const rec = {
+      username: userInp,
+      email: emailInp,
+      password_hash: pwHash,
+      passwordHash: pwHash,
+      updated_at: Date.now(),
+      updatedAt: Date.now(),
+      playlists: playlists,
+      liked_ids: tracks.filter(t => t.liked).map(t => t.id),
+      likedIds: tracks.filter(t => t.liked).map(t => t.id),
+      drive_tracks: collectCurrentDriveTracksForAccount()
+    };
+    if (existing) applyAccountRecordToState(existing);
+    accountsDb[emailInp] = rec;
+    userAccount = { username: userInp, email: emailInp, passwordHash: pwHash, password_hash: pwHash };
+    savePersistentState();
+    updateAccountUI();
+
+    await uploadPlaylistsToDrive();
+    if (stEl) stEl.textContent = `✔ Cuenta «${userInp}» (${emailInp}) creada y sincronizada en el servidor de Google Drive.`;
+    showToast(`👤 Cuenta ${userInp} guardada en Drive`);
+  } else {
+    const qLow = userInp.toLowerCase();
+    let foundKey = null;
+    let foundAcc = null;
+    for (const [k, acc] of Object.entries(accountsDb)) {
+      if (!acc) continue;
+      if (k.toLowerCase() === qLow || String(acc.email || "").toLowerCase() === qLow || String(acc.username || "").toLowerCase() === qLow) {
+        foundKey = k;
+        foundAcc = acc;
+        break;
+      }
+    }
+    if (!foundAcc) {
+      if (stEl) stEl.textContent = "⚠️ No se encontró esa cuenta en Google Drive. Si la creaste en otro dispositivo, asegúrate de haberla guardado en Drive o créala en «Crear Cuenta».";
+      return;
+    }
+    const storedHash = foundAcc.password_hash || foundAcc.passwordHash;
+    const match = (storedHash === pwHash) || (storedHash === oldHash);
+    if (!match) {
+      if (stEl) stEl.textContent = "⚠️ Contraseña incorrecta para esa cuenta.";
+      return;
+    }
+    applyAccountRecordToState(foundAcc);
+    userAccount = { username: foundAcc.username, email: foundAcc.email || foundKey, passwordHash: pwHash, password_hash: pwHash };
+    foundAcc.password_hash = pwHash;
+    foundAcc.passwordHash = pwHash;
+    foundAcc.playlists = playlists;
+    foundAcc.likedIds = tracks.filter(t => t.liked).map(t => t.id);
+    foundAcc.drive_tracks = collectCurrentDriveTracksForAccount();
+    savePersistentState();
+    renderHomePlaylists();
+    renderTracks();
+    updateAccountUI();
+    autoDiscoverDriveMusic();
+    const token = document.getElementById("gdToken").value.trim();
+    if (token) {
+      await uploadPlaylistsToDrive();
+    }
+    if (stEl) stEl.textContent = `✔ Sesión iniciada: ${userAccount.username} (${userAccount.email}). Playlists y canciones restauradas.`;
+    showToast(`🔑 Bienvenido, ${userAccount.username}`);
+  }
+}
+
+function logoutSpotiAccount() {
+  userAccount = null;
+  savePersistentState();
+  updateAccountUI();
+  showToast("Sesión cerrada");
+}
+
+function openGoogleSignInPopup() {
+  const cid = document.getElementById("gdClientId").value.trim();
+  const st = document.getElementById("gdStatus");
+  if (cid) {
+    const redirect = encodeURIComponent(window.location.href.split("#")[0]);
+    const scope = encodeURIComponent("https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly");
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(cid)}&redirect_uri=${redirect}&response_type=token&scope=${scope}&include_granted_scopes=true`;
+    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.openExternalAuth) {
+      window.AndroidMedia.openExternalAuth(authUrl);
+    } else {
+      window.location.href = authUrl;
+    }
+  } else {
+    st.textContent = "🔑 Abriendo consola para autorizar tu cuenta de Google...";
+    const authHelperUrl = "https://developers.google.com/oauthplayground/#step1&apisSelect=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive";
+    if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.openExternalAuth) {
+      window.AndroidMedia.openExternalAuth(authHelperUrl);
+    } else {
+      window.open(authHelperUrl, "_blank");
+    }
+  }
+}
+
+async function fetchGoogleUserProfile() {
+  const token = document.getElementById("gdToken").value.trim();
+  if (!token) return null;
+  try {
+    const res = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        googleUserProfile = {
+          displayName: data.user.displayName || "Usuario de Google",
+          email: data.user.emailAddress || "",
+          photoLink: data.user.photoLink || ""
+        };
+        updateAccountUI();
+        return googleUserProfile;
+      }
+    }
+  } catch (e) {
+    console.error("Error al obtener perfil de usuario:", e);
+  }
+  return null;
+}
+
+function updateAccountUI() {
+  const nameEl = document.getElementById("homeAccountName");
+  const subEl = document.getElementById("homeAccountSub");
+  const avatarEl = document.getElementById("homeAvatar");
+  const dNameEl = document.getElementById("driveAccountName");
+  const dSubEl = document.getElementById("driveAccountSub");
+  const dAvatarEl = document.getElementById("driveAvatar");
+  const logoutBtn = document.getElementById("btnLogoutAccount");
+
+  if (userAccount && userAccount.username) {
+    const nameStr = `👤 ${userAccount.username}`;
+    const subStr = `${userAccount.email} • Drive (${DEFAULT_DRIVE_ROOT_FOLDER_ID.substring(0, 8)}…/Musica) 🛡️`;
+    if (nameEl) nameEl.textContent = nameStr;
+    if (subEl) subEl.textContent = subStr;
+    if (dNameEl) dNameEl.textContent = nameStr;
+    if (dSubEl) dSubEl.textContent = subStr;
+    if (logoutBtn) logoutBtn.style.display = "inline-block";
+    updateSideMenuProfile();
+    return;
+  }
+  if (logoutBtn) logoutBtn.style.display = "none";
+
+  if (googleUserProfile && googleUserProfile.email) {
+    const nameStr = googleUserProfile.displayName || "Usuario de Google";
+    const subStr = `${googleUserProfile.email} • Playlists sincronizadas en la nube ☁️`;
+    if (nameEl) nameEl.textContent = nameStr;
+    if (subEl) subEl.textContent = subStr;
+    if (dNameEl) dNameEl.textContent = nameStr;
+    if (dSubEl) dSubEl.textContent = subStr;
+
+    if (googleUserProfile.photoLink) {
+      if (avatarEl) avatarEl.innerHTML = `<img src="${googleUserProfile.photoLink}" alt="avatar" />`;
+      if (dAvatarEl) dAvatarEl.innerHTML = `<img src="${googleUserProfile.photoLink}" alt="avatar" />`;
+    }
+  } else {
+    const token = document.getElementById("gdToken").value.trim();
+    if (token) {
+      const msg = "Playlists y carpeta «Musica» sincronizadas con Google Drive ☁️";
+      if (nameEl) nameEl.textContent = "Cuenta de Google Conectada";
+      if (subEl) subEl.textContent = msg;
+      if (dNameEl) dNameEl.textContent = "Cuenta de Google Conectada";
+      if (dSubEl) dSubEl.textContent = msg;
+    } else {
+      if (nameEl) nameEl.textContent = "Crear Cuenta / Google Drive (Musica)";
+      if (subEl) subEl.textContent = "Toca para crear tu cuenta (Usuario, Correo, Contraseña) y vincular Drive";
+      if (dNameEl) dNameEl.textContent = "Sin cuenta vinculada";
+      if (dSubEl) dSubEl.textContent = "Crea tu cuenta con Usuario, Correo y Contraseña abajo";
+    }
+  }
+  updateSideMenuProfile();
+}
+
+function handleTokenManualInput() {
+  savePersistentState();
+  const token = document.getElementById("gdToken").value.trim();
+  if (token.length > 20) {
+    fetchGoogleUserProfile();
+    syncCloudPlaylists();
+  }
+}
+
+let cachedCloudDbFileId = null;
+
+window.onCloudDatabaseFetched = function(jsonStr, fileId) {
+  if (jsonStr) {
+    try {
+      const data = JSON.parse(jsonStr);
+      const payload = (data && data.data && typeof data.data === "object" && data.data.accounts) ? data.data : data;
+      if (payload.accounts && typeof payload.accounts === "object") {
+        Object.assign(accountsDb, payload.accounts);
+      }
+      // Únicamente restaurar playlists y estado si el usuario ha iniciado sesión explícitamente con su cuenta
+      if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+        applyAccountRecordToState(accountsDb[userAccount.email]);
+        savePersistentState();
+        renderHomePlaylists();
+        renderTracks();
+      }
+      if (fileId) cachedCloudDbFileId = fileId;
+    } catch (_e) {}
+  }
+  if (window._cloudDbFetchResolver) {
+    window._cloudDbFetchResolver(fileId || null);
+    window._cloudDbFetchResolver = null;
+  }
+};
+
+async function pullCloudDatabaseFromDrive() {
+  const token = document.getElementById("gdToken").value.trim();
+  const apiKey = document.getElementById("gdApiKey").value.trim();
+  const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+
+  // 1. En Android: consulta pública nativa de Java al Servidor Oficial de Google Drive
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.fetchPublicCloudDatabase) {
+    const res = await new Promise(resolve => {
+      window._cloudDbFetchResolver = resolve;
+      window.AndroidMedia.fetchPublicCloudDatabase(rootId);
+      setTimeout(() => {
+        if (window._cloudDbFetchResolver) {
+          window._cloudDbFetchResolver(null);
+          window._cloudDbFetchResolver = null;
+        }
+      }, 6000);
+    });
+    if (res) return res;
+  }
+
+  // 2. Consulta directa al Servidor Oficial de Google Drive (Apps Script Web App)
+  try {
+    const dRes = await fetch(DEFAULT_DRIVE_SERVER_URL, { cache: "no-store" });
+    if (dRes.ok) {
+      const dData = await dRes.json();
+      const payload = (dData && dData.data && typeof dData.data === "object" && dData.data.accounts) ? dData.data : dData;
+      if (payload.accounts && typeof payload.accounts === "object") {
+        Object.assign(accountsDb, payload.accounts);
+      }
+      applyAccountRecordToState(payload);
+      if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+        applyAccountRecordToState(accountsDb[userAccount.email]);
+      }
+      savePersistentState();
+      renderHomePlaylists();
+      renderTracks();
+      cachedCloudDbFileId = "drive_server";
+      return "drive_server";
+    }
+  } catch (_e) {}
+
+  // 3. Consulta de respaldo al Servidor Central REST
+  try {
+    const sRes = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      const payload = (sData && sData.data && typeof sData.data === "object" && sData.data.accounts) ? sData.data : sData;
+      if (payload.accounts && typeof payload.accounts === "object") {
+        Object.assign(accountsDb, payload.accounts);
+      }
+      applyAccountRecordToState(payload);
+      if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+        applyAccountRecordToState(accountsDb[userAccount.email]);
+      }
+      savePersistentState();
+      renderHomePlaylists();
+      renderTracks();
+      cachedCloudDbFileId = "cloud_server";
+      return "cloud_server";
+    }
+  } catch (_e) {}
+
+  // 3. Si hay token o apiKey, consultar API v3 de Google Drive
+  if (!token && !apiKey) return null;
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+
+  try {
+    let q = `'${rootId}' in parents and (name = '${CLOUD_DB_FILENAME}' or name = 'spotilinux_cloud_playlists.json') and trashed = false`;
+    let sUrl = `https://www.googleapis.com/drive/v3/files?pageSize=5&fields=files(id,name)&q=${encodeURIComponent(q)}`;
+    if (apiKey && !token) sUrl += `&key=${encodeURIComponent(apiKey)}`;
+    const sRes = await fetch(sUrl, { headers });
+    let fileId = null;
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      if (sData.files && sData.files.length > 0) fileId = sData.files[0].id;
+    }
+    if (!fileId && token) {
+      const fallbackRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`name = '${CLOUD_DB_FILENAME}' and trashed = false`)}&fields=files(id,name)`, { headers });
+      if (fallbackRes.ok) {
+        const fbData = await fallbackRes.json();
+        if (fbData.files && fbData.files.length > 0) fileId = fbData.files[0].id;
+      }
+    }
+    if (fileId) {
+      let dlUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      if (apiKey && !token) dlUrl += `&key=${encodeURIComponent(apiKey)}`;
+      const dlRes = await fetch(dlUrl, { headers });
+      if (dlRes.ok) {
+        const cloudData = await dlRes.json();
+        if (cloudData.accounts && typeof cloudData.accounts === "object") {
+          Object.assign(accountsDb, cloudData.accounts);
+        }
+        applyAccountRecordToState(cloudData);
+        if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
+          applyAccountRecordToState(accountsDb[userAccount.email]);
+        }
+        savePersistentState();
+        renderHomePlaylists();
+        renderTracks();
+        cachedCloudDbFileId = fileId;
+        return fileId;
+      }
+    }
+  } catch (_e) {}
+  return null;
+}
+
+async function syncCloudPlaylists() {
+  const token = document.getElementById("gdToken").value.trim();
+  const statusEl = document.getElementById("cloudSyncStatus");
+  if (statusEl) statusEl.textContent = "☁️ Sincronizando cuenta, playlists y canciones de Drive...";
+
+  try {
+    if (token) await fetchGoogleUserProfile();
+    const fileId = await pullCloudDatabaseFromDrive();
+    await uploadPlaylistsToDrive(fileId);
+    await autoDiscoverDriveMusic();
+    if (statusEl) statusEl.textContent = `✔ Base de datos (${CLOUD_DB_FILENAME}) y carpeta «Musica» sincronizadas en Drive.`;
+    showToast("☁️ Cuenta y Playlists sincronizadas con Drive");
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "Aviso sincronización: " + err.message;
+  }
+}
+
+async function uploadPlaylistsToDrive(existingFileId) {
+  const driveTracksList = collectCurrentDriveTracksForAccount();
+  if (userAccount && userAccount.email) {
+    accountsDb[userAccount.email] = {
+      username: userAccount.username,
+      email: userAccount.email,
+      passwordHash: userAccount.passwordHash || userAccount.password_hash,
+      password_hash: userAccount.password_hash || userAccount.passwordHash,
+      updatedAt: Date.now(),
+      updated_at: Date.now(),
+      playlists: playlists,
+      likedIds: tracks.filter(t => t.liked).map(t => t.id),
+      liked_ids: tracks.filter(t => t.liked).map(t => t.id),
+      drive_tracks: driveTracksList
+    };
+  }
+  savePersistentState();
+
+  const token = document.getElementById("gdToken").value.trim();
+  const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+
+  const payload = {
+    app: "MaoMusic",
+    version: "2.0.0",
+    updatedAt: Date.now(),
+    updated_at: Date.now(),
+    rootFolderId: rootId,
+    root_folder_id: rootId,
+    user: googleUserProfile,
+    account: userAccount,
+    accounts: accountsDb,
+    playlists: playlists,
+    likedIds: tracks.filter(t => t.liked).map(t => t.id),
+    liked_ids: tracks.filter(t => t.liked).map(t => t.id),
+    drive_tracks: driveTracksList,
+    drive_catalog: driveTracksList
+  };
+  const jsonStr = JSON.stringify(payload, null, 2);
+
+  // 1. Sincronizar mediante el servicio nativo de Android
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.syncDatabaseToCloudServer) {
+    window.AndroidMedia.syncDatabaseToCloudServer(rootId, jsonStr);
+  } else {
+    // 2. Sincronizar directamente con el Servidor Oficial de Google Drive (Apps Script Web App)
+    try {
+      fetch(DEFAULT_DRIVE_SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify({ action: "sync_db", db: payload })
+      }).catch(() => {});
+    } catch (_e) {}
+
+    // 3. Sincronizar de respaldo con el Servidor Central REST
+    try {
+      const wrap = {
+        name: DEFAULT_CLOUD_OBJECT_NAME,
+        data: payload
+      };
+      fetch(DEFAULT_CLOUD_SERVER_URL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify(wrap)
+      }).catch(() => {});
+    } catch (_e) {}
+  }
+
+  // 2. Si además hay Token de Google Drive, subir directamente a la API v3 de Drive
+  if (!token) return true;
+
+  try {
+    let fileId = existingFileId;
+    if (!fileId || fileId === "cloud_server") {
+      const q = `'${rootId}' in parents and name = '${CLOUD_DB_FILENAME}' and trashed = false`;
+      const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        if (data.files && data.files.length > 0) fileId = data.files[0].id;
+      }
+    }
+
+    if (fileId && fileId !== "cloud_server") {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json; charset=UTF-8"
+        },
+        body: jsonStr
+      });
+    } else {
+      const boundary = "-------314159265358979323846";
+      const delimiter = "\r\n--" + boundary + "\r\n";
+      const closeDelim = "\r\n--" + boundary + "--";
+
+      const metadata = {
+        name: CLOUD_DB_FILENAME,
+        mimeType: "application/json",
+        parents: [rootId],
+        description: "Base de datos de cuentas, playlists y canciones de SpotiLinux"
+      };
+
+      const multipartRequestBody =
+        delimiter +
+        "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+        JSON.stringify(metadata) +
+        delimiter +
+        "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+        jsonStr +
+        closeDelim;
+
+      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`
+        },
+        body: multipartRequestBody
+      });
+    }
+  } catch (_e) {}
+  return true;
+}
+
+function extractDriveId(str) {
+  str = (str || "").trim();
+  let m = str.match(/\/folders\/([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  m = str.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  m = str.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  return str;
+}
+
+async function resolveMusicaSubfolderId(rootFolderId, token, apiKey) {
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+  if (token || apiKey) {
+    try {
+      const q = `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      let url = `https://www.googleapis.com/drive/v3/files?pageSize=25&fields=files(id,name)&q=${encodeURIComponent(q)}`;
+      if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const sub = (data.files || []).find(f => {
+          const low = (f.name || "").trim().toLowerCase();
+          return low === "musica" || low === "música" || low === "music" || low.includes("musica");
+        });
+        if (sub) {
+          cachedMusicaFolderId = sub.id;
+          return sub.id;
+        }
+        // Si no existe y hay token con permisos de editor, crear la carpeta Musica
+        if (token) {
+          const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json; charset=UTF-8"
+            },
+            body: JSON.stringify({
+              name: "Musica",
+              mimeType: "application/vnd.google-apps.folder",
+              parents: [rootFolderId]
+            })
+          });
+          if (createRes.ok) {
+            const created = await createRes.json();
+            if (created.id) {
+              cachedMusicaFolderId = created.id;
+              return created.id;
+            }
+          }
+        }
+      }
+    } catch (_e) {}
+  }
+  return DEFAULT_MUSICA_FOLDER_ID;
+}
+
+let cachedVideosFolderId = "";
+async function resolveVideosSubfolderId(rootFolderId, token, apiKey) {
+  if (cachedVideosFolderId) return cachedVideosFolderId;
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+  if (token || apiKey) {
+    try {
+      const q = `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      let url = `https://www.googleapis.com/drive/v3/files?pageSize=25&fields=files(id,name)&q=${encodeURIComponent(q)}`;
+      if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const sub = (data.files || []).find(f => {
+          const low = (f.name || "").trim().toLowerCase();
+          return low === "videos" || low === "video" || low === "vídeos" || low.includes("video");
+        });
+        if (sub) {
+          cachedVideosFolderId = sub.id;
+          return sub.id;
+        }
+      }
+    } catch (_e) {}
+  }
+  return DEFAULT_VIDEOS_FOLDER_ID;
+}
+
+function triggerDriveUploadPicker() {
+  const token = document.getElementById("gdToken").value.trim();
+  if (!token) {
+    showToast("🔑 Ingresa tu Token OAuth 2.0 para subir canciones a «Musica»");
+    document.getElementById("gdStatus").textContent = "⚠️ Para subir nuevas canciones a la carpeta «Musica» del Drive ingresa primero tu Token OAuth 2.0.";
+    return;
+  }
+  document.getElementById("driveUploadPicker").click();
+}
+
+async function uploadSelectedFilesToDrive(ev) {
+  const files = Array.from(ev.target.files || []);
+  if (!files.length) return;
+  const token = document.getElementById("gdToken").value.trim();
+  const rootId = extractDriveId(document.getElementById("gdFolder").value.trim()) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+  const st = document.getElementById("gdStatus");
+  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
+
+  st.textContent = "📂 Localizando carpeta «Musica» en el Drive...";
+  const musicaId = await resolveMusicaSubfolderId(rootId, token, "");
+  let uploadedCount = 0;
+  let skippedDupCount = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const cleanName = cleanTrackTitle(f.name);
+    const ext = (/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(f.name) ? f.name.match(/\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i)[0] : ".mp3");
+    const safeUploadName = cleanName + ext;
+    const normNew = normalizeFullTitle(cleanName);
+    if (verifyDedup && tracks.some(t => t.cloud && normalizeFullTitle(t.title) === normNew)) {
+      skippedDupCount++;
+      continue;
+    }
+    st.textContent = `⬆️ Subiendo (${i + 1}/${files.length}): ${safeUploadName} a «Musica»...`;
+    try {
+      const metaRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json; charset=UTF-8",
+          "X-Upload-Content-Type": f.type || "audio/mpeg",
+          "X-Upload-Content-Length": String(f.size)
+        },
+        body: JSON.stringify({
+          name: safeUploadName,
+          parents: [musicaId]
+        })
+      });
+      const uploadUrl = metaRes.headers.get("Location");
+      if (uploadUrl) {
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": f.type || "audio/mpeg" },
+          body: f
+        });
+        if (putRes.ok) {
+          uploadedCount++;
+        }
+      }
+    } catch (_e) {}
+  }
+  ev.target.value = "";
+  st.textContent = `✔ ${uploadedCount} canciones subidas a «Musica» (${skippedDupCount} duplicadas omitidas).`;
+  showToast(`⬆️ ${uploadedCount} canciones subidas a Drive`);
+  await autoDiscoverDriveMusic();
+  await uploadPlaylistsToDrive();
+}
+
+window.onPublicDriveFolderFetched = function(filesList) {
+  const st = document.getElementById("gdStatus");
+  if (!Array.isArray(filesList)) return;
+  let added = 0;
+  let updated = 0;
+
+  filesList.forEach(f => {
+    if (!f || !f.id) return;
+    const fname = f.name || "";
+    // Ignorar base de datos y archivos que no son audio (imágenes, textos, pdfs, zips)
+    if (fname === CLOUD_DB_FILENAME || /^(.*\.json|.*\.png|.*\.jpe?g|.*\.gif|.*\.webp|.*\.txt|.*\.pdf|.*\.zip|.*\.rar)$/i.test(fname)) return;
+
+    const cleanTitle = cleanTrackTitle(fname);
+    const normKey = normalizeFullTitle(cleanTitle);
+    const cid = "gd_" + f.id;
+
+    // Deduplicación inteligente: por ID exacto de archivo o por nombre completo idéntico (local y nube)
+    const existingIdx = tracks.findIndex(x =>
+      x.id === cid ||
+      x.driveId === f.id ||
+      (normKey && normalizeFullTitle(x.title) === normKey)
+    );
+
+    const trackObj = {
+      id: cid,
+      driveId: f.id,
+      fileName: fname,
+      driveName: fname,
+      title: cleanTitle,
+      artist: "Google Drive (Musica) ☁️",
+      album: "Google Drive • Musica",
+      genre: "Cloud",
+      src: `https://drive.usercontent.google.com/download?id=${f.id}&export=download&confirm=t`,
+      liked: existingIdx >= 0 ? tracks[existingIdx].liked : false,
+      cloud: true,
+      downloaded: existingIdx >= 0 ? tracks[existingIdx].downloaded : false,
+      color: "#00d2ff"
+    };
+
+    if (existingIdx >= 0) {
+      if (tracks[existingIdx].cover) trackObj.cover = tracks[existingIdx].cover;
+      if (tracks[existingIdx].savedId) trackObj.savedId = tracks[existingIdx].savedId;
+      if (tracks[existingIdx].altId) trackObj.altId = tracks[existingIdx].altId;
+      if (tracks[existingIdx].extraIds) trackObj.extraIds = tracks[existingIdx].extraIds;
+      if (tracks[existingIdx].filePath) trackObj.filePath = tracks[existingIdx].filePath;
+      if (tracks[existingIdx].downloaded) {
+        trackObj.downloaded = true;
+        trackObj.src = tracks[existingIdx].src;
+        trackObj.artist = tracks[existingIdx].artist || "Google Drive (Descargada) ✔";
+      }
+      tracks[existingIdx] = trackObj;
+      const mIdx = masterTracksPool.findIndex(x => x.id === cid || x.driveId === f.id || (normKey && normalizeFullTitle(x.title) === normKey));
+      if (mIdx >= 0) masterTracksPool[mIdx] = trackObj;
+      else masterTracksPool.unshift(trackObj);
+      updated++;
+    } else {
+      tracks.unshift(trackObj);
+      masterTracksPool.unshift(trackObj);
+      added++;
+    }
+
+    if (driveImportMode === "download" && !trackObj.downloaded) {
+      downloadSingleDriveTrack(trackObj, null);
+    }
+  });
+
+  savePersistentState();
+  renderTracks();
+  renderHomePlaylists();
+  updateVinylStandbyVideo();
+  if (st) {
+    st.textContent = `✔ Sincronizadas ${filesList.length} canciones (${added} nuevas, ${updated} actualizadas • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
+  }
+};
+
+async function autoDiscoverDriveMusic() {
+  const token = document.getElementById("gdToken").value.trim();
+  let folderInput = document.getElementById("gdFolder").value.trim() || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+  const apiKey = document.getElementById("gdApiKey").value.trim();
+  const st = document.getElementById("gdStatus");
+  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
+
+  document.getElementById("gdFolder").value = folderInput;
+  savePersistentState();
+
+  const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+  let rootFolderId = extractDriveId(folderInput) || DEFAULT_DRIVE_ROOT_FOLDER_ID;
+
+  // Si no hay Token ni API Key, usar el extractor nativo de carpeta pública compartida (1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT -> Musica y videos)
+  if (!token && !apiKey) {
+    if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
+      st.textContent = `🔍 Escaneando carpeta «Musica» y «videos» en Drive (${rootFolderId.substring(0, 10)}…)...`;
+      window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
+      return;
+    }
+    // Si estamos en navegador Web puro sin puente Android, consultar directo al Servidor de Drive
+    try {
+      st.textContent = "🔍 Escaneando canciones de «Musica» vía Servidor de Google Drive...";
+      const listRes = await fetch(DEFAULT_DRIVE_SERVER_URL + "?action=list_music");
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        if (listData.files && Array.isArray(listData.files)) {
+          window.onPublicDriveFolderFetched(listData.files);
+        }
+      }
+    } catch (_e) {}
+    try {
+      const vRes = await fetch(DEFAULT_DRIVE_SERVER_URL + "?action=list_videos");
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        if (vData.files && Array.isArray(vData.files)) {
+          window.onPublicDriveVideosFetched(vData.files);
+        }
+      }
+    } catch (_ve) {}
+    return;
+  }
+
+  st.textContent = "🔍 Localizando subcarpeta «Musica» dentro del Drive...";
+  const targetFolderId = await resolveMusicaSubfolderId(rootFolderId, token, apiKey);
+
+  let added = 0;
+  let skippedDup = 0;
+  if (token || apiKey) {
+    try {
+      const q = `'${targetFolderId}' in parents and trashed = false`;
+      let url = `https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id,name,mimeType)&q=${encodeURIComponent(q)}`;
+      if (apiKey && !token) url += `&key=${encodeURIComponent(apiKey)}`;
+
+      const resp = await fetch(url, { headers });
+      if (resp.ok) {
+        const data = await resp.json();
+        const files = (data.files || []).filter(f => {
+          const fname = f.name || "";
+          return f.mimeType !== "application/vnd.google-apps.folder" &&
+                 fname !== CLOUD_DB_FILENAME &&
+                 !/^(.*\.json|.*\.png|.*\.jpe?g|.*\.gif|.*\.webp|.*\.txt|.*\.pdf|.*\.zip|.*\.rar)$/i.test(fname);
+        });
+
+        for (const f of files) {
+          let streamUrl = `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`;
+          if (apiKey && !token) streamUrl += `&key=${encodeURIComponent(apiKey)}`;
+
+          const fname = f.name || f.id;
+          const cleanTitle = cleanTrackTitle(fname);
+          const normKey = normalizeFullTitle(cleanTitle);
+          const cid = "gd_" + f.id;
+          const existingIdx = tracks.findIndex(x =>
+            x.id === cid ||
+            x.driveId === f.id ||
+            (normKey && normalizeFullTitle(x.title) === normKey)
+          );
+
+          const trackObj = {
+            id: cid,
+            driveId: f.id,
+            fileName: fname,
+            driveName: fname,
+            title: cleanTitle,
+            artist: "Google Drive (Musica) ☁️",
+            album: "Google Drive • Musica",
+            genre: "Cloud",
+            src: streamUrl,
+            authToken: token,
+            liked: existingIdx >= 0 ? tracks[existingIdx].liked : false,
+            cloud: true,
+            downloaded: existingIdx >= 0 ? tracks[existingIdx].downloaded : false,
+            color: "#00d2ff"
+          };
+
+          if (existingIdx >= 0) {
+            if (tracks[existingIdx].cover) trackObj.cover = tracks[existingIdx].cover;
+            if (tracks[existingIdx].savedId) trackObj.savedId = tracks[existingIdx].savedId;
+            if (tracks[existingIdx].altId) trackObj.altId = tracks[existingIdx].altId;
+            if (tracks[existingIdx].extraIds) trackObj.extraIds = tracks[existingIdx].extraIds;
+            if (tracks[existingIdx].filePath) trackObj.filePath = tracks[existingIdx].filePath;
+            if (tracks[existingIdx].downloaded) {
+              trackObj.downloaded = true;
+              trackObj.src = tracks[existingIdx].src;
+              trackObj.artist = tracks[existingIdx].artist || "Google Drive (Descargada) ✔";
+            }
+            tracks[existingIdx] = trackObj;
+            const mIdx = masterTracksPool.findIndex(x => x.id === cid || x.driveId === f.id || (normKey && normalizeFullTitle(x.title) === normKey));
+            if (mIdx >= 0) masterTracksPool[mIdx] = trackObj;
+            else masterTracksPool.unshift(trackObj);
+            skippedDup++;
+          } else {
+            tracks.unshift(trackObj);
+            masterTracksPool.unshift(trackObj);
+            added++;
+          }
+
+          if (driveImportMode === "download" && !trackObj.downloaded) {
+            downloadSingleDriveTrack(trackObj, null);
+          }
+        }
+
+        // Escanear también la subcarpeta 'videos' de Google Drive
+        try {
+          const vFolderId = await resolveVideosSubfolderId(rootFolderId, token, apiKey);
+          if (vFolderId) {
+            const vQuery = `'${vFolderId}' in parents and trashed = false`;
+            let vUrl = `https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id,name,mimeType)&q=${encodeURIComponent(vQuery)}`;
+            if (apiKey && !token) vUrl += `&key=${encodeURIComponent(apiKey)}`;
+            const vResp = await fetch(vUrl, { headers });
+            if (vResp.ok) {
+              const vData = await vResp.json();
+              if (Array.isArray(vData.files) && vData.files.length > 0) {
+                window.onPublicDriveVideosFetched(vData.files);
+              }
+            }
+          }
+        } catch (_ve) {}
+      } else if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
+        window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
+        return;
+      }
+    } catch (_err) {
+      if (hasNativeAndroid && window.AndroidMedia.fetchPublicDriveFolder) {
+        window.AndroidMedia.fetchPublicDriveFolder(rootFolderId);
+        return;
+      }
+    }
+  }
+
+  savePersistentState();
+  renderTracks();
+  renderHomePlaylists();
+  await uploadPlaylistsToDrive();
+  st.textContent = `✔ Carpeta «Musica» lista: ${added} agregadas (${skippedDup} actualizadas • ${driveImportMode === 'download' ? 'Descargando...' : 'Modo Online'}).`;
+}
+
+function downloadSingleDriveTrack(trackObj, btnEl) {
+  if (!trackObj || !trackObj.driveId) return;
+  const verifyDedup = document.getElementById("chkVerifyDuplicates") ? document.getElementById("chkVerifyDuplicates").checked : true;
+  if (verifyDedup) {
+    const normT = normalizeFullTitle(trackObj.title);
+    const localDup = tracks.find(x => x.downloaded && (x.driveId === trackObj.driveId || x.id === "gd_" + trackObj.driveId || (normT && normalizeFullTitle(x.title) === normT)));
+    if (localDup && localDup.src && !localDup.src.startsWith("http")) {
+      trackObj.src = localDup.src;
+      trackObj.downloaded = true;
+      trackObj.artist = "Google Drive (Descargada) ✔";
+      savePersistentState();
+      renderTracks();
+      showToast(`🛡️ Duplicado evitado: «${trackObj.title}» ya está descargada`);
+      return;
+    }
+  }
+
+  if (btnEl) btnEl.textContent = "⏳";
+  const token = document.getElementById("gdToken").value.trim();
+  const apiKey = document.getElementById("gdApiKey").value.trim();
+
+  if (hasNativeAndroid && window.AndroidMedia.downloadDriveTrack) {
+    window.AndroidMedia.downloadDriveTrack(trackObj.driveId, trackObj.title, token, apiKey);
+  }
+}
+
+function downloadAllCloudTracks() {
+  const cloudPending = tracks.filter(t => t.cloud && !t.downloaded && t.driveId);
+  if (!cloudPending.length) {
+    document.getElementById("gdStatus").textContent = "🛡️ Todas las pistas de «Musica» ya están descargadas (sin duplicados pendientes).";
+    showToast("🛡️ Todas las canciones ya están descargadas");
+    return;
+  }
+  document.getElementById("gdStatus").textContent = `⬇️ Verificando duplicados y descargando ${cloudPending.length} canciones a SpotiLinuxMusic...`;
+  cloudPending.forEach(t => downloadSingleDriveTrack(t, null));
+}
+
+function downloadCurrentPlaylistTracks() {
+  let plTracks = [];
+  let plName = "Playlist";
+
+  if (selectedPlaylistId === "pl_liked") {
+    plTracks = tracks.filter(t => t.liked);
+    plName = "Canciones que te gustan";
+  } else if (selectedPlaylistId === "pl_cloud") {
+    plTracks = tracks.filter(t => t.cloud);
+    plName = "Google Drive";
+  } else {
+    const curPl = playlists.find(p => p.id === selectedPlaylistId);
+    if (!curPl) return;
+    plName = curPl.name;
+    plTracks = getPlaylistTracks(curPl);
+  }
+
+  const cloudPending = plTracks.filter(t => t.cloud && !t.downloaded && t.driveId);
+  if (!cloudPending.length) {
+    showToast(`🛡️ Todas las canciones de «${plName}» ya están disponibles localmente`);
+    return;
+  }
+
+  showToast(`⬇️ Descargando ${cloudPending.length} canciones de «${plName}»...`);
+  cloudPending.forEach(t => downloadSingleDriveTrack(t, null));
+}
+
+async function refreshDriveCatalog() {
+  showToast("🔄 Consultando nuevas canciones y playlists en Drive...");
+  await pullCloudDatabaseFromDrive();
+  await autoDiscoverDriveMusic();
+  showToast("✔ Canciones y playlists actualizadas desde Google Drive");
+}
+
+window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped, coverUrl) {
+  if (!ok || !savedPath) return;
+  const updateFn = (t) => {
+    if (!t) return;
+    t.src = savedPath;
+    t.filePath = savedPath;
+    t.downloaded = true;
+    t.artist = "Google Drive (Descargada) ✔";
+    if (coverUrl) {
+      t.cover = coverUrl;
+    }
+  };
+  const t = tracks.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
+  const mt = masterTracksPool.find(x => x.driveId === fileId || x.id === "gd_" + fileId);
+  updateFn(t);
+  updateFn(mt);
+  if (t) {
+    if (duplicateSkipped) {
+      showToast(`🛡️ Duplicado evitado: «${t.title}» ya existía`);
+    } else {
+      showToast(`⬇️ Descargada: «${t.title}»`);
+    }
+  }
+  savePersistentState();
+  renderTracks();
+  updateFullPlayerUI();
+  updateVinylStandbyUI();
+};
+
+/* ---------------- MODAL DE BIENVENIDA AL INICIAR LA APP ---------------- */
+function closeWelcomeModal() {
+  localStorage.setItem("welcome_done", "1");
+  document.getElementById("welcomeModal").classList.remove("open");
+  savePersistentState();
+}
+
+function closeWelcomeAndConnectGoogle() {
+  closeWelcomeModal();
+  switchTab("drive");
+}
+
+function closeWelcomeAndScanPhone() {
+  closeWelcomeModal();
+  scanPhoneMusic();
+}
+
+/* ---------------- ECUALIZADOR NATIVO ---------------- */
+function setEqBand(idx, val) {
+  const num = parseFloat(val);
+  currentEqValues[idx] = num;
+  document.getElementById("eqv" + idx).textContent = (num > 0 ? "+" : "") + num + " dB";
+  if (hasNativeAndroid && window.AndroidMedia.setEqBand) {
+    window.AndroidMedia.setEqBand(idx, num);
+  }
+}
+
+function applyEqPreset(vals) {
+  const sliders = document.querySelectorAll(".eq-col input[type=range]");
+  vals.forEach((v, i) => {
+    if (sliders[i]) sliders[i].value = v;
+    setEqBand(i, v);
+  });
+}
+
+/* ---------------- NAVEGACIÓN Y FILTROS ---------------- */
+function switchTab(tab) {
+  ["home", "songs", "drive", "eq"].forEach(k => {
+    const pane = document.getElementById("tab-" + k);
+    if (pane) pane.classList.toggle("active", k === tab);
+    const smBtn = document.getElementById("smNav" + k.charAt(0).toUpperCase() + k.slice(1));
+    if (smBtn) smBtn.classList.toggle("active", k === tab);
+  });
+  if (tab === "home") renderHomePlaylists();
+  if (tab === "songs") renderTracks();
+  if (tab === "drive") updateAccountUI();
+}
+
+function setFilter(flt) {
+  activeFilter = flt;
+  ["all", "saved", "liked", "cloud"].forEach(k => {
+    const el = document.getElementById("flt-" + k);
+    if (el) el.classList.toggle("active", k === flt);
+  });
+  const plBtn = document.getElementById("flt-playlist");
+  if (plBtn) {
+    if (flt.startsWith("pl:")) {
+      plBtn.classList.add("active");
+      const plId = flt.replace("pl:", "");
+      if (plId === "pl_liked") plBtn.textContent = "♥ Favoritos ▾";
+      else if (plId === "pl_cloud") plBtn.textContent = "☁️ Drive ▾";
+      else {
+        const pl = playlists.find(p => p.id === plId);
+        plBtn.textContent = pl ? ("📁 " + (pl.name.length > 12 ? pl.name.slice(0, 10) + "…" : pl.name) + " ▾") : "📁 Playlist ▾";
+      }
+    } else {
+      plBtn.classList.remove("active");
+      plBtn.textContent = "📁 Por Playlist ▾";
+    }
+  }
+  const heading = document.getElementById("listHeading");
+  if (heading) {
+    if (flt.startsWith("pl:")) {
+      const plId = flt.replace("pl:", "");
+      if (plId === "pl_liked") heading.textContent = "Playlist • Tus Favoritos";
+      else if (plId === "pl_cloud") heading.textContent = "Playlist • Google Drive";
+      else {
+        const pl = playlists.find(p => p.id === plId);
+        heading.textContent = pl ? ("Playlist • " + pl.name) : "Biblioteca de Canciones";
+      }
+    } else if (flt === "saved") {
+      heading.textContent = "Canciones Descargadas";
+    } else if (flt === "liked") {
+      heading.textContent = "Tus Favoritos";
+    } else if (flt === "cloud") {
+      heading.textContent = "Google Drive (Nube)";
+    } else {
+      heading.textContent = "Biblioteca de Canciones";
+    }
+  }
+  renderTracks();
+}
+
+function cycleMaomaoStyle() {
+  maomaoStyle = (maomaoStyle + 1) % MAOMAO_STYLES.length;
+  const name = MAOMAO_STYLES[maomaoStyle];
+  const lbl1 = document.getElementById("lblDanceStyle");
+  if (lbl1) lbl1.textContent = name;
+  const lbl2 = document.getElementById("fpLblDanceStyle");
+  if (lbl2) lbl2.textContent = name;
+  showToast(`Paso de baile: ${name}`);
+}
+
+function cycleVisMode() {
+  visMode = (visMode + 1) % 2;
+  showToast(visMode === 1 ? "Modo: Onda Neón 〰️" : "Modo: Espectro FFT 📊");
+}
+
+/* ---------------- LIENZOS ADAPTATIVOS, MOTOR RÍTMICO Y ANIMACIÓN 60 FPS ---------------- */
+const mmCanvas = document.getElementById("maomaoCanvas");
+const mmCtx = mmCanvas.getContext("2d");
+const vCanvas = document.getElementById("visCanvas");
+const vCtx = vCanvas.getContext("2d");
+
+const NUM_SPEC_BARS = 28;
+let specBars = new Array(NUM_SPEC_BARS).fill(0);
+let specPeaks = new Array(NUM_SPEC_BARS).fill(0);
+let prevRawMag = new Array(NUM_SPEC_BARS).fill(0);
+let specFloor = new Array(NUM_SPEC_BARS).fill(0.12);
+let agcCeiling = 0.65;
+let lastNativeSpecAt = 0;
+
+let trackKnownBpm = 112;
+let currentBpm = 112;
+let beatConfidence = 0.85;
+let onsetImpulse = 0;
+let danceAmp = 0;
+let idleTimeSec = 0;
+let lastFrameTimeMs = performance.now();
+
+// Reloj monótono interpolado para fase de beat libre de saltos
+let clockBasePosSec = 0;
+let clockBaseWallSec = performance.now() / 1000;
+let onsetTimestamps = [];
+let fluxAvg = 0.05;
+let lastOnsetWallSec = 0;
+
+function onTrackChangedForRhythm(trackObj) {
+  clockBasePosSec = 0;
+  clockBaseWallSec = performance.now() / 1000;
+  onsetTimestamps = [];
+  specFloor.fill(0.12);
+  prevRawMag.fill(0);
+  const parsedBpm = (trackObj && typeof trackObj.bpm === "number" && isFinite(trackObj.bpm))
+    ? trackObj.bpm
+    : (trackObj && trackObj.bpm ? parseFloat(trackObj.bpm) : 0);
+  if (parsedBpm && isFinite(parsedBpm) && parsedBpm >= 40 && parsedBpm <= 240) {
+    trackKnownBpm = parsedBpm;
+    currentBpm = parsedBpm;
+    beatConfidence = 0.92;
+  } else {
+    trackKnownBpm = 0;
+    currentBpm = 116;
+    beatConfidence = 0.65;
+  }
+}
+
+function syncSmoothClockFromNative(posMs, playingState) {
+  const posSec = Math.max(0, (posMs || 0) / 1000);
+  const nowSec = performance.now() / 1000;
+  if (!playingState) {
+    clockBasePosSec = posSec;
+    clockBaseWallSec = nowSec;
+    return;
+  }
+  const pred = clockBasePosSec + (nowSec - clockBaseWallSec);
+  const drift = posSec - pred;
+  if (Math.abs(drift) > 0.14) {
+    clockBasePosSec = posSec;
+    clockBaseWallSec = nowSec;
+  } else {
+    clockBasePosSec += drift * 0.22;
+  }
+}
+
+function getSmoothPlaybackSec() {
+  if (!isPlaying) return clockBasePosSec;
+  if (!hasNativeAndroid && audio && !audio.paused && !isNaN(audio.currentTime)) {
+    return audio.currentTime;
+  }
+  const nowSec = performance.now() / 1000;
+  return Math.max(0, clockBasePosSec + (nowSec - clockBaseWallSec));
+}
+
+/**
+ * Recibe las 28 bandas FFT reales enviadas desde MediaPlaybackService.java (Android Visualizer).
+ * Aplica resta de piso adaptativo por banda (specFloor) + refuerzo de flujo espectral (transientes)
+ * para que las barras y ondas cambien con gran contraste en cada golpe, voz y sección de la canción.
+ */
+window.onNativeSpectrum = function(rawBins) {
+  if (!Array.isArray(rawBins) || rawBins.length === 0) return;
+  lastNativeSpecAt = performance.now();
+
+  const eqBoostBass = Math.max(0.55, 1 + currentEqValues[0] / 18);
+  const eqBoostMid  = Math.max(0.55, 1 + currentEqValues[2] / 18);
+  const eqBoostHigh = Math.max(0.55, 1 + currentEqValues[4] / 18);
+
+  let rawValues = new Array(NUM_SPEC_BARS).fill(0);
+  let bassFlux = 0;
+
+  for (let i = 0; i < NUM_SPEC_BARS; i++) {
+    const m = Math.max(0, Number(rawBins[i] || 0));
+    const db = 20 * Math.log10(m / 90 + 1e-4) + (i / NUM_SPEC_BARS) * 18;
+    let norm = Math.max(0, Math.min(1.45, (db + 26) / 36));
+    const eqGain = i < 8 ? eqBoostBass : (i < 18 ? eqBoostMid : eqBoostHigh);
+    norm *= eqGain;
+
+    // Piso adaptativo por banda + transiente (spectral flux)
+    if (norm < specFloor[i]) {
+      specFloor[i] = 0.80 * specFloor[i] + 0.20 * norm;
+    } else {
+      specFloor[i] = 0.965 * specFloor[i] + 0.035 * norm;
+    }
+    const diff = Math.max(0, norm - prevRawMag[i]);
+    if (i < 9) bassFlux += diff;
+    prevRawMag[i] = norm;
+
+    const dynVal = Math.max(0, norm - specFloor[i] * 0.78) + diff * 1.45;
+    rawValues[i] = dynVal;
+  }
+
+  // AGC dinámico
+  const framePeak = Math.max(...rawValues, 0.08);
+  if (framePeak > agcCeiling) {
+    agcCeiling = 0.70 * agcCeiling + 0.30 * framePeak;
+  } else {
+    agcCeiling = Math.max(0.32, 0.985 * agcCeiling + 0.015 * framePeak);
+  }
+
+  for (let i = 0; i < NUM_SPEC_BARS; i++) {
+    const scaled = Math.pow(Math.min(1, rawValues[i] / (agcCeiling * 0.88)), 1.38);
+    if (scaled >= specBars[i]) {
+      specBars[i] = 0.28 * specBars[i] + 0.72 * scaled;
+    } else {
+      specBars[i] = 0.74 * specBars[i] + 0.26 * scaled;
+    }
+    if (specBars[i] >= specPeaks[i]) {
+      specPeaks[i] = specBars[i];
+    } else {
+      specPeaks[i] = Math.max(0, specPeaks[i] - 0.018);
+    }
+  }
+
+  // Detección de golpe (onset) y estimación de BPM para pistas sin BPM predefinido
+  fluxAvg = 0.88 * fluxAvg + 0.12 * bassFlux;
+  const nowSec = performance.now() / 1000;
+  if (bassFlux > fluxAvg * 1.40 && bassFlux > 0.18 && (nowSec - lastOnsetWallSec) > 0.25) {
+    onsetImpulse = Math.min(1, 0.58 + bassFlux * 0.28);
+    lastOnsetWallSec = nowSec;
+    if (!trackKnownBpm) {
+      onsetTimestamps.push(nowSec);
+      if (onsetTimestamps.length > 14) onsetTimestamps.shift();
+      if (onsetTimestamps.length >= 5) {
+        let intervals = [];
+        for (let k = 1; k < onsetTimestamps.length; k++) {
+          let dt = onsetTimestamps[k] - onsetTimestamps[k - 1];
+          while (dt > 0.92) dt *= 0.5;
+          while (dt < 0.34) dt *= 2.0;
+          if (dt >= 0.35 && dt <= 0.90) intervals.push(dt);
+        }
+        if (intervals.length >= 4) {
+          intervals.sort((a, b) => a - b);
+          const med = intervals[Math.floor(intervals.length / 2)];
+          const estBpm = Math.round(60 / med);
+          if (estBpm >= 68 && estBpm <= 172) {
+            currentBpm = Math.round(currentBpm * 0.75 + estBpm * 0.25);
+          }
+        }
+      }
+    }
+  }
+};
+
+function syncCanvasDimensions() {
+  if (mmCanvas) {
+    const rectM = mmCanvas.getBoundingClientRect();
+    const nw = Math.max(120, Math.round(rectM.width || mmCanvas.clientWidth || 360));
+    const nh = Math.max(80, Math.round(rectM.height || mmCanvas.clientHeight || 175));
+    if (mmCanvas.width !== nw) mmCanvas.width = nw;
+    if (mmCanvas.height !== nh) mmCanvas.height = nh;
+  }
+  if (vCanvas) {
+    const rectV = vCanvas.getBoundingClientRect();
+    const vw = Math.max(120, Math.round(rectV.width || vCanvas.clientWidth || 360));
+    const vh = Math.max(30, Math.round(rectV.height || vCanvas.clientHeight || 56));
+    if (vCanvas.width !== vw) vCanvas.width = vw;
+    if (vCanvas.height !== vh) vCanvas.height = vh;
+  }
+  if (!fullMmCanvas) fullMmCanvas = document.getElementById("fullMaomaoCanvas");
+  if (fullMmCanvas) {
+    const rectFM = fullMmCanvas.getBoundingClientRect();
+    const fnw = Math.max(140, Math.round(rectFM.width || fullMmCanvas.clientWidth || 380));
+    const fnh = Math.max(90, Math.round(rectFM.height || fullMmCanvas.clientHeight || 220));
+    if (fullMmCanvas.width !== fnw) fullMmCanvas.width = fnw;
+    if (fullMmCanvas.height !== fnh) fullMmCanvas.height = fnh;
+  }
+  if (!fullVCanvas) fullVCanvas = document.getElementById("fullVisCanvas");
+  if (fullVCanvas) {
+    const rectFV = fullVCanvas.getBoundingClientRect();
+    const fvw = Math.max(140, Math.round(rectFV.width || fullVCanvas.clientWidth || 380));
+    const fvh = Math.max(30, Math.round(rectFV.height || fullVCanvas.clientHeight || 56));
+    if (fullVCanvas.width !== fvw) fullVCanvas.width = fvw;
+    if (fullVCanvas.height !== fvh) fullVCanvas.height = fvh;
+  }
+}
+
+window.addEventListener("resize", syncCanvasDimensions);
+window.addEventListener("orientationchange", () => setTimeout(syncCanvasDimensions, 120));
+
+function computeDancePose(beatPos, styleIdx, amp, idleSec) {
+  if (amp < 0.02) {
+    const br = Math.sin(idleSec * 2.1);
+    return {
+      bounce: (br + 1) * 1.1,
+      swayX: Math.sin(idleSec * 1.05) * 1.8,
+      hipX: 0,
+      torsoRot: Math.sin(idleSec * 1.05) * 1.2,
+      headTilt: Math.sin(idleSec * 1.4) * 0.04,
+      armL: 0.08 * br,
+      armR: -0.08 * br,
+      stepL: 0,
+      stepR: 0,
+      skirtSwing: 0,
+      bunBounce: Math.max(0, br) * 1.2,
+      earTwitch: 0,
+      beatPulse: 0
+    };
+  }
+
+  // Normalizar tempo de baile a un rango cómodo (72 - 142 BPM)
+  let danceBpm = currentBpm;
+  let bScale = 1.0;
+  if (danceBpm > 142) bScale = 0.5;
+  else if (danceBpm < 72) bScale = 2.0;
+
+  const db = beatPos * bScale;
+  const frac = ((db % 1) + 1) % 1;
+  const beatInBar = ((Math.floor(db) % 4) + 4) % 4;
+  const phrasePos = ((db % 8) + 8) % 8;
+
+  const beatPulse = Math.pow(Math.max(0, Math.cos((frac - 0.06) * Math.PI)), 2.6);
+  const groove = Math.pow(Math.sin(frac * Math.PI), 1.35);
+  const bounce = (groove * 9.5 + onsetImpulse * 2.5) * amp;
+
+  const halfCycle = Math.sin(db * Math.PI * 0.5);
+  const quarterCycle = Math.sin(db * Math.PI);
+  const swayX = halfCycle * 11.5 * amp;
+  const hipX = -quarterCycle * 3.8 * amp;
+  const torsoRot = halfCycle * 3.8 * amp;
+  const headTilt = (quarterCycle * 0.105 + Math.sin(db * Math.PI * 0.25) * 0.04) * amp;
+
+  const stepWave = Math.sin(db * Math.PI);
+  const stepL = Math.max(0, stepWave) * 5.2 * amp;
+  const stepR = Math.max(0, -stepWave) * 5.2 * amp;
+  const skirtSwing = (quarterCycle * 4.8 + Math.sin(db * Math.PI * 2) * 1.5) * amp;
+
+  let armL = 0, armR = 0;
+  if (styleIdx === 0) {
+    // Danza Imperial: mangas fluidas con fraseo de 8 tiempos
+    armL = (0.48 * Math.sin(db * Math.PI * 0.5 + 0.35) + 0.26 * Math.sin(db * Math.PI)) * amp;
+    armR = (-0.48 * Math.sin(db * Math.PI * 0.5 - 0.35) + 0.26 * Math.cos(db * Math.PI)) * amp;
+    if (phrasePos >= 6.0) {
+      const lift = Math.sin(((phrasePos - 6.0) / 2.0) * Math.PI);
+      armL += 0.36 * lift * amp;
+      armR -= 0.36 * lift * amp;
+    }
+  } else if (styleIdx === 1) {
+    // Recolección de Hierbas: balanceo alegre de boticaria
+    armL = (0.56 * Math.sin(db * Math.PI) + 0.18 * Math.cos(db * Math.PI * 0.5)) * amp;
+    armR = (0.56 * Math.sin(db * Math.PI) - 0.18 * Math.cos(db * Math.PI * 0.5)) * amp;
+  } else {
+    // Paso Neko :3: zarpazos rítmicos alternando cada beat
+    const pawL = beatInBar % 2 === 0 ? groove : groove * 0.35;
+    const pawR = beatInBar % 2 === 1 ? groove : groove * 0.35;
+    armL = (0.32 + 0.52 * pawL) * amp;
+    armR = -(0.32 + 0.52 * pawR) * amp;
+  }
+
+  const bunBounce = (groove * 4.5 + beatPulse * 2.2) * amp;
+  const earTwitch = (beatPulse * 5.0 + Math.max(0, Math.sin(db * Math.PI * 2)) * 2.0) * amp;
+
+  return {
+    bounce, swayX, hipX, torsoRot, headTilt,
+    armL, armR, stepL, stepR, skirtSwing,
+    bunBounce, earTwitch, beatPulse
+  };
+}
+
+function animateLoop(nowMs) {
+  requestAnimationFrame(animateLoop);
+  try {
+    if (typeof nowMs !== "number" || isNaN(nowMs)) nowMs = performance.now();
+    const dt = Math.min(0.08, Math.max(0.004, (nowMs - lastFrameTimeMs) / 1000));
+    lastFrameTimeMs = nowMs;
+    idleTimeSec += dt;
+
+    const posSec = getSmoothPlaybackSec();
+    const safeBpm = (isFinite(currentBpm) && currentBpm >= 40) ? currentBpm : 116;
+    const beatPos = posSec * (safeBpm / 60);
+
+    if (isPlaying) {
+      danceAmp = Math.min(1, danceAmp + dt * 3.8);
+    } else {
+      danceAmp = Math.max(0, danceAmp - dt * 4.2);
+    }
+    onsetImpulse = Math.max(0, onsetImpulse - dt * 5.2);
+
+    // Si el visualizador nativo de Android no envió trama en los últimos 220 ms (p.ej. sin permiso RECORD_AUDIO o en navegador),
+    // generamos un espectro musical con progresión de secciones (Intro/Verso/Build-up/Drop) y formantes móviles bloqueados al beat
+    const nativeActive = isPlaying && (nowMs - lastNativeSpecAt < 220);
+    if (!nativeActive) {
+      const frac = ((beatPos % 1) + 1) % 1;
+      const phrase16 = ((beatPos % 16) + 16) % 16;
+      const sectionEnergy = phrase16 < 4 ? 0.55 : (phrase16 < 12 ? 0.82 : (phrase16 < 14 ? 0.92 : 1.05));
+      const kickEnv = Math.pow(Math.max(0, Math.cos((frac - 0.05) * Math.PI)), 3.8) * sectionEnergy;
+      const snareEnv = (Math.floor(beatPos) % 2 === 1 ? Math.pow(Math.max(0, Math.cos((frac - 0.04) * Math.PI)), 3.2) * 0.92 : kickEnv * 0.18) * sectionEnergy;
+      const hatEnv = Math.pow(Math.abs(Math.sin(beatPos * Math.PI * 2)), 2.8) * 0.62 * sectionEnergy;
+      const melodyCenter = 0.44 + 0.18 * Math.sin(beatPos * Math.PI * 0.25);
+
+      const eqBoostBass = Math.max(0.55, 1 + currentEqValues[0] / 18);
+      const eqBoostMid  = Math.max(0.55, 1 + currentEqValues[2] / 18);
+      const eqBoostHigh = Math.max(0.55, 1 + currentEqValues[4] / 18);
+
+      for (let i = 0; i < NUM_SPEC_BARS; i++) {
+        let target = 0;
+        if (isPlaying) {
+          const x = i / (NUM_SPEC_BARS - 1);
+          const sub = Math.exp(-Math.pow(x / 0.20, 2)) * (0.08 + 0.84 * kickEnv) * eqBoostBass;
+          const mid = Math.exp(-Math.pow((x - melodyCenter) / 0.20, 2)) * (0.10 + 0.55 * snareEnv + 0.24 * Math.max(0, Math.sin(beatPos * Math.PI * 0.5 + i * 0.42))) * eqBoostMid;
+          const air = Math.exp(-Math.pow((x - 0.84) / 0.18, 2)) * (0.06 + 0.52 * hatEnv) * eqBoostHigh;
+          target = Math.min(0.98, Math.max(0.03, sub + mid + air));
+        }
+        if (target >= specBars[i]) {
+          specBars[i] = 0.28 * specBars[i] + 0.72 * target;
+        } else {
+          specBars[i] = 0.75 * specBars[i] + 0.25 * target;
+        }
+        if (specBars[i] >= specPeaks[i]) specPeaks[i] = specBars[i];
+        else specPeaks[i] = Math.max(0, specPeaks[i] - 0.016);
+      }
+      if (isPlaying && kickEnv > 0.78) onsetImpulse = Math.max(onsetImpulse, 0.65);
+    }
+
+    let bass = 0, mid = 0, high = 0;
+    for (let i = 0; i < 8; i++) bass += specBars[i];
+    for (let i = 8; i < 18; i++) mid += specBars[i];
+    for (let i = 18; i < NUM_SPEC_BARS; i++) high += specBars[i];
+    bass /= 8;
+    mid /= 10;
+    high /= (NUM_SPEC_BARS - 18);
+
+    const pose = computeDancePose(beatPos, maomaoStyle, danceAmp, idleTimeSec);
+    drawMaomaoStage(pose, beatPos, bass, mid, high, mmCanvas, mmCtx);
+    drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, vCanvas, vCtx);
+
+    // Aura en el contorno del disco de vinilo en pantalla de reposo/suspensión
+    const vinylOverlay = document.getElementById("vinylStandbyOverlay");
+    if (vinylOverlay && vinylOverlay.classList.contains("active")) {
+      const auraEl = document.getElementById("vinylAura");
+      const discEl = document.getElementById("vinylDisc");
+      if (auraEl) {
+        if (isPlaying) {
+          const pulse = Math.min(1, Math.max(0, pose.beatPulse * 0.70 + bass * 0.70));
+          const glowSpread = (16 + pulse * 28 * danceAmp).toFixed(0);
+          const glowOuter = (32 + pulse * 45 * danceAmp).toFixed(0);
+          const op = (0.45 + pulse * 0.55 * danceAmp).toFixed(2);
+          const borderGlow = (0.65 + pulse * 0.35 * danceAmp).toFixed(2);
+          
+          auraEl.style.boxShadow = `0 0 ${glowSpread}px rgba(30, 215, 96, ${op}), 0 0 ${glowOuter}px rgba(30, 215, 96, ${(op * 0.55).toFixed(2)}), inset 0 0 ${(10 + pulse * 14).toFixed(0)}px rgba(30, 215, 96, ${(op * 0.5).toFixed(2)})`;
+          auraEl.style.borderColor = `rgba(30, 215, 96, ${borderGlow})`;
+          auraEl.style.opacity = op;
+          auraEl.style.transform = `scale(${(1.002 + pulse * 0.025 * danceAmp).toFixed(4)})`;
+
+          if (discEl) {
+            discEl.style.borderColor = `rgba(30, 215, 96, ${(0.35 + pulse * 0.50 * danceAmp).toFixed(2)})`;
+            discEl.style.boxShadow = `0 0 50px rgba(0, 0, 0, 0.95), 0 0 ${(22 + pulse * 24).toFixed(0)}px rgba(30, 215, 96, ${(0.3 + pulse * 0.45).toFixed(2)}), inset 0 0 10px #000`;
+          }
+        } else {
+          auraEl.style.boxShadow = "0 0 12px rgba(30, 215, 96, 0.25), inset 0 0 8px rgba(30, 215, 96, 0.15)";
+          auraEl.style.borderColor = "rgba(30, 215, 96, 0.35)";
+          auraEl.style.opacity = "0.25";
+          auraEl.style.transform = "scale(1)";
+          if (discEl) {
+            discEl.style.borderColor = "#1c1c24";
+            discEl.style.boxShadow = "0 0 50px rgba(0, 0, 0, 0.95), 0 0 20px rgba(30, 215, 96, 0.15), inset 0 0 10px #000";
+          }
+        }
+      }
+    }
+
+    if (isFullPlayerOpen) {
+      if (!fullMmCanvas || !fullMmCtx || !fullVCanvas || !fullVCtx) {
+        initFullPlayer();
+      }
+      if (fullMmCanvas && fullMmCtx && fullVCanvas && fullVCtx) {
+        if (fullMmCanvas.width < 50 || fullMmCanvas.height < 50) {
+          fullMmCanvas.width = fullMmCanvas.clientWidth || 380;
+          fullMmCanvas.height = fullMmCanvas.clientHeight || 220;
+        }
+        if (fullVCanvas.width < 50 || fullVCanvas.height < 20) {
+          fullVCanvas.width = fullVCanvas.clientWidth || 380;
+          fullVCanvas.height = fullVCanvas.clientHeight || 56;
+        }
+        if (fullPlayerTab === "visualizer") {
+          drawMaomaoStage(pose, beatPos, bass, mid, high, fullMmCanvas, fullMmCtx);
+          drawSpectrum(beatPos, pose.beatPulse, bass, mid, high, fullVCanvas, fullVCtx);
+        }
+      }
+    }
+  } catch (loopErr) {
+    // Si ocurre cualquier excepción inesperada, se silencia para asegurar 60 FPS ininterrumpidos
+  }
+}
+
+function drawMaomaoStage(pose, beatPos, bass, mid, high, targetCanvas, targetCtx) {
+  const mmCanvas = targetCanvas || document.getElementById("maomaoCanvas");
+  const mmCtx = targetCtx || (mmCanvas ? mmCanvas.getContext("2d") : null);
+  if (!mmCanvas || !mmCtx) return;
+
+  if (typeof mmCtx.roundRect !== "function") {
+    mmCtx.roundRect = function(x, y, w, h, radii) {
+      if (typeof radii === "undefined") radii = 0;
+      if (typeof radii === "number") radii = [radii, radii, radii, radii];
+      const r = Math.min(radii[0] || 0, Math.abs(w) / 2, Math.abs(h) / 2);
+      this.moveTo(x + r, y);
+      this.arcTo(x + w, y, x + w, y + h, r);
+      this.arcTo(x + w, y + h, x, y + h, r);
+      this.arcTo(x, y + h, x, y, r);
+      this.arcTo(x, y, x + w, y, r);
+      this.closePath();
+      return this;
+    };
+  }
+  let w = mmCanvas.width, h = mmCanvas.height;
+  if (!isFinite(w) || !isFinite(h) || w < 20 || h < 20) {
+    w = Math.max(120, mmCanvas.clientWidth || 360);
+    h = Math.max(80, mmCanvas.clientHeight || 175);
+    mmCanvas.width = w;
+    mmCanvas.height = h;
+  }
+  mmCtx.clearRect(0, 0, w, h);
+
+  const cx = w / 2;
+  const floorY = h - 12;
+  let scaleFactor = Math.min(w / 240, Math.max(30, h - 18) / 168);
+  if (!isFinite(scaleFactor) || scaleFactor <= 0.05) scaleFactor = 1.0;
+
+  // Halo rítmico sincronizado con el beat (radio asegurado positivo y mayor que el centro)
+  const haloR = Math.max(16, (68 + ((pose.beatPulse || 0) * 20 + (bass || 0) * 16) * (danceAmp || 0)) * scaleFactor);
+  const grad = mmCtx.createRadialGradient(cx, floorY - 55 * scaleFactor, 4, cx, floorY - 55 * scaleFactor, haloR);
+  grad.addColorStop(0, `rgba(29, 185, 84, ${(0.18 + (pose.beatPulse * 0.24 + bass * 0.18) * danceAmp).toFixed(3)})`);
+  grad.addColorStop(0.6, `rgba(162, 32, 68, ${(0.10 + mid * 0.22 * danceAmp).toFixed(3)})`);
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  mmCtx.fillStyle = grad;
+  mmCtx.beginPath();
+  mmCtx.arc(cx, floorY - 55 * scaleFactor, Math.max(16, 92 * scaleFactor), 0, Math.PI * 2);
+  mmCtx.fill();
+
+  // Sombra elíptica en el piso
+  mmCtx.fillStyle = "rgba(0, 0, 0, 0.45)";
+  mmCtx.beginPath();
+  const swaySafe = isFinite(pose.swayX) ? pose.swayX : 0;
+  const bounceSafe = isFinite(pose.bounce) ? pose.bounce : 0;
+  mmCtx.ellipse(cx + swaySafe * scaleFactor, floorY + 2, Math.max(12, (28 - bounceSafe * 0.35) * scaleFactor), Math.max(2, 4.5 * scaleFactor), 0, 0, Math.PI * 2);
+  mmCtx.fill();
+
+  mmCtx.save();
+  mmCtx.translate(cx + swaySafe * scaleFactor, floorY - bounceSafe * scaleFactor);
+  mmCtx.scale(scaleFactor, scaleFactor);
+
+  // Pies con pasitos alternados al ritmo del beat
+  mmCtx.fillStyle = "#2b1c20";
+  mmCtx.beginPath();
+  mmCtx.roundRect(-14, -7 - pose.stepL, 10, 6, 3);
+  mmCtx.roundRect(4, -7 - pose.stepR, 10, 6, 3);
+  mmCtx.fill();
+
+  // Falda carmesí (Hanfu) con vuelo rítmico
+  const sw = pose.skirtSwing + pose.hipX;
+  mmCtx.fillStyle = "#a22044";
+  mmCtx.strokeStyle = "#480d1e";
+  mmCtx.lineWidth = 2;
+  mmCtx.beginPath();
+  mmCtx.moveTo(-17, -52);
+  mmCtx.lineTo(17, -52);
+  mmCtx.lineTo(25 + sw, -6);
+  mmCtx.lineTo(-25 + sw, -6);
+  mmCtx.closePath();
+  mmCtx.fill();
+  mmCtx.stroke();
+
+  // Pliegues de la falda
+  mmCtx.strokeStyle = "rgba(65, 10, 25, 0.55)";
+  mmCtx.lineWidth = 1.2;
+  [-8, 0, 8].forEach(px => {
+    mmCtx.beginPath();
+    mmCtx.moveTo(px * 0.6, -50);
+    mmCtx.lineTo(px + sw * 0.65, -8);
+    mmCtx.stroke();
+  });
+
+  // Torso con rotación suave
+  mmCtx.save();
+  mmCtx.translate(0, -54);
+  mmCtx.rotate((pose.torsoRot * Math.PI) / 180);
+  mmCtx.translate(0, 54);
+
+  // Chaqueta verde jade de boticaria
+  mmCtx.fillStyle = "#2a7666";
+  mmCtx.strokeStyle = "#174238";
+  mmCtx.lineWidth = 2;
+  mmCtx.beginPath();
+  mmCtx.roundRect(-18, -86, 36, 36, 7);
+  mmCtx.fill();
+  mmCtx.stroke();
+
+  // Cuello cruzado crema
+  mmCtx.strokeStyle = "#eeeae0";
+  mmCtx.lineWidth = 2.8;
+  mmCtx.beginPath();
+  mmCtx.moveTo(-9, -85); mmCtx.lineTo(4, -66);
+  mmCtx.moveTo(9, -85); mmCtx.lineTo(-2, -70);
+  mmCtx.stroke();
+
+  // Cinturón
+  mmCtx.fillStyle = "#ebd2c3";
+  mmCtx.fillRect(-19, -56, 38, 6);
+
+  // Manga izquierda
+  mmCtx.save();
+  mmCtx.translate(-17, -79);
+  mmCtx.rotate(-0.55 + pose.armL);
+  mmCtx.fillStyle = "#2e7e6c";
+  mmCtx.beginPath();
+  mmCtx.roundRect(-28, -5, 28, 13, 5);
+  mmCtx.fill();
+  mmCtx.fillStyle = "#ffe2ce";
+  mmCtx.beginPath(); mmCtx.arc(-29, 1, 5, 0, Math.PI * 2); mmCtx.fill();
+  if (maomaoStyle === 1) {
+    mmCtx.fillStyle = "#35d472";
+    mmCtx.beginPath();
+    mmCtx.ellipse(-34, -4, 5, 2.5, -0.4, 0, Math.PI * 2);
+    mmCtx.fill();
+  }
+  mmCtx.restore();
+
+  // Manga derecha
+  mmCtx.save();
+  mmCtx.translate(17, -79);
+  mmCtx.rotate(0.55 + pose.armR);
+  mmCtx.fillStyle = "#2e7e6c";
+  mmCtx.beginPath();
+  mmCtx.roundRect(0, -5, 28, 13, 5);
+  mmCtx.fill();
+  mmCtx.fillStyle = "#ffe2ce";
+  mmCtx.beginPath(); mmCtx.arc(29, 1, 5, 0, Math.PI * 2); mmCtx.fill();
+  mmCtx.restore();
+
+  // Cabeza de Maomao
+  mmCtx.save();
+  mmCtx.translate(0, -90);
+  mmCtx.rotate(pose.headTilt);
+
+  if (maomaoStyle === 2) {
+    mmCtx.fillStyle = "#1e583e";
+    mmCtx.beginPath();
+    mmCtx.moveTo(-24, -34); mmCtx.lineTo(-32, -52 - pose.earTwitch); mmCtx.lineTo(-10, -42); mmCtx.fill();
+    mmCtx.beginPath();
+    mmCtx.moveTo(24, -34); mmCtx.lineTo(32, -52 - pose.earTwitch); mmCtx.lineTo(10, -42); mmCtx.fill();
+  }
+
+  [-1, 1].forEach(sign => {
+    mmCtx.fillStyle = "#ee6c8a";
+    mmCtx.beginPath(); mmCtx.arc(sign * 24, -23 - pose.bunBounce, 7, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.fillStyle = "#1e583e";
+    mmCtx.beginPath(); mmCtx.arc(sign * 31, -23 - pose.bunBounce, 10.5, 0, Math.PI * 2); mmCtx.fill();
+  });
+
+  // Rostro
+  mmCtx.fillStyle = "#ffe8d6";
+  mmCtx.beginPath();
+  mmCtx.roundRect(-24, -42, 48, 40, 18);
+  mmCtx.fill();
+
+  // Ojos violeta/índigo de Maomao
+  [-10.5, 10.5].forEach(ex => {
+    mmCtx.fillStyle = "#5c48a8";
+    mmCtx.beginPath(); mmCtx.arc(ex, -20, 4.8, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.fillStyle = "#261a52";
+    mmCtx.beginPath(); mmCtx.arc(ex, -20, 2.4, 0, Math.PI * 2); mmCtx.fill();
+    mmCtx.fillStyle = "#ffffff";
+    mmCtx.beginPath(); mmCtx.arc(ex - 1.5, -21.5, 1.6, 0, Math.PI * 2); mmCtx.fill();
+  });
+
+  // Pecas y rubor
+  mmCtx.fillStyle = "rgba(245, 145, 155, 0.45)";
+  mmCtx.beginPath(); mmCtx.ellipse(-14, -13, 4.5, 2.2, 0, 0, Math.PI * 2); mmCtx.fill();
+  mmCtx.beginPath(); mmCtx.ellipse(14, -13, 4.5, 2.2, 0, 0, Math.PI * 2); mmCtx.fill();
+
+  // Boca :3
+  mmCtx.strokeStyle = "#91464b";
+  mmCtx.lineWidth = 1.8;
+  mmCtx.beginPath();
+  mmCtx.moveTo(-4.5, -8.5);
+  mmCtx.quadraticCurveTo(-2.2, -5.5, 0, -8.5);
+  mmCtx.quadraticCurveTo(2.2, -5.5, 4.5, -8.5);
+  mmCtx.stroke();
+
+  // Flequillo verde oscuro
+  mmCtx.fillStyle = "#226044";
+  mmCtx.beginPath();
+  mmCtx.arc(0, -28, 25, Math.PI, 0);
+  mmCtx.fill();
+
+  mmCtx.restore(); // Cabeza
+  mmCtx.restore(); // Torso
+  mmCtx.restore(); // Escenario
+
+  // Notas flotantes sincronizadas con el beat
+  if (danceAmp > 0.1) {
+    mmCtx.fillStyle = `rgba(30, 215, 96, ${(0.55 + 0.35 * pose.beatPulse) * danceAmp})`;
+    mmCtx.font = "bold 12px sans-serif";
+    ["♪", "♫", "🌿", "✦"].forEach((sym, i) => {
+      const cyc = ((beatPos * 0.25 + i * 0.25) % 1 + 1) % 1;
+      const nx = cx + Math.cos(cyc * Math.PI * 2 + i * 1.4) * (44 + i * 11) * scaleFactor;
+      const ny = floorY - (34 + cyc * 82) * scaleFactor;
+      mmCtx.fillText(sym, nx, ny);
+    });
+  }
+
+  // Indicador de BPM y compás de 4 tiempos en la esquina superior derecha
+  mmCtx.font = "bold 10px sans-serif";
+  mmCtx.fillStyle = isPlaying ? "#1ed760" : "#8a8a96";
+  const bpmText = isPlaying ? `♩ ${Math.round(currentBpm)} BPM` : "En pausa";
+  mmCtx.textAlign = "right";
+  mmCtx.fillText(bpmText, w - 8, 14);
+  mmCtx.textAlign = "left";
+
+  const beatInBar = ((Math.floor(beatPos) % 4) + 4) % 4;
+  for (let b = 0; b < 4; b++) {
+    const dotX = w - 38 + b * 9;
+    const dotY = 23;
+    const isActiveBeat = isPlaying && b === beatInBar;
+    mmCtx.fillStyle = isActiveBeat ? (b === 0 ? "#1ed760" : "#00d2ff") : "rgba(255,255,255,0.18)";
+    mmCtx.beginPath();
+    mmCtx.arc(dotX, dotY, isActiveBeat ? 3.2 : 2.1, 0, Math.PI * 2);
+    mmCtx.fill();
+  }
+}
+
+function drawSpectrum(beatPos, beatPulse, bass, mid, high, targetCanvas, targetCtx) {
+  const vCanvas = targetCanvas || document.getElementById("visCanvas");
+  const vCtx = targetCtx || (vCanvas ? vCanvas.getContext("2d") : null);
+  if (!vCanvas || !vCtx) return;
+
+  if (typeof vCtx.roundRect !== "function") {
+    vCtx.roundRect = function(x, y, w, h, radii) {
+      if (typeof radii === "undefined") radii = 0;
+      if (typeof radii === "number") radii = [radii, radii, radii, radii];
+      const r = Math.min(radii[0] || 0, Math.abs(w) / 2, Math.abs(h) / 2);
+      this.moveTo(x + r, y);
+      this.arcTo(x + w, y, x + w, y + h, r);
+      this.arcTo(x + w, y + h, x, y + h, r);
+      this.arcTo(x, y + h, x, y, r);
+      this.arcTo(x, y, x + w, y, r);
+      this.closePath();
+      return this;
+    };
+  }
+  const w = vCanvas.width, h = vCanvas.height;
+  vCtx.clearRect(0, 0, w, h);
+
+  // Líneas guía sutiles de analizador profesional
+  vCtx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+  vCtx.lineWidth = 1;
+  [0.3, 0.6].forEach(f => {
+    const gy = Math.round(h * f) + 0.5;
+    vCtx.beginPath();
+    vCtx.moveTo(6, gy);
+    vCtx.lineTo(w - 6, gy);
+    vCtx.stroke();
+  });
+
+  // Indicador de verificación rítmica en vivo en el analizador (♩ BPM + 4 pulsos del compás)
+  if (isPlaying && currentBpm > 0) {
+    vCtx.font = "bold 9px sans-serif";
+    vCtx.fillStyle = "rgba(210, 240, 225, 0.78)";
+    vCtx.fillText(`♩ ${Math.round(currentBpm)} BPM`, 8, 10);
+    const beatInBar = ((Math.floor(beatPos) % 4) + 4) % 4;
+    for (let b = 0; b < 4; b++) {
+      const active = b === beatInBar;
+      vCtx.fillStyle = active ? (b === 0 ? "#1ed760" : "#00d2ff") : "rgba(255,255,255,0.20)";
+      vCtx.beginPath();
+      vCtx.arc(58 + b * 7, 7, active ? 2.4 : 1.6, 0, Math.PI * 2);
+      vCtx.fill();
+    }
+  }
+
+  if (visMode === 1) {
+    // Modo Onda Neón sincronizada con el espectro real y el pulso del beat
+    const midY = h * 0.52;
+    const ampScale = h * 0.40 * (0.82 + 0.25 * beatPulse);
+    const pts = [];
+    const nPts = 56;
+
+    for (let i = 0; i < nPts; i++) {
+      const u = i / (nPts - 1);
+      const x = 6 + u * (w - 12);
+      const bPos = u * (NUM_SPEC_BARS - 1);
+      const idx = Math.min(NUM_SPEC_BARS - 2, Math.floor(bPos));
+      const frac = bPos - idx;
+      const env = specBars[idx] * (1 - frac) + specBars[idx + 1] * frac;
+      const edge = Math.sin(u * Math.PI);
+      const carrier = Math.sin(u * Math.PI * 5 - beatPos * Math.PI) * 0.68
+                    + Math.sin(u * Math.PI * 10 + beatPos * Math.PI * 0.5) * 0.32;
+      const y = midY - env * edge * carrier * ampScale;
+      pts.push({ x, y });
+    }
+
+    // Relleno bajo la onda
+    const fillGrad = vCtx.createLinearGradient(0, 4, 0, h - 2);
+    fillGrad.addColorStop(0, "rgba(30, 215, 96, 0.32)");
+    fillGrad.addColorStop(1, "rgba(0, 210, 255, 0.02)");
+    vCtx.fillStyle = fillGrad;
+    vCtx.beginPath();
+    vCtx.moveTo(pts[0].x, midY);
+    pts.forEach(p => vCtx.lineTo(p.x, p.y));
+    vCtx.lineTo(pts[pts.length - 1].x, midY);
+    vCtx.closePath();
+    vCtx.fill();
+
+    // Trazo principal
+    const strokeGrad = vCtx.createLinearGradient(6, 0, w - 6, 0);
+    strokeGrad.addColorStop(0, "#1DB954");
+    strokeGrad.addColorStop(0.5, "#1ed760");
+    strokeGrad.addColorStop(1, "#00d2ff");
+    vCtx.strokeStyle = strokeGrad;
+    vCtx.lineWidth = 2.2;
+    vCtx.beginPath();
+    pts.forEach((p, idx) => {
+      if (idx === 0) vCtx.moveTo(p.x, p.y);
+      else vCtx.lineTo(p.x, p.y);
+    });
+    vCtx.stroke();
+    return;
+  }
+
+  // Modo Barras de Espectro con cabezales flotantes (Peak Caps) y reflejo inferior
+  const n = NUM_SPEC_BARS;
+  const gap = 3;
+  const barW = Math.max(2, (w - 16 - gap * (n - 1)) / n);
+  const baseLine = h - 7;
+  const maxBarH = baseLine - 5;
+
+  // Línea base que pulsa suavemente con el beat
+  vCtx.strokeStyle = `rgba(30, 215, 96, ${(0.18 + 0.35 * beatPulse * danceAmp).toFixed(2)})`;
+  vCtx.lineWidth = 1;
+  vCtx.beginPath();
+  vCtx.moveTo(6, baseLine + 0.5);
+  vCtx.lineTo(w - 6, baseLine + 0.5);
+  vCtx.stroke();
+
+  for (let i = 0; i < n; i++) {
+    const val = isPlaying ? Math.max(0.04, specBars[i]) : Math.max(0.025, specBars[i]);
+    const bh = Math.max(2, val * maxBarH);
+    const x = 8 + i * (barW + gap);
+    const y = baseLine - bh;
+
+    const barGrad = vCtx.createLinearGradient(0, y, 0, baseLine);
+    if (val > 0.72) {
+      barGrad.addColorStop(0, "#ffffff");
+      barGrad.addColorStop(0.28, "#25e86c");
+      barGrad.addColorStop(1, "#00d2ff");
+    } else if (i % 2 === 0) {
+      barGrad.addColorStop(0, "#25e86c");
+      barGrad.addColorStop(1, "#15883e");
+    } else {
+      barGrad.addColorStop(0, "#24d8ff");
+      barGrad.addColorStop(1, "#137a94");
+    }
+    vCtx.fillStyle = barGrad;
+    vCtx.beginPath();
+    vCtx.roundRect(x, y, barW, bh, 2);
+    vCtx.fill();
+
+    // Cabezal de pico flotante
+    const pkH = Math.max(bh, specPeaks[i] * maxBarH);
+    const pkY = Math.max(2, baseLine - pkH - 2.5);
+    vCtx.fillStyle = val > 0.72 ? "#ffffff" : (i % 2 === 0 ? "#80ffaa" : "#88ecff");
+    vCtx.fillRect(x, pkY, barW, 1.8);
+
+    // Sutil reflejo inferior
+    const refH = Math.min(5, bh * 0.16);
+    vCtx.fillStyle = i % 2 === 0 ? "rgba(29, 185, 84, 0.22)" : "rgba(0, 210, 255, 0.22)";
+    vCtx.fillRect(x, baseLine + 1, barW, refH);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  // Capturar access_token si regresó del flujo OAuth2 de Google en el hash de la URL
+  if (window.location.hash && window.location.hash.includes("access_token=")) {
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    const tok = params.get("access_token");
+    if (tok) {
+      document.getElementById("gdToken").value = tok;
+      localStorage.setItem("welcome_done", "1");
+      setTimeout(() => autoDiscoverDriveMusic(), 400);
+    }
+  }
+
+  try { loadPersistentState(); } catch(e){ console.error("Init loadPersistentState error:", e); }
+  try { initFullPlayer(); } catch(e){ console.error("Init initFullPlayer error:", e); }
+  try { renderTracks(); } catch(e){ console.error("Init renderTracks error:", e); }
+  try { renderHomePlaylists(); } catch(e){ console.error("Init renderHomePlaylists error:", e); }
+  try { updateAccountUI(); } catch(e){ console.error("Init updateAccountUI error:", e); }
+  try { updateShuffleUI(); } catch(e){ console.error("Init updateShuffleUI error:", e); }
+  try { updateRepeatUI(); } catch(e){ console.error("Init updateRepeatUI error:", e); }
+  try { updateFullPlayerUI(); } catch(e){ console.error("Init updateFullPlayerUI error:", e); }
+  try { updateSideMenuProfile(); } catch(e){ console.error("Init updateSideMenuProfile error:", e); }
+  try { syncCanvasDimensions(); } catch(e){ console.error("Init syncCanvasDimensions error:", e); }
+  try { animateLoop(); } catch(e){ console.error("Init animateLoop error:", e); }
+
+  // Precargar base de datos de cuentas y catálogo de Google Drive
+  setTimeout(() => {
+    pullCloudDatabaseFromDrive();
+  }, 250);
+
+  // Escanear automáticamente la carpeta «Musica» del Drive compartido 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT
+  setTimeout(() => {
+    const hasToken = Boolean(document.getElementById("gdToken").value.trim());
+    if (hasToken) {
+      fetchGoogleUserProfile();
+      syncCloudPlaylists();
+    } else {
+      autoDiscoverDriveMusic();
+    }
+  }, 550);
+
+  const vLbl = document.getElementById("smAppVersionLabel");
+  if (vLbl) vLbl.textContent = `Versión actual: v${getInstalledAppVersionName()} (GitHub)`;
+
+  // Comprobar automáticamente actualizaciones en segundo plano vía GitHub
+  setTimeout(() => {
+    checkForAppUpdates(false);
+  }, 2200);
+
+  const hasToken = Boolean(document.getElementById("gdToken").value.trim());
+  const welcomeDone = localStorage.getItem("welcome_done") === "1";
+  if (!hasToken && !userAccount && !welcomeDone) {
+    document.getElementById("welcomeModal").classList.add("open");
+  }
+});
