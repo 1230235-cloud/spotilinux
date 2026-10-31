@@ -1115,6 +1115,118 @@ class GitHubDesktopUpdateWorker(QThread):
             pass
 
 
+class YouTubeBatchDownloadDialog(QDialog):
+    """Diálogo con recuadro multi-línea para descargar listas de canciones o enlaces de YouTube."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("📥 Descargar y Sincronizar desde YouTube — MaoMusic")
+        self.setFixedSize(540, 440)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #121214;
+                color: #FFFFFF;
+                border: 1px solid #27272A;
+                border-radius: 12px;
+            }
+            QLabel {
+                color: #E4E4E7;
+                font-size: 13px;
+            }
+            QPlainTextEdit {
+                background-color: #18181B;
+                color: #FAFAFA;
+                border: 1px solid #3F3F46;
+                border-radius: 8px;
+                padding: 10px;
+                font-family: monospace, sans-serif;
+                font-size: 13px;
+                selection-background-color: #10B981;
+            }
+            QPlainTextEdit:focus {
+                border: 1px solid #10B981;
+            }
+            QCheckBox {
+                color: #A1A1AA;
+                font-size: 12px;
+            }
+            QPushButton#BtnCancel {
+                background-color: #27272A;
+                color: #A1A1AA;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }
+            QPushButton#BtnCancel:hover {
+                background-color: #3F3F46;
+                color: #FFFFFF;
+            }
+            QPushButton#BtnDownload {
+                background-color: #10B981;
+                color: #000000;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 20px;
+                font-weight: 700;
+            }
+            QPushButton#BtnDownload:hover {
+                background-color: #059669;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        header = QLabel("🎵 Lista de Canciones o Videos a Descargar")
+        header.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
+        layout.addWidget(header)
+
+        hint = QLabel("Escribe o pega una o varias canciones (una por línea o enlace directo de YouTube):")
+        hint.setStyleSheet("color: #A1A1AA; font-size: 12px;")
+        layout.addWidget(hint)
+
+        self.txt_list = QPlainTextEdit()
+        self.txt_list.setPlaceholderText(
+            "Ejemplo:\n"
+            "Otaku encubierto\n"
+            "Tu compras oro\n"
+            "Envenename\n"
+            "Que dolor\n"
+            "We don't talk soft rock versión\n"
+            "https://www.youtube.com/watch?v=..."
+        )
+        layout.addWidget(self.txt_list)
+
+        self.chk_local = QCheckBox("Guardar también copia local en music_library/")
+        self.chk_local.setChecked(True)
+        layout.addWidget(self.chk_local)
+
+        btns_row = QHBoxLayout()
+        btns_row.addStretch()
+
+        self.btn_cancel = QPushButton("Cancelar")
+        self.btn_cancel.setObjectName("BtnCancel")
+        self.btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cancel.clicked.connect(self.reject)
+        btns_row.addWidget(self.btn_cancel)
+
+        self.btn_download = QPushButton("🚀 Iniciar Descarga")
+        self.btn_download.setObjectName("BtnDownload")
+        self.btn_download.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_download.clicked.connect(self.accept)
+        btns_row.addWidget(self.btn_download)
+
+        layout.addLayout(btns_row)
+
+    def get_queries(self) -> list[str]:
+        raw = self.txt_list.toPlainText()
+        return [line.strip() for line in raw.splitlines() if line.strip() and not line.strip().startswith("#")]
+
+    def should_keep_local(self) -> bool:
+        return self.chk_local.isChecked()
+
+
 class SpotiLinuxWindow(QMainWindow):
     HOME_PREVIEW_LIMIT = 4  # canciones visibles en la vista previa reducida del Inicio
 
@@ -1884,63 +1996,87 @@ class SpotiLinuxWindow(QMainWindow):
         self._upload_worker.start()
 
     def download_from_youtube_dialog(self) -> None:
-        """Abre un diálogo para descargar una pista de YouTube y subirla automáticamente a Google Drive."""
-        from PyQt6.QtWidgets import QInputDialog, QProgressDialog
-        query, ok = QInputDialog.getText(
-            self,
-            "📥 Descarga Autónoma de YouTube",
-            "Ingresa el nombre de la canción, artista o enlace de YouTube:\n(Ej: La bicicleta nightcore)",
-        )
-        if not ok or not query.strip():
+        """Abre un diálogo con recuadro multi-línea para descargar una lista de canciones de YouTube y subirlas a Google Drive."""
+        dlg = YouTubeBatchDownloadDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
+        queries = dlg.get_queries()
+        if not queries:
+            QMessageBox.information(self, "Lista vacía", "No ingresaste ninguna canción o enlace para procesar.")
+            return
+
+        keep_local = dlg.should_keep_local()
+
+        from PyQt6.QtWidgets import QProgressDialog
         from media_sync_worker import MediaDownloaderWorker
         from gdrive_sync import DEFAULT_DRIVE_SERVER_URL
 
-        prog = QProgressDialog("Buscando en YouTube y procesando video/audio...", "Cancelar", 0, 0, self)
-        prog.setWindowTitle("Descarga y Sincronización MaoMusic")
+        total = len(queries)
+        prog = QProgressDialog(f"Iniciando descarga por lote (0/{total})...", "Cancelar", 0, total, self)
+        prog.setWindowTitle("Descarga y Sincronización — MaoMusic")
         prog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        prog.setMinimumDuration(0)
+        prog.setValue(0)
         prog.show()
         QApplication.processEvents()
 
-        class YTWorkerThread(QThread):
-            finished_signal = pyqtSignal(dict)
+        class BatchYTWorkerThread(QThread):
+            progress_signal = pyqtSignal(int, str)
+            finished_signal = pyqtSignal(list)
 
-            def __init__(self, query_text: str, parent=None):
+            def __init__(self, queries_list: list[str], keep_loc: bool, parent=None):
                 super().__init__(parent)
-                self.query_text = query_text
+                self.queries_list = queries_list
+                self.keep_loc = keep_loc
+                self.is_cancelled = False
+
+            def cancel(self):
+                self.is_cancelled = True
 
             def run(self):
                 worker = MediaDownloaderWorker(server_url=DEFAULT_DRIVE_SERVER_URL)
-                res = worker.process_query(self.query_text, keep_local=True)
-                self.finished_signal.emit(res)
+                results = []
+                for idx, q in enumerate(self.queries_list, 1):
+                    if self.is_cancelled:
+                        break
+                    self.progress_signal.emit(idx - 1, f"[{idx}/{len(self.queries_list)}] Procesando: {q}...")
+                    res = worker.process_query(q, keep_local=self.keep_loc)
+                    results.append(res)
+                    self.progress_signal.emit(idx, f"✔ [{idx}/{len(self.queries_list)}] Finalizado: {res.get('title', q)}")
+                self.finished_signal.emit(results)
 
-        self._yt_worker = YTWorkerThread(query.strip(), self)
+        self._batch_yt_worker = BatchYTWorkerThread(queries, keep_local, self)
+        prog.canceled.connect(self._batch_yt_worker.cancel)
 
-        def on_done(res: dict):
+        def on_progress(current_count, status_text):
+            prog.setValue(current_count)
+            prog.setLabelText(status_text)
+            QApplication.processEvents()
+
+        def on_done(results: list):
             prog.close()
-            if res.get("status") == "success":
-                sync_info = res.get("sync", {})
-                method = sync_info.get("method", "local")
-                QMessageBox.information(
-                    self,
-                    "✔ Descarga y Sincronización Completada",
-                    f"Pista: {res.get('title')}\n"
-                    f"Artista: {res.get('artist')}\n"
-                    f"Audio: {res.get('audio_file')}\n"
-                    f"Video: {res.get('video_file')}\n"
-                    f"Método Cloud: {method}",
-                )
-                self.rescan_local_library()
-            else:
-                QMessageBox.warning(
-                    self,
-                    "❌ Error en Descarga",
-                    f"No se pudo completar la descarga:\n{res.get('error', 'Error desconocido')}",
-                )
+            successes = [r for r in results if r.get("status") == "success"]
+            errors = [r for r in results if r.get("status") != "success"]
 
-        self._yt_worker.finished_signal.connect(on_done)
-        self._yt_worker.start()
+            summary = f"🎉 Proceso de descarga finalizado:\n\n"
+            summary += f"• Exitosos: {len(successes)} de {len(results)}\n"
+            if successes:
+                drive_synced = sum(1 for s in successes if s.get("sync", {}).get("audio_synced"))
+                summary += f"• Sincronizados a Google Drive: {drive_synced}\n"
+            if errors:
+                summary += f"• Errores ({len(errors)}):\n"
+                for err in errors[:5]:
+                    summary += f"  - {err.get('query')}: {err.get('error')}\n"
+                if len(errors) > 5:
+                    summary += f"  - ... y {len(errors) - 5} más.\n"
+
+            QMessageBox.information(self, "Resultado de Descarga por Lote", summary)
+            self.rescan_local_library()
+
+        self._batch_yt_worker.progress_signal.connect(on_progress)
+        self._batch_yt_worker.finished_signal.connect(on_done)
+        self._batch_yt_worker.start()
 
     def _on_upload_to_drive_finished(self, uploaded_tracks: list[TrackMetadata], status_msg: str) -> None:
         for t in uploaded_tracks:
