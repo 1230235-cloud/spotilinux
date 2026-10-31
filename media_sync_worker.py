@@ -34,6 +34,7 @@ if str(BASE_DIR) not in sys.path:
 from gdrive_sync import (
     DEFAULT_ROOT_DRIVE_FOLDER_ID,
     DEFAULT_MUSICA_FOLDER_ID,
+    DEFAULT_DRIVE_SERVER_URL,
     GoogleDriveConfig,
     clean_track_title,
     normalize_track_key,
@@ -72,11 +73,13 @@ class MediaDownloaderWorker:
         config: Optional[GoogleDriveConfig] = None,
         rclone_video_remote: Optional[str] = None,
         rclone_audio_remote: Optional[str] = None,
+        server_url: Optional[str] = None,
         temp_work_dir: Optional[Path] = None,
     ) -> None:
         self.config = config or GoogleDriveConfig()
         self.rclone_video_remote = rclone_video_remote or os.environ.get("RCLONE_VIDEO_REMOTE")
         self.rclone_audio_remote = rclone_audio_remote or os.environ.get("RCLONE_AUDIO_REMOTE")
+        self.server_url = server_url or os.environ.get("MAOMUSIC_DRIVE_SERVER_URL") or DEFAULT_DRIVE_SERVER_URL
         self.temp_work_dir = temp_work_dir or Path(tempfile.gettempdir()) / "maomusic_worker"
         self.temp_work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -89,7 +92,7 @@ class MediaDownloaderWorker:
                 logger.error(f"Binario requerido no encontrado en PATH: {binary}")
                 raise RuntimeError(f"Falta herramienta de sistema: {binary}")
         if not shutil.which("rclone"):
-            logger.info("Aviso: 'rclone' no está en PATH; se utilizará Google Drive API directa como fallback.")
+            logger.info("Aviso: 'rclone' no está en PATH; se utilizará el Proxy Serverless de Google Drive como método principal.")
 
     def fetch_and_extract(self, query: str) -> ProcessedMedia:
         """
@@ -140,7 +143,7 @@ class MediaDownloaderWorker:
         # 1. Descarga del video en MP4 (h264/avc1 + aac preferido para compatibilidad total con HTML5 y dispositivos)
         download_cmd = [
             "yt-dlp",
-            "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "--format", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio/best[ext=mp4]/best",
             "--merge-output-format", "mp4",
             "--no-playlist",
             "--write-thumbnail",
@@ -165,6 +168,24 @@ class MediaDownloaderWorker:
             else:
                 shutil.rmtree(work_dir, ignore_errors=True)
                 raise FileNotFoundError(f"No se generó el archivo de video esperado para {query}")
+
+        # Optimización preventiva si el video supera los 35MB para streaming móvil y límites de carga
+        if video_path.stat().st_size > 35 * 1024 * 1024:
+            size_mb = video_path.stat().st_size / (1024 * 1024)
+            logger.info(f"Video descargado ({size_mb:.1f}MB) excede 35MB; optimizando a 720p H.264...")
+            opt_video_path = work_dir / f"opt_{safe_filename}.mp4"
+            opt_cmd = [
+                "ffmpeg", "-y", "-i", str(video_path),
+                "-vf", "scale='min(1280,iw)':-2",
+                "-c:v", "libx264", "-crf", "26", "-preset", "fast",
+                "-c:a", "aac", "-b:a", "128k",
+                str(opt_video_path),
+            ]
+            opt_res = subprocess.run(opt_cmd, capture_output=True, text=True)
+            if opt_res.returncode == 0 and opt_video_path.exists():
+                video_path.unlink(missing_ok=True)
+                video_path = opt_video_path
+                logger.info(f"✔ Video optimizado con éxito a {video_path.stat().st_size / (1024*1024):.1f}MB")
 
         thumb_candidates = list(work_dir.glob("*.jpg"))
         thumbnail_path = thumb_candidates[0] if thumb_candidates else None
@@ -205,18 +226,56 @@ class MediaDownloaderWorker:
             video_id=video_id,
         )
 
+    def _upload_to_serverless_proxy(self, file_path: Path, folder_type: str, mime_type: str) -> Optional[dict]:
+        """Sube un archivo directamente a Google Drive a través del backend Google Apps Script sin requerir OAuth."""
+        if not self.server_url or not file_path.exists():
+            return None
+        import base64
+        import requests
+
+        try:
+            size_mb = file_path.stat().st_size / (1024 * 1024)
+            logger.info(f"Subiendo {file_path.name} ({size_mb:.2f}MB) a Google Drive ({folder_type}) vía proxy serverless...")
+            encoded_data = base64.b64encode(file_path.read_bytes()).decode("utf-8")
+            payload = {
+                "action": "upload_file",
+                "folder_type": folder_type,
+                "filename": file_path.name,
+                "mime_type": mime_type,
+                "file_data": encoded_data,
+            }
+            resp = requests.post(
+                self.server_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=180,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "ok":
+                    logger.info(f"✔ {file_path.name} sincronizado exitosamente en Google Drive: ID={data.get('file_id')}")
+                    return data
+                else:
+                    logger.warning(f"Respuesta del proxy serverless: {data}")
+            else:
+                logger.warning(f"Error HTTP {resp.status_code} desde proxy serverless: {resp.text[:200]}")
+        except Exception as exc:
+            logger.warning(f"Excepción al subir mediante proxy serverless: {exc}")
+        return None
+
     def sync_to_cloud(self, media: ProcessedMedia) -> dict:
         """
         Sincroniza video y audio a sus respectivas carpetas remotas en Google Drive.
-        Usa rclone si está configurado, o la API de Google Drive / backend de MaoMusic.
+        Usa rclone si está configurado, o el Proxy Serverless de Google Apps Script (cero configuración),
+        o la API oficial de Google Drive v3 con OAuth.
         """
         results = {"video_synced": False, "audio_synced": False, "method": ""}
 
-        # Intentar vía Rclone si los remotos están definidos
+        # 1. Intentar vía Rclone si los remotos están definidos
         if self.rclone_video_remote and self.rclone_audio_remote and shutil.which("rclone"):
             logger.info("Sincronizando mediante rclone a remotos configurados...")
             try:
-                # 1. Subir video
+                # Subir video
                 v_res = subprocess.run(
                     ["rclone", "copyto", str(media.video_path), f"{self.rclone_video_remote}/{media.video_path.name}"],
                     capture_output=True,
@@ -228,7 +287,7 @@ class MediaDownloaderWorker:
                 else:
                     logger.warning(f"Rclone video error: {v_res.stderr}")
 
-                # 2. Subir audio
+                # Subir audio
                 a_res = subprocess.run(
                     ["rclone", "copyto", str(media.audio_path), f"{self.rclone_audio_remote}/{media.audio_path.name}"],
                     capture_output=True,
@@ -244,9 +303,30 @@ class MediaDownloaderWorker:
                     results["method"] = "rclone"
                     return results
             except Exception as exc:
-                logger.warning(f"Excepción en rclone: {exc}. Evaluando fallback nativo.")
+                logger.warning(f"Excepción en rclone: {exc}. Evaluando fallback.")
 
-        # Fallback: API de Google Drive usando gdrive_sync
+        # 2. Intentar vía Proxy Serverless (Google Apps Script - Cero configuración)
+        if self.server_url:
+            logger.info("Sincronizando mediante Proxy Serverless de Google Drive...")
+            audio_info = self._upload_to_serverless_proxy(media.audio_path, folder_type="audio", mime_type="audio/mpeg")
+            if audio_info:
+                results["audio_synced"] = True
+                results["audio_file_id"] = audio_info.get("file_id")
+
+            # Video: solo si no excede 38MB para no sobrepasar el límite de payload
+            if media.video_path.stat().st_size <= 38 * 1024 * 1024:
+                video_info = self._upload_to_serverless_proxy(media.video_path, folder_type="video", mime_type="video/mp4")
+                if video_info:
+                    results["video_synced"] = True
+                    results["video_file_id"] = video_info.get("file_id")
+            else:
+                logger.warning(f"Video {media.video_path.name} ({media.video_path.stat().st_size / (1024*1024):.1f}MB) supera 38MB; omitido de subida por proxy serverless.")
+
+            if results["audio_synced"] or results["video_synced"]:
+                results["method"] = "serverless_proxy"
+                return results
+
+        # 3. Fallback: API oficial de Google Drive v3 usando gdrive_sync
         if self.config.access_token:
             logger.info("Sincronizando mediante API oficial de Google Drive v3...")
             import requests
@@ -282,7 +362,7 @@ class MediaDownloaderWorker:
             results["method"] = "gdrive_api"
             return results
 
-        logger.warning("No se cuenta con remotos de rclone ni Access Token OAuth para subida remota inmediata.")
+        logger.warning("No se cuenta con remotos de rclone, proxy serverless funcional ni Access Token OAuth para subida remota.")
         results["method"] = "local_only"
         return results
 
@@ -343,6 +423,7 @@ def main():
     parser.add_argument("--keep-local", "-k", action="store_true", help="Mantener una copia en music_library/")
     parser.add_argument("--rclone-video", help="Remoto rclone para videos (ej: gdrive:videos)")
     parser.add_argument("--rclone-audio", help="Remoto rclone para audios (ej: gdrive:Musica)")
+    parser.add_argument("--server-url", help="URL del endpoint Web App de Google Apps Script")
     parser.add_argument("--json", action="store_true", help="Salida estructurada en JSON")
 
     args = parser.parse_args()
@@ -355,6 +436,7 @@ def main():
         config=gdrive_cfg,
         rclone_video_remote=args.rclone_video,
         rclone_audio_remote=args.rclone_audio,
+        server_url=args.server_url,
     )
 
     if args.batch:

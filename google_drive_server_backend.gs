@@ -114,7 +114,47 @@ function doPost(e) {
     var folderId = data.folder_id || data.root_folder_id || ROOT_FOLDER_ID;
     var folder = DriveApp.getFolderById(folderId);
 
-    // 1. Acción: Guardar o combinar base de datos completa
+    // 1. Acción: Subir archivo multimedia (Audio o Video) directamente sin OAuth
+    if (data.action === "upload_file") {
+      var targetFolderId = data.folder_type === "video" ? VIDEOS_FOLDER_ID : MUSICA_FOLDER_ID;
+      if (data.folder_id) targetFolderId = data.folder_id;
+
+      var targetFolder = DriveApp.getFolderById(targetFolderId);
+      var filename = String(data.filename || "unnamed_media").trim();
+      var mimeType = data.mime_type || (data.folder_type === "video" ? "video/mp4" : "audio/mpeg");
+
+      // Evitar duplicados innecesarios si ya existe
+      var existing = targetFolder.getFilesByName(filename);
+      if (existing.hasNext()) {
+        var existingFile = existing.next();
+        return jsonResponse({
+          status: "ok",
+          action: "existing",
+          file_id: existingFile.getId(),
+          name: existingFile.getName(),
+          size: existingFile.getSize(),
+          download_url: "https://drive.google.com/uc?export=download&id=" + existingFile.getId()
+        });
+      }
+
+      var decodedBytes = Utilities.base64Decode(data.file_data);
+      var blob = Utilities.newBlob(decodedBytes, mimeType, filename);
+      var createdFile = targetFolder.createFile(blob);
+      try {
+        createdFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (_shareErr) {}
+
+      return jsonResponse({
+        status: "ok",
+        action: "created",
+        file_id: createdFile.getId(),
+        name: createdFile.getName(),
+        size: createdFile.getSize(),
+        download_url: "https://drive.google.com/uc?export=download&id=" + createdFile.getId()
+      });
+    }
+
+    // 2. Acción: Guardar o combinar base de datos completa
     if (data.action === "sync_db" || data.accounts) {
       var dbPayload = data.db || data;
       var files = folder.getFilesByName(DB_FILENAME);

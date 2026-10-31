@@ -1883,6 +1883,65 @@ class SpotiLinuxWindow(QMainWindow):
         self._upload_worker.upload_finished.connect(self._on_upload_to_drive_finished)
         self._upload_worker.start()
 
+    def download_from_youtube_dialog(self) -> None:
+        """Abre un diálogo para descargar una pista de YouTube y subirla automáticamente a Google Drive."""
+        from PyQt6.QtWidgets import QInputDialog, QProgressDialog
+        query, ok = QInputDialog.getText(
+            self,
+            "📥 Descarga Autónoma de YouTube",
+            "Ingresa el nombre de la canción, artista o enlace de YouTube:\n(Ej: La bicicleta nightcore)",
+        )
+        if not ok or not query.strip():
+            return
+
+        from media_sync_worker import MediaDownloaderWorker
+        from gdrive_sync import DEFAULT_DRIVE_SERVER_URL
+
+        prog = QProgressDialog("Buscando en YouTube y procesando video/audio...", "Cancelar", 0, 0, self)
+        prog.setWindowTitle("Descarga y Sincronización MaoMusic")
+        prog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        prog.show()
+        QApplication.processEvents()
+
+        class YTWorkerThread(QThread):
+            finished_signal = pyqtSignal(dict)
+
+            def __init__(self, query_text: str, parent=None):
+                super().__init__(parent)
+                self.query_text = query_text
+
+            def run(self):
+                worker = MediaDownloaderWorker(server_url=DEFAULT_DRIVE_SERVER_URL)
+                res = worker.process_query(self.query_text, keep_local=True)
+                self.finished_signal.emit(res)
+
+        self._yt_worker = YTWorkerThread(query.strip(), self)
+
+        def on_done(res: dict):
+            prog.close()
+            if res.get("status") == "success":
+                sync_info = res.get("sync", {})
+                method = sync_info.get("method", "local")
+                QMessageBox.information(
+                    self,
+                    "✔ Descarga y Sincronización Completada",
+                    f"Pista: {res.get('title')}\n"
+                    f"Artista: {res.get('artist')}\n"
+                    f"Audio: {res.get('audio_file')}\n"
+                    f"Video: {res.get('video_file')}\n"
+                    f"Método Cloud: {method}",
+                )
+                self.rescan_local_library()
+            else:
+                QMessageBox.warning(
+                    self,
+                    "❌ Error en Descarga",
+                    f"No se pudo completar la descarga:\n{res.get('error', 'Error desconocido')}",
+                )
+
+        self._yt_worker.finished_signal.connect(on_done)
+        self._yt_worker.start()
+
     def _on_upload_to_drive_finished(self, uploaded_tracks: list[TrackMetadata], status_msg: str) -> None:
         for t in uploaded_tracks:
             self.store.tracks[t.id] = t
@@ -2089,6 +2148,14 @@ class SpotiLinuxWindow(QMainWindow):
         btn_up.setToolTip("Subir nuevas canciones a la carpeta Musica del Drive")
         btn_up.clicked.connect(self.upload_files_to_drive_dialog)
         acc_lay.addWidget(btn_up)
+
+        btn_yt = QPushButton("📥 YouTube")
+        btn_yt.setObjectName("ActionChipButton")
+        btn_yt.setFixedHeight(32)
+        btn_yt.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_yt.setToolTip("Buscar, descargar y sincronizar música y videos de YouTube automáticamente")
+        btn_yt.clicked.connect(self.download_from_youtube_dialog)
+        acc_lay.addWidget(btn_yt)
 
         btn_sync = QPushButton("🔄 Drive" if (has_spoti_acc or has_user or has_token) else "☁️ Drive")
         btn_sync.setObjectName("ActionChipButton")

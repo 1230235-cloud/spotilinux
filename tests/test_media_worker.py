@@ -50,6 +50,35 @@ class TestMediaSyncWorker(unittest.TestCase):
             self.assertTrue(res["audio_synced"])
             self.assertEqual(res["method"], "rclone")
 
+    @patch("requests.post")
+    def test_serverless_proxy_sync_call(self, mock_post):
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"status": "ok", "file_id": "test_drive_id_123"}
+        mock_post.return_value = mock_resp
+
+        with patch("shutil.which", side_effect=lambda b: f"/usr/bin/{b}" if b in ("yt-dlp", "ffmpeg") else None), \
+             patch("pathlib.Path.read_bytes", return_value=b"fake_media_data"), \
+             patch("pathlib.Path.stat") as mock_stat:
+            mock_stat.return_value.st_size = 5 * 1024 * 1024
+            worker = MediaDownloaderWorker(server_url="https://mock.script.google.com/exec")
+            media = ProcessedMedia(
+                query="Test Song",
+                video_title="Artist - Song",
+                clean_title="Artist - Song",
+                artist="Artist",
+                video_path=Path("/tmp/test_video.mp4"),
+                audio_path=Path("/tmp/test_audio.mp3"),
+                thumbnail_path=None,
+                duration=180.0,
+                video_id="id123",
+            )
+            with patch.object(Path, "exists", return_value=True):
+                res = worker.sync_to_cloud(media)
+                self.assertTrue(res["video_synced"])
+                self.assertTrue(res["audio_synced"])
+                self.assertEqual(res["method"], "serverless_proxy")
+                self.assertEqual(res.get("audio_file_id"), "test_drive_id_123")
+
 
 if __name__ == "__main__":
     unittest.main()
