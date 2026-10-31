@@ -1966,8 +1966,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 21;
-const CURRENT_APP_VERSION_NAME = "2.8.4";
+const CURRENT_APP_VERSION_CODE = 22;
+const CURRENT_APP_VERSION_NAME = "2.8.5";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 

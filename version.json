@@ -1,19 +1,19 @@
 {
-  "versionCode": 21,
-  "versionName": "2.8.4",
-  "releaseDate": "2026-10-27",
+  "versionCode": 22,
+  "versionName": "2.8.5",
+  "releaseDate": "2026-10-30",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.8.4",
+    "version": "2.8.5",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Streaming instantáneo HTTP 206 de videos pesados (130 MB a 690 MB) desde drive.usercontent.google.com sin esperas ni bloqueo por escaneo de virus",
-    "Corrección de títulos truncados en pistas descargadas (Que Dolor, Envenéname, Nightcore, Soft Rock, Female Version, etc.)",
-    "Sincronización completa entre masterTracksPool y tracks, y paginación ampliada a 1000 archivos en Google Drive",
-    "Carátulas persistentes entre teléfono y tablet con miniatura automática desde Google Drive y protección contra imágenes rotas",
-    "Corrección de pausa accidental al cambiar videos en modo Vinilo, polyfill Canvas roundRect y funciones de salto multi-dispositivo"
+    "Nuevo módulo autónomo de sincronización y descarga multimedia (YouTube -> Google Drive)",
+    "Modularización y optimización de rendimiento del frontend móvil en archivos dedicados",
+    "Integración de almacenamiento persistente indexado SQLite",
+    "Suite de tests automatizados y CI/CD en GitHub Actions",
+    "Optimizaciones de estabilidad en streaming HTTP 206 y reproducción en segundo plano"
   ]
 }
