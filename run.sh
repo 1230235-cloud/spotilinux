@@ -11,6 +11,8 @@ done
 DIR="$(cd -P "$(dirname "$TARGET")" >/dev/null 2>&1 && pwd)"
 cd "$DIR"
 
+echo "➜ Iniciando MaoMusic Desktop..."
+
 if [ -x "$DIR/venv/bin/python" ]; then
     exec "$DIR/venv/bin/python" "$DIR/main.py" "$@"
 else
