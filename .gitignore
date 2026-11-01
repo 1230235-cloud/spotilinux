@@ -22,3 +22,4 @@ music_library/
 # Lanzadores de escritorio generados dinámicamente con rutas locales
 MaoMusic.desktop
 SpotiLinux.desktop
+data/maomusic*.log*
