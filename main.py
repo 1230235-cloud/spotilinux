@@ -21,7 +21,10 @@ from pathlib import Path
 from typing import Optional
 import urllib.request
 
+import doctor
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME
+from download_queue import DownloadQueue, QueueRunner
+from download_queue_ui import DownloadQueuePanel, QueueSignals
 from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
@@ -1268,6 +1271,22 @@ class SpotiLinuxWindow(QMainWindow):
         self._cloud_sync_worker: Optional[GDriveCloudPlaylistSyncWorker] = None
         self._upload_worker: Optional[GDriveUploadWorker] = None
 
+        # Cola de descargas persistente no bloqueante (Fase 3 & 4)
+        self.download_queue = DownloadQueue(self.base_dir / "data" / "download_queue.sqlite")
+        self.queue_signals = QueueSignals()
+        self.queue_runner = QueueRunner(
+            queue=self.download_queue,
+            on_event=self._on_queue_runner_event,
+            max_parallel=int(self.download_queue.get_meta("max_parallel", "1")),
+        )
+        self.download_queue_panel: Optional[DownloadQueuePanel] = None
+        self._library_rescan_timer = QTimer(self)
+        self._library_rescan_timer.setSingleShot(True)
+        self._library_rescan_timer.setInterval(2000)
+        self._library_rescan_timer.timeout.connect(self.rescan_local_library)
+        self.queue_signals.summary_changed.connect(self._update_download_badge)
+        self.queue_runner.start()
+
         # Estado de navegación actual
         self.current_view: str = "home"  # "home" | "library" | "gdrive" | "liked" | "recent" | "playlist:<id>"
         self.active_genre_filter: str = "Todo"
@@ -1289,6 +1308,7 @@ class SpotiLinuxWindow(QMainWindow):
         # Cargar vista inicial y preparar primera canción (cola = playlist seleccionada, no toda la biblioteca)
         self.switch_view("home")
         self._update_shuffle_ui()
+        self._update_download_badge()
         _pl_name, initial_ctx = self._get_home_preview_tracks(self.home_preview_key)
         if not initial_ctx:
             initial_ctx = list(self.displayed_tracks)
@@ -1868,10 +1888,10 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_account_sidebar.clicked.connect(self.open_account_dialog)
         self.btn_connect_gdrive.clicked.connect(self.open_google_drive_dialog)
         self.btn_upload_gdrive.clicked.connect(self.upload_files_to_drive_dialog)
-        self.btn_download_yt.clicked.connect(self.download_from_youtube_dialog)
+        self.btn_download_yt.clicked.connect(self.open_download_queue_panel)
         self.btn_quick_cloud.clicked.connect(self.open_google_drive_dialog)
         self.hero_banner.btn_cloud_sync_banner.clicked.connect(self.open_google_drive_dialog)
-        self.hero_banner.btn_download_yt_banner.clicked.connect(self.download_from_youtube_dialog)
+        self.hero_banner.btn_download_yt_banner.clicked.connect(self.open_download_queue_panel)
 
         self.btn_auto_scan_pc.clicked.connect(self.auto_scan_pc_music)
         self.btn_import_folder.clicked.connect(self.import_folder_dialog)
@@ -2010,8 +2030,50 @@ class SpotiLinuxWindow(QMainWindow):
         self._upload_worker.upload_finished.connect(self._on_upload_to_drive_finished)
         self._upload_worker.start()
 
+    def _on_queue_runner_event(self, event: dict) -> None:
+        ev_type = event.get("type")
+        if ev_type == "item_done":
+            self.queue_signals.summary_changed.emit()
+            self._library_rescan_timer.start()
+        elif ev_type in ("item_started", "item_error", "item_cancelled", "summary_changed", "state_changed"):
+            self.queue_signals.summary_changed.emit()
+
+    def _update_download_badge(self) -> None:
+        items = self.download_queue.list()
+        active = sum(1 for it in items if it.status in ("pending", "running"))
+        badge_text = f"📥  Descargas ({active})" if active > 0 else "📥  Descargas..."
+        banner_badge_text = f"📥 YouTube ({active})" if active > 0 else "📥 YouTube"
+        if hasattr(self, "btn_download_yt"):
+            self.btn_download_yt.setText(badge_text)
+        if hasattr(self, "hero_banner") and hasattr(self.hero_banner, "btn_download_yt_banner"):
+            self.hero_banner.btn_download_yt_banner.setText(banner_badge_text)
+
+    def open_download_queue_panel(self) -> None:
+        """Abre o enfoca el panel flotante no bloqueante de la cola de descargas."""
+        if self.download_queue_panel is None:
+            self.download_queue_panel = DownloadQueuePanel(
+                queue=self.download_queue,
+                runner=self.queue_runner,
+                signals=self.queue_signals,
+                parent=self,
+            )
+        self.download_queue_panel.show()
+        self.download_queue_panel.raise_()
+        self.download_queue_panel.activateWindow()
+
     def download_from_youtube_dialog(self) -> None:
-        """Abre un diálogo con recuadro multi-línea para descargar una lista de canciones de YouTube y subirlas a Google Drive."""
+        """Abre el asistente para agregar canciones a la cola de descargas de forma no bloqueante."""
+        results = doctor.check_environment(online=False, base_dir=self.base_dir)
+        failed = [r for r in results if r.required and not r.ok]
+        if failed:
+            hints = "\n".join(f"• {r.name}: {r.hint}" for r in failed)
+            QMessageBox.warning(
+                self,
+                "Dependencias Faltantes",
+                f"No se pueden iniciar descargas porque faltan herramientas requeridas en el sistema:\n\n{hints}\n\nEjecuta './install.sh' o 'python doctor.py' en la terminal para resolverlas.",
+            )
+            return
+
         dlg = YouTubeBatchDownloadDialog(self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
@@ -2022,76 +2084,15 @@ class SpotiLinuxWindow(QMainWindow):
             return
 
         keep_local = dlg.should_keep_local()
-
-        from PyQt6.QtWidgets import QProgressDialog
-        from media_sync_worker import MediaDownloaderWorker
-        from gdrive_sync import DEFAULT_DRIVE_SERVER_URL
-
-        total = len(queries)
-        prog = QProgressDialog(f"Iniciando descarga por lote (0/{total})...", "Cancelar", 0, total, self)
-        prog.setWindowTitle("Descarga y Sincronización — MaoMusic")
-        prog.setWindowModality(Qt.WindowModality.ApplicationModal)
-        prog.setMinimumDuration(0)
-        prog.setValue(0)
-        prog.show()
-        QApplication.processEvents()
-
-        class BatchYTWorkerThread(QThread):
-            progress_signal = pyqtSignal(int, str)
-            finished_signal = pyqtSignal(list)
-
-            def __init__(self, queries_list: list[str], keep_loc: bool, parent=None):
-                super().__init__(parent)
-                self.queries_list = queries_list
-                self.keep_loc = keep_loc
-                self.is_cancelled = False
-
-            def cancel(self):
-                self.is_cancelled = True
-
-            def run(self):
-                worker = MediaDownloaderWorker(server_url=DEFAULT_DRIVE_SERVER_URL)
-                results = []
-                for idx, q in enumerate(self.queries_list, 1):
-                    if self.is_cancelled:
-                        break
-                    self.progress_signal.emit(idx - 1, f"[{idx}/{len(self.queries_list)}] Procesando: {q}...")
-                    res = worker.process_query(q, keep_local=self.keep_loc)
-                    results.append(res)
-                    self.progress_signal.emit(idx, f"✔ [{idx}/{len(self.queries_list)}] Finalizado: {res.get('title', q)}")
-                self.finished_signal.emit(results)
-
-        self._batch_yt_worker = BatchYTWorkerThread(queries, keep_local, self)
-        prog.canceled.connect(self._batch_yt_worker.cancel)
-
-        def on_progress(current_count, status_text):
-            prog.setValue(current_count)
-            prog.setLabelText(status_text)
-            QApplication.processEvents()
-
-        def on_done(results: list):
-            prog.close()
-            successes = [r for r in results if r.get("status") == "success"]
-            errors = [r for r in results if r.get("status") != "success"]
-
-            summary = f"🎉 Proceso de descarga finalizado:\n\n"
-            summary += f"• Exitosos: {len(successes)} de {len(results)}\n"
-            if successes:
-                drive_synced = sum(1 for s in successes if s.get("sync", {}).get("audio_synced"))
-                summary += f"• Sincronizados a Google Drive: {drive_synced}\n"
-            if errors:
-                summary += f"• Errores ({len(errors)}):\n"
-                for err in errors[:5]:
-                    summary += f"  - {err.get('query')}: {err.get('error')}\n"
-                if len(errors) > 5:
-                    summary += f"  - ... y {len(errors) - 5} más.\n"
-
-            QMessageBox.information(self, "Resultado de Descarga por Lote", summary)
-            self.rescan_local_library()
-
-        self._batch_yt_worker.progress_signal.connect(on_progress)
-        self._batch_yt_worker.finished_signal.connect(on_done)
-        self._batch_yt_worker.start()
+        added, skipped = self.download_queue.add(queries, keep_local=keep_local)
+        self._update_download_badge()
+        self.open_download_queue_panel()
+        if skipped > 0:
+            QMessageBox.information(
+                self,
+                "Canciones encoladas",
+                f"✔ Se agregaron {added} canciones a la cola de descargas.\n(Se omitieron {skipped} por estar ya registradas).",
+            )
 
     def _on_upload_to_drive_finished(self, uploaded_tracks: list[TrackMetadata], status_msg: str) -> None:
         for t in uploaded_tracks:
@@ -3384,6 +3385,28 @@ class SpotiLinuxWindow(QMainWindow):
     def _open_eq_drawer(self) -> None:
         self.right_card.setVisible(True)
         self._switch_right_tab(1)
+
+    def closeEvent(self, event) -> None:
+        if hasattr(self, "download_queue") and hasattr(self, "queue_runner"):
+            items = self.download_queue.list()
+            running = [it for it in items if it.status == "running"]
+            if running:
+                reply = QMessageBox.question(
+                    self,
+                    "Descargas en curso",
+                    f"Hay {len(running)} descarga(s) en progreso actualmente.\n\n¿Deseas salir de la aplicación? "
+                    "Las descargas en curso se pausarán de forma segura y volverán a estar pendientes la próxima vez.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+
+            self.queue_runner.stop()
+            if self.download_queue_panel:
+                self.download_queue_panel.close()
+        event.accept()
 
     def _on_eq_changed(self, enabled: bool, preset_name: str, gains: list[float]) -> None:
         self.store.eq_enabled = enabled
