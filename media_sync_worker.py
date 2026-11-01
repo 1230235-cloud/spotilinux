@@ -22,9 +22,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Dict, List, Optional
 
 # Integración con el ecosistema MaoMusic
 BASE_DIR = Path(__file__).resolve().parent
@@ -48,6 +49,40 @@ from storage import LibraryStore
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] [MediaWorker] %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 logger = logging.getLogger("MediaWorker")
+
+
+def classify_error(err_str: str) -> str:
+    """
+    Clasifica un error como 'transient' (reintentable con backoff)
+    o 'permanent' (fallo definitivo).
+    """
+    if not err_str:
+        return "permanent"
+    s = err_str.lower()
+    transient_indicators = [
+        "429",
+        "too many requests",
+        "500",
+        "502",
+        "503",
+        "504",
+        "timed out",
+        "timeout",
+        "unable to download webpage",
+        "connection reset",
+        "connection refused",
+        "remotedisconnected",
+        "network is unreachable",
+        "temporary failure in name resolution",
+        "name or service not known",
+        "proxy error",
+        "server disconnected",
+        "try again",
+    ]
+    for ind in transient_indicators:
+        if ind in s:
+            return "transient"
+    return "permanent"
 
 
 @dataclass
@@ -86,29 +121,47 @@ class MediaDownloaderWorker:
 
         self._check_system_binaries()
 
+    def missing_binaries(self) -> list[str]:
+        """Devuelve una lista de binarios obligatorios que no están presentes en el sistema."""
+        missing = []
+        if not resolve_binary("yt-dlp"):
+            missing.append("yt-dlp")
+        if not resolve_binary("ffmpeg"):
+            missing.append("ffmpeg")
+        return missing
+
     def _check_system_binaries(self) -> None:
-        """Verifica dependencias fundamentales del sistema."""
+        """Verifica dependencias fundamentales del sistema sin abortar la construcción."""
         self.ytdlp_bin = resolve_binary("yt-dlp")
         self.ffmpeg_bin = resolve_binary("ffmpeg")
         self.rclone_bin = resolve_binary("rclone")
 
         if not self.ytdlp_bin:
-            logger.error("Binario requerido no encontrado: yt-dlp")
-            raise RuntimeError("Falta herramienta de sistema: yt-dlp")
+            logger.warning("Binario no encontrado al inicializar: yt-dlp")
         if not self.ffmpeg_bin:
-            logger.error("Binario requerido no encontrado: ffmpeg")
-            raise RuntimeError("Falta herramienta de sistema: ffmpeg")
+            logger.warning("Binario no encontrado al inicializar: ffmpeg")
         if not self.rclone_bin:
             logger.info("Aviso: 'rclone' no está en PATH; se utilizará el Proxy Serverless de Google Drive como método principal.")
 
-    def fetch_and_extract(self, query: str) -> ProcessedMedia:
+    def fetch_and_extract(
+        self,
+        query: str,
+        progress_cb: Optional[Callable[[str, float, str], None]] = None,
+        cancel_event: Optional[Any] = None,
+    ) -> ProcessedMedia:
         """
         Descarga el video de YouTube en contenedor MP4 y deriva el audio en MP3 320kbps,
-        minimizando I/O y evitando descargas dobles.
+        minimizando I/O y reportando progreso granular con soporte de cancelación inmediata.
         """
-        task_id = re.sub(r"[^a-zA-Z0-9_-]", "_", query)[:32] + f"_{os.getpid()}"
+        if cancel_event and cancel_event.is_set():
+            raise InterruptedError("Operación cancelada por el usuario")
+
+        task_id = re.sub(r"[^a-zA-Z0-9_-]", "_", query)[:32] + f"_{os.getpid()}_{int(time.time()*1000)}"
         work_dir = self.temp_work_dir / task_id
         work_dir.mkdir(parents=True, exist_ok=True)
+
+        if progress_cb:
+            progress_cb("search", 2.0, f"Buscando en YouTube: '{query}'")
 
         search_query = query if query.startswith("http://") or query.startswith("https://") else f"ytsearch1:{query}"
         logger.info(f"Iniciando búsqueda y descarga para consulta: '{query}'")
@@ -129,6 +182,10 @@ class MediaDownloaderWorker:
             shutil.rmtree(work_dir, ignore_errors=True)
             raise RuntimeError(f"Fallo en búsqueda de YouTube para: {query}") from exc
 
+        if cancel_event and cancel_event.is_set():
+            shutil.rmtree(work_dir, ignore_errors=True)
+            raise InterruptedError("Operación cancelada por el usuario")
+
         raw_title = meta.get("title", query)
         video_id = meta.get("id", "video")
         duration = float(meta.get("duration", 0.0))
@@ -143,6 +200,8 @@ class MediaDownloaderWorker:
             final_track_title = parts[1].strip()
 
         logger.info(f"Resolución de pista: '{final_track_title}' por '{artist_guess}' (Duración: {duration}s)")
+        if progress_cb:
+            progress_cb("download", 10.0, f"Descargando video: {clean_title}")
 
         safe_filename = re.sub(r'[\\/*?:"<>|]', "_", clean_title).strip() or video_id
         video_output_template = str(work_dir / f"{safe_filename}.mp4")
@@ -155,26 +214,71 @@ class MediaDownloaderWorker:
             "--no-playlist",
             "--write-thumbnail",
             "--convert-thumbnails", "jpg",
+            "--newline",
+            "--progress-template", "download:%(progress._percent_str)s",
             "-o", video_output_template,
             search_query,
         ]
 
         logger.info("Descargando contenedor de video en máxima calidad compatible...")
-        dl_res = subprocess.run(download_cmd, capture_output=True, text=True)
-        if dl_res.returncode != 0:
-            logger.error(f"Error durante descarga de video yt-dlp: {dl_res.stderr}")
+        proc = subprocess.Popen(
+            download_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+        dl_output = []
+        try:
+            if proc.stdout:
+                for line in proc.stdout:
+                    dl_output.append(line)
+                    if cancel_event and cancel_event.is_set():
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=3.0)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                        shutil.rmtree(work_dir, ignore_errors=True)
+                        raise InterruptedError("Operación cancelada por el usuario durante la descarga")
+
+                    m = re.search(r"download:\s*([0-9.]+)%", line)
+                    if m and progress_cb:
+                        try:
+                            pct_val = float(m.group(1))
+                            scaled = 10.0 + (pct_val * 0.60)
+                            progress_cb("download", scaled, f"Descargando: {pct_val:.0f}%")
+                        except ValueError:
+                            pass
+            proc.wait()
+        except Exception:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2.0)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            raise
+
+        if proc.returncode != 0:
+            err_tail = "".join(dl_output[-10:])
+            logger.error(f"Error durante descarga de video yt-dlp: {err_tail}")
             shutil.rmtree(work_dir, ignore_errors=True)
-            raise RuntimeError(f"Error en yt-dlp al procesar {query}")
+            raise RuntimeError(f"Error en yt-dlp al procesar {query}: {err_tail}")
 
         video_path = Path(video_output_template)
         if not video_path.exists():
-            # Buscar si yt-dlp añadió alguna extensión ligeramente distinta
             found = list(work_dir.glob(f"{safe_filename}*.mp4"))
             if found:
                 video_path = found[0]
             else:
                 shutil.rmtree(work_dir, ignore_errors=True)
                 raise FileNotFoundError(f"No se generó el archivo de video esperado para {query}")
+
+        if cancel_event and cancel_event.is_set():
+            shutil.rmtree(work_dir, ignore_errors=True)
+            raise InterruptedError("Operación cancelada por el usuario")
 
         # Optimización preventiva si el video supera los 35MB para streaming móvil y límites de carga
         if video_path.stat().st_size > 35 * 1024 * 1024:
@@ -198,6 +302,9 @@ class MediaDownloaderWorker:
         thumbnail_path = thumb_candidates[0] if thumb_candidates else None
 
         # 2. Extracción de audio en alta fidelidad (MP3 320k) directamente desde el video descargado
+        if progress_cb:
+            progress_cb("convert", 72.0, "Extrayendo audio MP3 320kbps con metadatos incrustados...")
+
         audio_path = work_dir / f"{safe_filename}.mp3"
         logger.info("Extrayendo stream de audio a MP3 320kbps con metadatos incrustados...")
 
@@ -219,7 +326,10 @@ class MediaDownloaderWorker:
         if ff_res.returncode != 0 or not audio_path.exists() or audio_path.stat().st_size < 1024:
             logger.error(f"Fallo al extraer audio vía ffmpeg: {ff_res.stderr}")
             shutil.rmtree(work_dir, ignore_errors=True)
-            raise RuntimeError(f"Error en ffmpeg al extraer audio para {query}")
+            raise RuntimeError(f"Error en ffmpeg al extraer audio para {query}: {ff_res.stderr}")
+
+        if progress_cb:
+            progress_cb("convert", 84.0, "Audio MP3 extraído con éxito")
 
         return ProcessedMedia(
             query=query,
@@ -270,12 +380,20 @@ class MediaDownloaderWorker:
             logger.warning(f"Excepción al subir mediante proxy serverless: {exc}")
         return None
 
-    def sync_to_cloud(self, media: ProcessedMedia) -> dict:
+    def sync_to_cloud(
+        self,
+        media: ProcessedMedia,
+        progress_cb: Optional[Callable[[str, float, str], None]] = None,
+        cancel_event: Optional[Any] = None,
+    ) -> dict:
         """
         Sincroniza video y audio a sus respectivas carpetas remotas en Google Drive.
         Usa rclone si está configurado, o el Proxy Serverless de Google Apps Script (cero configuración),
         o la API oficial de Google Drive v3 con OAuth.
         """
+        if cancel_event and cancel_event.is_set():
+            raise InterruptedError("Operación cancelada por el usuario")
+
         results = {"video_synced": False, "audio_synced": False, "method": ""}
 
         # 1. Intentar vía Rclone si los remotos están definidos
@@ -283,6 +401,8 @@ class MediaDownloaderWorker:
         if self.rclone_video_remote and self.rclone_audio_remote and rclone_exe:
             logger.info("Sincronizando mediante rclone a remotos configurados...")
             try:
+                if progress_cb:
+                    progress_cb("upload", 86.0, "Sincronizando video con rclone...")
                 # Subir video
                 v_res = subprocess.run(
                     [rclone_exe, "copyto", str(media.video_path), f"{self.rclone_video_remote}/{media.video_path.name}"],
@@ -295,6 +415,11 @@ class MediaDownloaderWorker:
                 else:
                     logger.warning(f"Rclone video error: {v_res.stderr}")
 
+                if cancel_event and cancel_event.is_set():
+                    raise InterruptedError("Operación cancelada por el usuario")
+
+                if progress_cb:
+                    progress_cb("upload", 94.0, "Sincronizando audio con rclone...")
                 # Subir audio
                 a_res = subprocess.run(
                     [rclone_exe, "copyto", str(media.audio_path), f"{self.rclone_audio_remote}/{media.audio_path.name}"],
@@ -310,19 +435,28 @@ class MediaDownloaderWorker:
                 if results["video_synced"] or results["audio_synced"]:
                     results["method"] = "rclone"
                     return results
+            except InterruptedError:
+                raise
             except Exception as exc:
                 logger.warning(f"Excepción en rclone: {exc}. Evaluando fallback.")
 
         # 2. Intentar vía Proxy Serverless (Google Apps Script - Cero configuración)
         if self.server_url:
             logger.info("Sincronizando mediante Proxy Serverless de Google Drive...")
+            if progress_cb:
+                progress_cb("upload", 86.0, "Sincronizando audio vía Proxy Serverless...")
             audio_info = self._upload_to_serverless_proxy(media.audio_path, folder_type="audio", mime_type="audio/mpeg")
             if audio_info:
                 results["audio_synced"] = True
                 results["audio_file_id"] = audio_info.get("file_id")
 
+            if cancel_event and cancel_event.is_set():
+                raise InterruptedError("Operación cancelada por el usuario")
+
             # Video: solo si no excede 38MB para no sobrepasar el límite de payload
             if media.video_path.stat().st_size <= 38 * 1024 * 1024:
+                if progress_cb:
+                    progress_cb("upload", 94.0, "Sincronizando video vía Proxy Serverless...")
                 video_info = self._upload_to_serverless_proxy(media.video_path, folder_type="video", mime_type="video/mp4")
                 if video_info:
                     results["video_synced"] = True
@@ -365,7 +499,15 @@ class MediaDownloaderWorker:
                     logger.error(f"Error subiendo {file_path.name} a Drive: {e}")
                     return False
 
+            if progress_cb:
+                progress_cb("upload", 86.0, "Subiendo audio a Google Drive...")
             results["audio_synced"] = _upload_file_to_drive(media.audio_path, musica_folder_id, "audio/mpeg")
+
+            if cancel_event and cancel_event.is_set():
+                raise InterruptedError("Operación cancelada por el usuario")
+
+            if progress_cb:
+                progress_cb("upload", 94.0, "Subiendo video a Google Drive...")
             results["video_synced"] = _upload_file_to_drive(media.video_path, videos_folder_id, "video/mp4")
             results["method"] = "gdrive_api"
             return results
@@ -374,23 +516,48 @@ class MediaDownloaderWorker:
         results["method"] = "local_only"
         return results
 
-    def process_query(self, query: str, keep_local: bool = False, local_destination: Optional[Path] = None) -> dict:
+    def process_query(
+        self,
+        query: str,
+        keep_local: bool = False,
+        local_destination: Optional[Path] = None,
+        progress_cb: Optional[Callable[[str, float, str], None]] = None,
+        cancel_event: Optional[Any] = None,
+    ) -> dict:
         """
         Ejecuta el ciclo completo: Descarga -> Extracción -> Sincronización -> Limpieza.
+        Soporta reporte de progreso continuo y cancelación cooperativa por hilo.
         """
+        missing = self.missing_binaries()
+        if missing:
+            err_msg = f"Faltan dependencias de sistema requeridas: {', '.join(missing)}"
+            logger.error(err_msg)
+            return {
+                "status": "error",
+                "query": query,
+                "error": err_msg,
+                "error_kind": "permanent",
+            }
+
+        if cancel_event and cancel_event.is_set():
+            return {"status": "cancelled", "query": query, "error": "Cancelado por el usuario"}
+
         media = None
         work_dir = None
         try:
-            media = self.fetch_and_extract(query)
+            media = self.fetch_and_extract(query, progress_cb=progress_cb, cancel_event=cancel_event)
             work_dir = media.video_path.parent
 
-            sync_status = self.sync_to_cloud(media)
+            sync_status = self.sync_to_cloud(media, progress_cb=progress_cb, cancel_event=cancel_event)
 
             if keep_local:
                 dest = local_destination or BASE_DIR / "music_library"
                 dest.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(media.audio_path, dest / media.audio_path.name)
                 logger.info(f"Copia local guardada en: {dest / media.audio_path.name}")
+
+            if progress_cb:
+                progress_cb("done", 100.0, "Descarga y sincronización completadas")
 
             return {
                 "status": "success",
@@ -401,9 +568,18 @@ class MediaDownloaderWorker:
                 "audio_file": media.audio_path.name,
                 "sync": sync_status,
             }
+        except (InterruptedError, KeyboardInterrupt):
+            logger.info(f"Procesamiento cancelado para '{query}'")
+            return {"status": "cancelled", "query": query, "error": "Cancelado por el usuario"}
         except Exception as exc:
             logger.error(f"Fallo en procesamiento de '{query}': {exc}")
-            return {"status": "error", "query": query, "error": str(exc)}
+            err_str = str(exc)
+            return {
+                "status": "error",
+                "query": query,
+                "error": err_str,
+                "error_kind": classify_error(err_str),
+            }
         finally:
             if work_dir and work_dir.exists():
                 logger.info("Limpiando archivos temporales locales (Zero-Waste I/O)...")
@@ -434,7 +610,63 @@ def main():
     parser.add_argument("--server-url", help="URL del endpoint Web App de Google Apps Script")
     parser.add_argument("--json", action="store_true", help="Salida estructurada en JSON")
 
+    # Comandos de cola persistente (Fase 3)
+    parser.add_argument("--queue-add", nargs="+", help="Agregar una o más consultas a la cola de descargas")
+    parser.add_argument("--queue-import", type=Path, help="Importar archivo de texto (.txt) a la cola")
+    parser.add_argument("--queue-list", action="store_true", help="Mostrar estado actual de la cola de descargas")
+    parser.add_argument("--queue-run", action="store_true", help="Ejecutar y procesar la cola en primer plano hasta vaciarla")
+    parser.add_argument("--queue-retry-failed", action="store_true", help="Reintentar todas las canciones fallidas en la cola")
+    parser.add_argument("--queue-clear", action="store_true", help="Limpiar canciones terminadas o canceladas de la cola")
+    parser.add_argument("--parallel", type=int, default=1, choices=[1, 2, 3], help="Descargas simultáneas (1 a 3, default: 1)")
+
     args = parser.parse_args()
+
+    # Manejo de comandos de cola sin inicializar worker
+    if args.queue_add:
+        from download_queue import DownloadQueue
+        queue = DownloadQueue()
+        added, skipped = queue.add(args.queue_add, keep_local=True)
+        print(f"✔ Encolados: {added} | Omitidos por duplicado: {skipped}")
+        return
+
+    if args.queue_import:
+        from download_queue import DownloadQueue
+        if not args.queue_import.exists():
+            print(f"❌ Archivo no encontrado: {args.queue_import}", file=sys.stderr)
+            sys.exit(1)
+        lines = args.queue_import.read_text(encoding="utf-8").splitlines()
+        queue = DownloadQueue()
+        added, skipped = queue.add(lines, keep_local=True)
+        print(f"✔ Importados: {added} | Omitidos por duplicado: {skipped}")
+        return
+
+    if args.queue_list:
+        from download_queue import DownloadQueue
+        queue = DownloadQueue()
+        items = queue.list()
+        if not items:
+            print("La cola de descargas está vacía.")
+        else:
+            print(f"{'ID':<4} {'Estado':<11} {'Etapa':<15} {'Progreso':<10} {'Consulta':<30} {'Error'}")
+            print("-" * 80)
+            for it in items:
+                err = (it.error[:25] + "...") if len(it.error) > 25 else it.error
+                print(f"{it.id:<4} {it.status:<11} {it.stage:<15} {it.progress:>5.1f}%     {it.query[:28]:<30} {err}")
+        return
+
+    if args.queue_retry_failed:
+        from download_queue import DownloadQueue
+        queue = DownloadQueue()
+        count = queue.retry_failed()
+        print(f"✔ Se reencolaron {count} elementos con error o cancelados.")
+        return
+
+    if args.queue_clear:
+        from download_queue import DownloadQueue
+        queue = DownloadQueue()
+        count = queue.clear_finished()
+        print(f"✔ Se eliminaron {count} elementos terminados o cancelados.")
+        return
 
     # Cargar token o config existente si existe en data/library.json
     store = LibraryStore(BASE_DIR)
@@ -446,6 +678,44 @@ def main():
         rclone_audio_remote=args.rclone_audio,
         server_url=args.server_url,
     )
+
+    if args.queue_run:
+        from download_queue import DownloadQueue, QueueRunner
+        queue = DownloadQueue()
+        print(f"Iniciando ejecutor de cola (concurrencia: {args.parallel}). Presione Ctrl+C para detener.")
+
+        def on_event(ev):
+            t = ev.get("type")
+            if t == "item_started":
+                print(f"▶ [{ev.get('item_id')}] Iniciando: {ev.get('query')}")
+            elif t == "item_progress":
+                print(f"  [{ev.get('item_id')}] {ev.get('stage')}: {ev.get('progress'):.1f}% - {ev.get('message', '')}")
+            elif t == "item_done":
+                print(f"✔ [{ev.get('item_id')}] Completado: {ev.get('result', {}).get('title')}")
+            elif t == "item_error":
+                print(f"❌ [{ev.get('item_id')}] Error (transient={ev.get('transient')}): {ev.get('error')}")
+            elif t == "item_cancelled":
+                print(f"⏹ [{ev.get('item_id')}] Cancelado")
+
+        runner = QueueRunner(
+            queue=queue,
+            downloader_factory=lambda: worker,
+            on_event=on_event,
+            max_parallel=args.parallel,
+        )
+        runner.start()
+        try:
+            while True:
+                active_pending = [it for it in queue.list() if it.status in ("pending", "running")]
+                if not active_pending:
+                    print("✔ Cola completada. No hay más tareas pendientes.")
+                    break
+                time.sleep(1.0)
+        except KeyboardInterrupt:
+            print("\nDeteniendo ejecutor de cola...")
+        finally:
+            runner.stop()
+        return
 
     if args.batch:
         results = worker.process_batch_file(args.batch)
