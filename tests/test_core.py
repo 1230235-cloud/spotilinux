@@ -173,3 +173,33 @@ class TestLinkingRobustness(unittest.TestCase):
             ok, _msg = upload_cloud_database(GoogleDriveConfig(), Path(tmp) / "db.json", {"accounts": {}})
             self.assertFalse(ok)
             self.assertTrue((Path(tmp) / "db.json").exists())
+
+
+class TestPlaybackAndBatchDownload(unittest.TestCase):
+    def test_audio_engine_delegates_gdrive_track(self):
+        import tempfile
+        from PyQt6.QtWidgets import QApplication
+        from audio_engine import AudioEngine
+        from metadata import TrackMetadata
+
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = AudioEngine(Path(tmp))
+            delegated = []
+            engine.track_stream_requested.connect(lambda t, ctx: delegated.append((t, ctx)))
+
+            cloud_track = TrackMetadata(
+                id="gd_12345",
+                filepath="gdrive://12345",
+                title="Cloud Song",
+                artist="Cloud Artist",
+                album="Cloud Album",
+                genre="Pop",
+                year=2026,
+                duration=180,
+                cover_path="",
+                dominant_color="",
+            )
+            engine.play_track(cloud_track)
+            self.assertEqual(len(delegated), 1)
+            self.assertEqual(delegated[0][0].id, "gd_12345")

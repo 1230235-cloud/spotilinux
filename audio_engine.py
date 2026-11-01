@@ -43,7 +43,7 @@ EQ_PRESETS: dict[str, list[float]] = {
 
 
 class PCMAnalyzerWorker(QThread):
-    """Decodifica el archivo de audio a PCM mono ligero (11025 Hz) en segundo plano para FFT exacta."""
+    """Decodifica el archivo de audio a PCM mono ligero (11025/22050 Hz) en segundo plano para FFT exacta."""
 
     finished_pcm = pyqtSignal(str, object, int, object)  # id, samples, sample_rate, rhythm(dict)
 
@@ -54,10 +54,13 @@ class PCMAnalyzerWorker(QThread):
         self.sample_rate = sample_rate
 
     def run(self) -> None:
+        if not self.filepath or self.filepath.startswith("gdrive://") or not Path(self.filepath).is_file():
+            return
         try:
             cmd = [
                 "ffmpeg",
                 "-v", "quiet",
+                "-t", "90",
                 "-i", self.filepath,
                 "-vn",
                 "-ac", "1",
@@ -65,7 +68,7 @@ class PCMAnalyzerWorker(QThread):
                 "-f", "s16le",
                 "-",
             ]
-            res = subprocess.run(cmd, capture_output=True, timeout=25)
+            res = subprocess.run(cmd, capture_output=True, timeout=12)
             if res.returncode == 0 and res.stdout:
                 samples = np.frombuffer(res.stdout, dtype=np.int16).astype(np.float32) / 32768.0
                 try:
@@ -129,6 +132,7 @@ class AudioEngine(QObject):
     spectrum_updated = pyqtSignal(object, object)  # (spectrum_32_bars, waveform_128_pts)
     beat_info = pyqtSignal(float, float, float, float)  # (bpm, beat_pos, confianza, onset 0..1)
     eq_status_changed = pyqtSignal(str)
+    track_stream_requested = pyqtSignal(object, object)  # (TrackMetadata, list[TrackMetadata] | None)
 
     def __init__(self, eq_cache_dir: Path) -> None:
         super().__init__()
@@ -186,13 +190,21 @@ class AudioEngine(QObject):
         context_list: Optional[list[TrackMetadata]] = None,
         record_history: bool = True,
     ) -> None:
+        if context_list is not None:
+            self.context_tracks = list(context_list)
+
+        # Si la pista es remota (gdrive:// o URL externa) y no existe localmente, delegar streaming/caché
+        if track.filepath.startswith("gdrive://") or (not Path(track.filepath).exists() and "://" in track.filepath):
+            self.current_track = track
+            self.track_changed.emit(track)
+            self.queue_changed.emit()
+            self.track_stream_requested.emit(track, self.context_tracks)
+            return
+
         if self.current_track and record_history and self.current_track.id != track.id:
             self.history.append(self.current_track)
             if len(self.history) > 50:
                 self.history.pop(0)
-
-        if context_list is not None:
-            self.context_tracks = list(context_list)
 
         self.current_track = track
         self._pcm_samples = None
@@ -201,10 +213,11 @@ class AudioEngine(QObject):
         self._last_raw_pos = -1
         self._pending_seek_ms = -1
 
-        # Iniciar decodificación PCM en segundo plano para el visualizador FFT
-        self._pcm_worker = PCMAnalyzerWorker(track.id, track.filepath)
-        self._pcm_worker.finished_pcm.connect(self._on_pcm_ready)
-        self._pcm_worker.start()
+        # Iniciar decodificación PCM en segundo plano para el visualizador FFT solo si el archivo es local
+        if Path(track.filepath).is_file():
+            self._pcm_worker = PCMAnalyzerWorker(track.id, track.filepath)
+            self._pcm_worker.finished_pcm.connect(self._on_pcm_ready)
+            self._pcm_worker.start()
 
         # Reproducir archivo original inmediatamente y si hay EQ activo renderizar versión filtrada
         play_path = self._get_or_schedule_eq_file(track, resume_pos_ms=0)
@@ -358,6 +371,9 @@ class AudioEngine(QObject):
 
     def _get_or_schedule_eq_file(self, track: TrackMetadata, resume_pos_ms: int = 0) -> str:
         if not self.eq_enabled or all(abs(g) < 0.2 for g in self.eq_gains):
+            return track.filepath
+
+        if not Path(track.filepath).is_file():
             return track.filepath
 
         sig = f"{track.id}_{'_'.join(f'{g:.1f}' for g in self.eq_gains)}"

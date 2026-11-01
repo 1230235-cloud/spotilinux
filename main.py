@@ -1455,6 +1455,69 @@ class GitUpdateWorker(QThread):
             self.update_failed.emit(str(exc))
 
 
+class PlaylistBatchDownloadWorker(QThread):
+    """Descarga de forma no bloqueante una lista de pistas de Google Drive a la carpeta local."""
+
+    progress = pyqtSignal(int, int, str)  # (actual, total, titulo_cancion)
+    track_saved = pyqtSignal(str, object, bool)  # (old_id, updated_track, was_duplicate)
+    batch_finished = pyqtSignal(int, int, int)  # (descargadas, duplicadas, fallos)
+
+    def __init__(
+        self,
+        tracks: list[TrackMetadata],
+        config,
+        cache_dir: Path,
+        covers_dir: Path,
+        existing_local_dirs: list[Path],
+        verify_duplicates: bool = True,
+    ) -> None:
+        super().__init__()
+        self.tracks = list(tracks)
+        self.config = config
+        self.cache_dir = cache_dir
+        self.covers_dir = covers_dir
+        self.existing_local_dirs = existing_local_dirs
+        self.verify_duplicates = verify_duplicates
+        self._is_cancelled = False
+
+    def cancel(self) -> None:
+        self._is_cancelled = True
+
+    def run(self) -> None:
+        downloaded = 0
+        duplicates = 0
+        errors = 0
+        total = len(self.tracks)
+
+        for idx, track in enumerate(self.tracks, start=1):
+            if self._is_cancelled:
+                break
+            self.progress.emit(idx, total, track.title)
+            try:
+                worker = GDriveStreamDownloadWorker(
+                    track=track,
+                    config=self.config,
+                    cache_dir=self.cache_dir,
+                    covers_dir=self.covers_dir,
+                    existing_local_dirs=self.existing_local_dirs,
+                    verify_duplicates=self.verify_duplicates,
+                )
+                worker.run()
+                if worker.cached_track:
+                    is_dup = getattr(worker, "was_duplicate", False)
+                    if is_dup:
+                        duplicates += 1
+                    else:
+                        downloaded += 1
+                    self.track_saved.emit(track.id, worker.cached_track, is_dup)
+                elif worker.error_message:
+                    errors += 1
+            except Exception:
+                errors += 1
+
+        self.batch_finished.emit(downloaded, duplicates, errors)
+
+
 class YouTubeBatchDownloadDialog(QDialog):
     """Diálogo con recuadro multi-línea para descargar listas de canciones o enlaces de YouTube."""
     def __init__(self, parent=None):
@@ -2315,6 +2378,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.engine.spectrum_updated.connect(self._on_spectrum_frame)
         self.engine.beat_info.connect(self._on_beat_info)
         self.engine.eq_status_changed.connect(self.eq_panel.set_status_text)
+        self.engine.track_stream_requested.connect(self._play_track_or_stream_from_cloud)
 
     def _on_beat_info(self, bpm: float, beat_pos: float, conf: float, onset: float) -> None:
         self.maomao_widget.set_beat(bpm, beat_pos, conf, onset)
@@ -3395,15 +3459,53 @@ class SpotiLinuxWindow(QMainWindow):
             self,
             "Descargar Playlist Completa",
             f"¿Deseas descargar las {len(cloud_pending)} canciones de Google Drive de «{name}» a tu carpeta local?\n\n"
-            "Se verificarán duplicados automáticamente para evitar archivos repetidos.",
+            "Se verificarán duplicados automáticamente en segundo plano sin congelar la aplicación.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        self.hero_banner.lbl_subtitle.setText(f"⬇️ Descargando {len(cloud_pending)} canciones de «{name}»...")
-        for t in cloud_pending:
-            self._download_cloud_track_to_app_folder(t)
+        self._retire_worker("_playlist_batch_worker")
+        self.hero_banner.lbl_subtitle.setText(
+            f"⬇️ Iniciando descarga en segundo plano de {len(cloud_pending)} canciones de «{name}»..."
+        )
+        self._playlist_batch_worker = PlaylistBatchDownloadWorker(
+            tracks=cloud_pending,
+            config=self.store.gdrive_config,
+            cache_dir=self.store.music_library_dir,
+            covers_dir=self.store.covers_dir,
+            existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
+            verify_duplicates=self.store.gdrive_config.verify_duplicates,
+        )
+        self._playlist_batch_worker.progress.connect(self._on_playlist_download_progress)
+        self._playlist_batch_worker.track_saved.connect(self._on_playlist_batch_track_saved)
+        self._playlist_batch_worker.batch_finished.connect(self._on_playlist_batch_finished)
+        self._playlist_batch_worker.start()
+
+    def _on_playlist_download_progress(self, current: int, total: int, title: str) -> None:
+        self.hero_banner.lbl_subtitle.setText(f"⬇️ Descargando ({current}/{total}): «{title}»...")
+
+    def _on_playlist_batch_track_saved(self, old_id: str, updated_track: TrackMetadata, was_duplicate: bool) -> None:
+        self.store.tracks[old_id] = updated_track
+        self.store.deduplicate_library()
+        self.store.save()
+        self._refresh_track_table()
+
+    def _on_playlist_batch_finished(self, downloaded: int, duplicates: int, errors: int) -> None:
+        parts = []
+        if downloaded > 0:
+            parts.append(f"{downloaded} canciones descargadas")
+        if duplicates > 0:
+            parts.append(f"{duplicates} ya existían localmente (vinculadas)")
+        if errors > 0:
+            parts.append(f"{errors} errores")
+        summary = ", ".join(parts) if parts else "completado"
+        self.hero_banner.lbl_subtitle.setText(f"✔ Descarga de playlist finalizada: {summary}.")
+        QMessageBox.information(
+            self,
+            "Descarga de Playlist Finalizada",
+            f"Se completó la sincronización de la playlist:\n\n• {summary}.\n\nTodos los archivos están listos para reproducir sin conexión.",
+        )
 
     def _download_cloud_track_to_app_folder(self, track: TrackMetadata) -> None:
         """Descarga explícitamente una pista de Google Drive a music_library/ verificando duplicados primero."""
@@ -3433,12 +3535,6 @@ class SpotiLinuxWindow(QMainWindow):
         if was_duplicate:
             msg = f"🛡️ Duplicado evitado: «{updated_track.title}» ya estaba descargada en music_library/"
             self.hero_banner.lbl_subtitle.setText(msg)
-            QMessageBox.information(
-                self,
-                "🛡️ Verificación de Duplicados",
-                f"La canción «{updated_track.title}» ya existía localmente en:\n{updated_track.filepath}\n\n"
-                "Se vinculó el archivo existente sin volver a descargarlo ni duplicarlo.",
-            )
         else:
             self.hero_banner.lbl_subtitle.setText(
                 f"✔ Guardada en carpeta de la app (music_library/): {updated_track.title}"
@@ -3787,7 +3883,15 @@ class SpotiLinuxWindow(QMainWindow):
             pass
 
     def _stop_all_workers(self) -> None:
-        names = ("_updater_worker", "_git_update_worker", "_upload_worker", "_gdrive_worker", "_stream_worker", "_cloud_sync_worker")
+        names = (
+            "_updater_worker",
+            "_git_update_worker",
+            "_upload_worker",
+            "_gdrive_worker",
+            "_stream_worker",
+            "_cloud_sync_worker",
+            "_playlist_batch_worker",
+        )
         threads = [getattr(self, n, None) for n in names] + list(getattr(self, "_retired_workers", []))
         for th in threads:
             try:
