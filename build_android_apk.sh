@@ -15,7 +15,13 @@ if [ ! -f "$PLATFORM_JAR" ] || [ ! -d "$BUILD_TOOLS" ]; then
     exit 1
 fi
 
-export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
+if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
+    if [ -d "/usr/lib/jvm/java-17-openjdk" ]; then
+        export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
+    elif command -v javac >/dev/null 2>&1; then
+        export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(which javac)")")")"
+    fi
+fi
 export PATH="$JAVA_HOME/bin:$BUILD_TOOLS:$PATH"
 
 rm -rf "$BUILD_DIR"
