@@ -795,6 +795,9 @@ class GoogleDriveDialog(QDialog):
             return
 
         self.lbl_status.setText("Abriendo navegador para autorizar acceso a Google Drive...")
+        if self._oauth_worker is not None and self._oauth_worker.isRunning():
+            self.lbl_status.setText("Ya hay una autorización en curso; completa o cierra la pestaña del navegador.")
+            return
         self._oauth_worker = GDriveOAuthLoopbackWorker(cid, csec)
         self._oauth_worker.oauth_completed.connect(self._on_oauth_success)
         self._oauth_worker.oauth_error.connect(lambda err: self.lbl_status.setText(f"Error OAuth: {err}"))
@@ -1523,6 +1526,7 @@ class SpotiLinuxWindow(QMainWindow):
         self._stream_worker: Optional[GDriveStreamDownloadWorker] = None
         self._cloud_sync_worker: Optional[GDriveCloudPlaylistSyncWorker] = None
         self._upload_worker: Optional[GDriveUploadWorker] = None
+        self._retired_workers: list = []
 
         # Cola de descargas persistente no bloqueante (Fase 3 & 4)
         self.download_queue = DownloadQueue(self.base_dir / "data" / "download_queue.sqlite")
@@ -1609,6 +1613,7 @@ class SpotiLinuxWindow(QMainWindow):
             self.auto_scan_pc_music()
 
     def _check_github_updates(self, manual: bool = False) -> None:
+        self._retire_worker("_updater_worker")
         self._updater_worker = GitHubDesktopUpdateWorker(self)
         self._updater_worker.update_available.connect(self._on_update_available)
         self._updater_worker.start()
@@ -2273,6 +2278,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         file_paths = [Path(f) for f in files]
         self.hero_banner.lbl_subtitle.setText("⬆️ Subiendo canciones a la carpeta «Musica» de Google Drive...")
+        self._retire_worker("_upload_worker")
         self._upload_worker = GDriveUploadWorker(
             filepaths=file_paths,
             config=self.store.gdrive_config,
@@ -2386,6 +2392,7 @@ class SpotiLinuxWindow(QMainWindow):
         self._silent_gdrive_sync = silent_view_keep
         self.hero_banner.lbl_subtitle.setText("☁️ Conectando con la carpeta «Musica» de Google Drive...")
         target_cache = self.store.music_library_dir if download_immediately else self.store.gdrive_cache_dir
+        self._retire_worker("_gdrive_worker")
         self._gdrive_worker = GDriveSyncWorker(
             config=self.store.gdrive_config,
             cache_dir=target_cache,
@@ -2421,6 +2428,7 @@ class SpotiLinuxWindow(QMainWindow):
             self.lbl_bar_artist.setText("Transmitiendo desde la carpeta «Musica» de Google Drive...")
             if context_list is not None:
                 self.engine.context_tracks = list(context_list)
+            self._retire_worker("_stream_worker")
             self._stream_worker = GDriveStreamDownloadWorker(
                 track=track,
                 config=self.store.gdrive_config,
@@ -3152,6 +3160,7 @@ class SpotiLinuxWindow(QMainWindow):
             "likedIds": list(self.store.liked_ids),
             "drive_tracks": self._collect_drive_tracks_for_account(),
         }
+        self._retire_worker("_cloud_sync_worker")
         self._cloud_sync_worker = GDriveCloudPlaylistSyncWorker(
             access_token=token,
             local_payload=payload,
@@ -3286,6 +3295,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.hero_banner.lbl_subtitle.setText(
             f"⬇️ Verificando duplicados y descargando «{track.title}» a music_library/..."
         )
+        self._retire_worker("_stream_worker")
         self._stream_worker = GDriveStreamDownloadWorker(
             track=track,
             config=self.store.gdrive_config,
@@ -3646,6 +3656,33 @@ class SpotiLinuxWindow(QMainWindow):
         self.right_card.setVisible(True)
         self._switch_right_tab(1)
 
+    def _retire_worker(self, attr: str) -> None:
+        """Detiene con seguridad un QThread previo antes de reemplazarlo (evita 'Destroyed while thread is still running')."""
+        old = getattr(self, attr, None)
+        if old is None:
+            return
+        try:
+            if old.isRunning():
+                old.requestInterruption()
+                old.quit()
+                if not old.wait(1500):
+                    self._retired_workers.append(old)
+                    old.finished.connect(lambda o=old: self._retired_workers.remove(o) if o in self._retired_workers else None)
+        except RuntimeError:
+            pass
+
+    def _stop_all_workers(self) -> None:
+        names = ("_updater_worker", "_upload_worker", "_gdrive_worker", "_stream_worker", "_cloud_sync_worker")
+        threads = [getattr(self, n, None) for n in names] + list(getattr(self, "_retired_workers", []))
+        for th in threads:
+            try:
+                if th is not None and th.isRunning():
+                    th.requestInterruption()
+                    th.quit()
+                    th.wait(2000)
+            except RuntimeError:
+                pass
+
     def closeEvent(self, event) -> None:
         if hasattr(self, "download_queue") and hasattr(self, "queue_runner"):
             items = self.download_queue.list()
@@ -3666,6 +3703,7 @@ class SpotiLinuxWindow(QMainWindow):
             self.queue_runner.stop()
             if self.download_queue_panel:
                 self.download_queue_panel.close()
+        self._stop_all_workers()
         event.accept()
 
     def _on_eq_changed(self, enabled: bool, preset_name: str, gains: list[float]) -> None:
