@@ -11,11 +11,16 @@ Incluye:
   - Visualizador de espectro FFT / ondas en tiempo real a 60 FPS y Ecualizador de 5 bandas
 """
 
+import faulthandler
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import random
 import sys
+import threading
 import time
+import traceback
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -25,7 +30,7 @@ import doctor
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME
 from download_queue import DownloadQueue, QueueRunner
 from download_queue_ui import DownloadQueuePanel, QueueSignals
-from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, pyqtSignal, qInstallMessageHandler, QtMsgType
 from PyQt6.QtGui import (
     QAction,
     QColor,
@@ -3681,6 +3686,106 @@ class SpotiLinuxWindow(QMainWindow):
         btn.style().polish(btn)
 
 
+_FAULTHANDLER_FILE = None
+
+
+def setup_crash_logging(base_dir: Path | str) -> Path:
+    """Configura la red de seguridad anti-cierre: log rotativo, hooks de excepción y faulthandler."""
+    global _FAULTHANDLER_FILE
+    base_path = Path(base_dir).resolve()
+    data_dir = base_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = data_dir / "maomusic.log"
+    root_logger = logging.getLogger()
+    if root_logger.level == logging.NOTSET or root_logger.level > logging.INFO:
+        root_logger.setLevel(logging.INFO)
+
+    for h in list(root_logger.handlers):
+        if isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", "") == str(log_path.resolve()):
+            root_logger.removeHandler(h)
+
+    handler = RotatingFileHandler(
+        log_path,
+        maxBytes=512 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"))
+    root_logger.addHandler(handler)
+
+    def _handle_exception(exc_type, exc_value, exc_traceback) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        logging.getLogger("MaoMusic").critical(
+            "Excepción no capturada en hilo principal:",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+        app = QApplication.instance()
+        if app:
+            try:
+                QMessageBox.critical(
+                    None,
+                    "Error inesperado en MaoMusic",
+                    f"Ocurrió un error inesperado:\n\n{exc_value}\n\nLos detalles se guardaron en:\n{log_path}",
+                )
+            except Exception:
+                pass
+
+    def _handle_thread_exception(args: threading.ExceptHookArgs) -> None:
+        if issubclass(args.exc_type, KeyboardInterrupt):
+            sys.__excepthook__(args.exc_type, args.exc_value, args.exc_traceback)
+            return
+        thread_name = getattr(args.thread, "name", "SegundoPlano")
+        logging.getLogger("MaoMusic").critical(
+            f"Excepción no capturada en hilo '{thread_name}':",
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+        app = QApplication.instance()
+        if app:
+            try:
+                QMessageBox.critical(
+                    None,
+                    "Error en hilo de fondo — MaoMusic",
+                    f"Ocurrió un error en segundo plano ({thread_name}):\n\n{args.exc_value}\n\nLos detalles se guardaron en:\n{log_path}",
+                )
+            except Exception:
+                pass
+
+    sys.excepthook = _handle_exception
+    threading.excepthook = _handle_thread_exception
+
+    fault_log_path = data_dir / "maomusic_fault.log"
+    try:
+        if _FAULTHANDLER_FILE and not _FAULTHANDLER_FILE.closed:
+            _FAULTHANDLER_FILE.close()
+        _FAULTHANDLER_FILE = open(fault_log_path, "a", encoding="utf-8")
+        faulthandler.enable(file=_FAULTHANDLER_FILE)
+    except Exception as e:
+        logging.getLogger("MaoMusic").warning(f"No se pudo habilitar faulthandler: {e}")
+
+    def _qt_message_handler(mode: QtMsgType, context, message: str) -> None:
+        qt_logger = logging.getLogger("Qt")
+        if mode == QtMsgType.QtInfoMsg:
+            qt_logger.info(message)
+        elif mode == QtMsgType.QtWarningMsg:
+            qt_logger.warning(message)
+        elif mode == QtMsgType.QtCriticalMsg:
+            qt_logger.error(message)
+        elif mode == QtMsgType.QtFatalMsg:
+            qt_logger.critical(message)
+        else:
+            qt_logger.debug(message)
+
+    try:
+        qInstallMessageHandler(_qt_message_handler)
+    except Exception as e:
+        logging.getLogger("MaoMusic").warning(f"No se pudo instalar qInstallMessageHandler: {e}")
+
+    return log_path
+
+
 def resolve_app_data_dir() -> Path:
     """Devuelve la carpeta de datos escribible tanto en modo script como en ejecutable compilado."""
     if getattr(sys, "frozen", False):
@@ -3700,6 +3805,7 @@ def main() -> None:
     app.setStyleSheet(SPOTIFY_QSS)
 
     base_dir = resolve_app_data_dir()
+    setup_crash_logging(base_dir)
     window = SpotiLinuxWindow(base_dir)
     window.show()
     sys.exit(app.exec())
