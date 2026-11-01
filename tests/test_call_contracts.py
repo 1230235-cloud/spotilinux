@@ -19,8 +19,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-MODULES = ("gdrive_sync", "storage", "download_queue", "media_sync_worker", "audio_engine", "metadata", "download_queue_ui")
-SCANNED_FILES = ("main.py", "download_queue_ui.py", "gdrive_sync.py", "media_sync_worker.py")
+MODULES = ("gdrive_sync", "storage", "download_queue", "media_sync_worker", "audio_engine", "metadata", "download_queue_ui", "cloud_service")
+SCANNED_FILES = ("main.py", "download_queue_ui.py", "gdrive_sync.py", "media_sync_worker.py", "cloud_service.py")
 
 
 def _collect_callables() -> dict:

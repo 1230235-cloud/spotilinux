@@ -81,6 +81,7 @@ from PyQt6.QtWidgets import (
 )
 
 from audio_engine import AudioEngine
+from cloud_service import CloudSyncManager
 from gdrive_sync import (
     CLOUD_DB_FILENAME,
     DEFAULT_ROOT_DRIVE_FOLDER_ID,
@@ -1455,69 +1456,6 @@ class GitUpdateWorker(QThread):
             self.update_failed.emit(str(exc))
 
 
-class PlaylistBatchDownloadWorker(QThread):
-    """Descarga de forma no bloqueante una lista de pistas de Google Drive a la carpeta local."""
-
-    progress = pyqtSignal(int, int, str)  # (actual, total, titulo_cancion)
-    track_saved = pyqtSignal(str, object, bool)  # (old_id, updated_track, was_duplicate)
-    batch_finished = pyqtSignal(int, int, int)  # (descargadas, duplicadas, fallos)
-
-    def __init__(
-        self,
-        tracks: list[TrackMetadata],
-        config,
-        cache_dir: Path,
-        covers_dir: Path,
-        existing_local_dirs: list[Path],
-        verify_duplicates: bool = True,
-    ) -> None:
-        super().__init__()
-        self.tracks = list(tracks)
-        self.config = config
-        self.cache_dir = cache_dir
-        self.covers_dir = covers_dir
-        self.existing_local_dirs = existing_local_dirs
-        self.verify_duplicates = verify_duplicates
-        self._is_cancelled = False
-
-    def cancel(self) -> None:
-        self._is_cancelled = True
-
-    def run(self) -> None:
-        downloaded = 0
-        duplicates = 0
-        errors = 0
-        total = len(self.tracks)
-
-        for idx, track in enumerate(self.tracks, start=1):
-            if self._is_cancelled:
-                break
-            self.progress.emit(idx, total, track.title)
-            try:
-                worker = GDriveStreamDownloadWorker(
-                    track=track,
-                    config=self.config,
-                    cache_dir=self.cache_dir,
-                    covers_dir=self.covers_dir,
-                    existing_local_dirs=self.existing_local_dirs,
-                    verify_duplicates=self.verify_duplicates,
-                )
-                worker.run()
-                if worker.cached_track:
-                    is_dup = getattr(worker, "was_duplicate", False)
-                    if is_dup:
-                        duplicates += 1
-                    else:
-                        downloaded += 1
-                    self.track_saved.emit(track.id, worker.cached_track, is_dup)
-                elif worker.error_message:
-                    errors += 1
-            except Exception:
-                errors += 1
-
-        self.batch_finished.emit(downloaded, duplicates, errors)
-
-
 class YouTubeBatchDownloadDialog(QDialog):
     """Diálogo con recuadro multi-línea para descargar listas de canciones o enlaces de YouTube."""
     def __init__(self, parent=None):
@@ -1659,12 +1597,38 @@ class SpotiLinuxWindow(QMainWindow):
         self.engine.eq_enabled = self.store.eq_enabled
         self.engine.eq_gains = list(self.store.eq_gains)
 
-        self._gdrive_worker: Optional[GDriveSyncWorker] = None
-        self._stream_worker: Optional[GDriveStreamDownloadWorker] = None
-        self._cloud_sync_worker: Optional[GDriveCloudPlaylistSyncWorker] = None
-        self._upload_worker: Optional[GDriveUploadWorker] = None
         self._retired_workers: list = []
         self._git_update_worker = None
+
+        # Servicio desacoplado para operaciones en la nube (Propuesta 1)
+        self.cloud_service = CloudSyncManager(
+            config=self.store.gdrive_config,
+            music_library_dir=self.store.music_library_dir,
+            gdrive_cache_dir=self.store.gdrive_cache_dir,
+            covers_dir=self.store.covers_dir,
+            accounts_db_path=self.store.accounts_db_path,
+            parent=self,
+        )
+        self.cloud_service.stream_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(msg))
+        self.cloud_service.stream_ready.connect(self._on_cloud_stream_ready)
+        self.cloud_service.stream_failed.connect(lambda _tid, err: QMessageBox.warning(self, "Google Drive Stream", err))
+
+        self.cloud_service.sync_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(f"☁️ {msg}"))
+        self.cloud_service.sync_finished.connect(self._on_gdrive_sync_finished)
+
+        self.cloud_service.batch_progress.connect(self._on_playlist_download_progress)
+        self.cloud_service.batch_track_saved.connect(self._on_playlist_batch_track_saved)
+        self.cloud_service.batch_finished.connect(self._on_playlist_batch_finished)
+
+        self.cloud_service.upload_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(msg))
+        self.cloud_service.upload_finished.connect(self._on_upload_to_drive_finished)
+
+        self.cloud_service.cloud_db_sync_completed.connect(
+            lambda merged: self._on_cloud_sync_success(merged, notify=getattr(self, "_cloud_sync_notify", False))
+        )
+        self.cloud_service.cloud_db_sync_failed.connect(
+            lambda err: self._on_cloud_sync_failed(err, notify=getattr(self, "_cloud_sync_notify", False))
+        )
 
         # Cola de descargas persistente no bloqueante (Fase 3 & 4)
         self.download_queue = DownloadQueue(self.base_dir / "data" / "download_queue.sqlite")
@@ -2457,15 +2421,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         file_paths = [Path(f) for f in files]
         self.hero_banner.lbl_subtitle.setText("⬆️ Subiendo canciones a la carpeta «Musica» de Google Drive...")
-        self._retire_worker("_upload_worker")
-        self._upload_worker = GDriveUploadWorker(
-            filepaths=file_paths,
-            config=self.store.gdrive_config,
-            covers_dir=self.store.covers_dir,
-        )
-        self._upload_worker.upload_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(msg))
-        self._upload_worker.upload_finished.connect(self._on_upload_to_drive_finished)
-        self._upload_worker.start()
+        self.cloud_service.upload_files(file_paths)
 
     def _on_queue_runner_event(self, event: dict) -> None:
         ev_type = event.get("type")
@@ -2570,19 +2526,11 @@ class SpotiLinuxWindow(QMainWindow):
     ) -> None:
         self._silent_gdrive_sync = silent_view_keep
         self.hero_banner.lbl_subtitle.setText("☁️ Conectando con la carpeta «Musica» de Google Drive...")
-        target_cache = self.store.music_library_dir if download_immediately else self.store.gdrive_cache_dir
-        self._retire_worker("_gdrive_worker")
-        self._gdrive_worker = GDriveSyncWorker(
-            config=self.store.gdrive_config,
-            cache_dir=target_cache,
-            covers_dir=self.store.covers_dir,
-            direct_links=direct_links,
+        self.cloud_service.sync_library(
             download_immediately=download_immediately,
+            direct_links=direct_links,
             extra_search_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
         )
-        self._gdrive_worker.sync_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(f"☁️ {msg}"))
-        self._gdrive_worker.sync_finished.connect(self._on_gdrive_sync_finished)
-        self._gdrive_worker.start()
 
     def _on_gdrive_sync_finished(self, tracks: list[TrackMetadata], status_msg: str) -> None:
         for t in tracks:
@@ -2607,20 +2555,7 @@ class SpotiLinuxWindow(QMainWindow):
             self.lbl_bar_artist.setText("Transmitiendo desde la carpeta «Musica» de Google Drive...")
             if context_list is not None:
                 self.engine.context_tracks = list(context_list)
-            self._retire_worker("_stream_worker")
-            self._stream_worker = GDriveStreamDownloadWorker(
-                track=track,
-                config=self.store.gdrive_config,
-                cache_dir=self.store.gdrive_cache_dir,
-                covers_dir=self.store.covers_dir,
-                existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
-                verify_duplicates=self.store.gdrive_config.verify_duplicates,
-            )
-            self._stream_worker.stream_ready.connect(self._on_cloud_stream_ready)
-            self._stream_worker.stream_failed.connect(
-                lambda _tid, err: QMessageBox.warning(self, "Google Drive Stream", err)
-            )
-            self._stream_worker.start()
+            self.cloud_service.stream_track(track, self.store.tracks)
         else:
             self.engine.play_track(track, context_list)
 
@@ -3339,16 +3274,8 @@ class SpotiLinuxWindow(QMainWindow):
             "likedIds": list(self.store.liked_ids),
             "drive_tracks": self._collect_drive_tracks_for_account(),
         }
-        self._retire_worker("_cloud_sync_worker")
-        self._cloud_sync_worker = GDriveCloudPlaylistSyncWorker(
-            access_token=token,
-            local_payload=payload,
-            config=self.store.gdrive_config,
-            local_db_path=self.store.accounts_db_path,
-        )
-        self._cloud_sync_worker.sync_completed.connect(lambda merged: self._on_cloud_sync_success(merged, notify=notify))
-        self._cloud_sync_worker.sync_failed.connect(lambda err: self._on_cloud_sync_failed(err, notify=notify))
-        self._cloud_sync_worker.start()
+        self._cloud_sync_notify = notify
+        self.cloud_service.sync_cloud_db(payload)
 
     def _on_cloud_sync_success(self, merged: dict, notify: bool = False) -> None:
         changed = False
@@ -3465,22 +3392,10 @@ class SpotiLinuxWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        self._retire_worker("_playlist_batch_worker")
         self.hero_banner.lbl_subtitle.setText(
             f"⬇️ Iniciando descarga en segundo plano de {len(cloud_pending)} canciones de «{name}»..."
         )
-        self._playlist_batch_worker = PlaylistBatchDownloadWorker(
-            tracks=cloud_pending,
-            config=self.store.gdrive_config,
-            cache_dir=self.store.music_library_dir,
-            covers_dir=self.store.covers_dir,
-            existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
-            verify_duplicates=self.store.gdrive_config.verify_duplicates,
-        )
-        self._playlist_batch_worker.progress.connect(self._on_playlist_download_progress)
-        self._playlist_batch_worker.track_saved.connect(self._on_playlist_batch_track_saved)
-        self._playlist_batch_worker.batch_finished.connect(self._on_playlist_batch_finished)
-        self._playlist_batch_worker.start()
+        self.cloud_service.download_playlist_batch(cloud_pending, self.store.tracks)
 
     def _on_playlist_download_progress(self, current: int, total: int, title: str) -> None:
         self.hero_banner.lbl_subtitle.setText(f"⬇️ Descargando ({current}/{total}): «{title}»...")
@@ -3509,23 +3424,7 @@ class SpotiLinuxWindow(QMainWindow):
 
     def _download_cloud_track_to_app_folder(self, track: TrackMetadata) -> None:
         """Descarga explícitamente una pista de Google Drive a music_library/ verificando duplicados primero."""
-        self.hero_banner.lbl_subtitle.setText(
-            f"⬇️ Verificando duplicados y descargando «{track.title}» a music_library/..."
-        )
-        self._retire_worker("_stream_worker")
-        self._stream_worker = GDriveStreamDownloadWorker(
-            track=track,
-            config=self.store.gdrive_config,
-            cache_dir=self.store.music_library_dir,
-            covers_dir=self.store.covers_dir,
-            existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
-            verify_duplicates=self.store.gdrive_config.verify_duplicates,
-        )
-        self._stream_worker.stream_ready.connect(self._on_cloud_download_saved)
-        self._stream_worker.stream_failed.connect(
-            lambda _tid, err: QMessageBox.warning(self, "Google Drive Descarga", err)
-        )
-        self._stream_worker.start()
+        self.cloud_service.download_track_to_library(track, self.store.tracks)
 
     def _on_cloud_download_saved(self, old_id: str, updated_track: TrackMetadata, was_duplicate: bool = False) -> None:
         self.store.tracks[old_id] = updated_track
@@ -3883,14 +3782,16 @@ class SpotiLinuxWindow(QMainWindow):
             pass
 
     def _stop_all_workers(self) -> None:
+        if hasattr(self, "cloud_service"):
+            self.cloud_service.shutdown()
         names = (
-            "_updater_worker",
-            "_git_update_worker",
-            "_upload_worker",
-            "_gdrive_worker",
             "_stream_worker",
+            "_gdrive_worker",
+            "_upload_worker",
             "_cloud_sync_worker",
             "_playlist_batch_worker",
+            "_updater_worker",
+            "_git_update_worker",
         )
         threads = [getattr(self, n, None) for n in names] + list(getattr(self, "_retired_workers", []))
         for th in threads:

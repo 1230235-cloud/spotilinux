@@ -53,3 +53,19 @@
 2. **Lectura Acotada**: Lee únicamente los rangos de líneas necesarios (`StartLine`/`EndLine`) antes de editar.
 3. **Preservación de Contratos**: No elimines comentarios de contexto, identificadores canónicos de Google Drive ni firmas del puente `@JavascriptInterface`.
 4. **Sincronía de Versiones**: Al publicar cambios, actualiza `version.json` y `android-app/AndroidManifest.xml` de forma atómica antes de compilar.
+
+## 5. Directrices de UI: Estilo Dark y Controles Minimalistas
+
+1. **Paleta Base OLED Dark**:
+   - Fondo general: `#09090b`
+   - Tarjetas y paneles: `#121215` (borde `1px solid rgba(255, 255, 255, 0.08)`, radio `12px`-`14px`)
+   - Superficies elevadas y chips: `#18181f`
+   - Acento vibrante: `#1ed760` (Spotify green bright)
+2. **Estilo Dark para Botones**:
+   - Todo botón de acción (`ActionChipButton`, filtros, tabs, diálogos) debe llevar diseño de píldora (`border-radius: 9999px`), fondo dark `#18181f`, borde sutil `rgba(255, 255, 255, 0.10)` y texto `#e5e5ec`.
+   - Hover: fondo `#24242d`, borde translúcido verde `rgba(30, 215, 96, 0.50)` y texto blanco.
+   - Activo/Seleccionado: fondo `#1ed760`, texto `#000000`, negrita 800.
+3. **Controles Genéricos Limpios y Minimalistas**:
+   - QLineEdit / Buscadores: fondo `#16161c`, borde `rgba(255, 255, 255, 0.09)`, radio `9999px` (píldora), sin sombras pesadas ni bordes nativos de Qt/SO.
+   - Tablas y Listas: fondo transparente, sin rejillas visibles (`gridline-color: transparent`), filas con padding generoso, hover suave (`rgba(255, 255, 255, 0.04)`) y selección verde translúcida.
+   - QDialog y Menús: fondo oscuro unificado (`#121216`), bordes redondeados, sin botones estilo botón clásico de Windows 95 o widgets genéricos sin estilizar.
