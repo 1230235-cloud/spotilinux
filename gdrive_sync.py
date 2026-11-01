@@ -475,6 +475,7 @@ class GDriveSyncWorker(QThread):
         download_immediately: bool = False,
         existing_tracks: Optional[dict[str, TrackMetadata]] = None,
         extra_search_dirs: Optional[list[Path]] = None,
+        existing_local_dirs: Optional[list[Path]] = None,
     ) -> None:
         super().__init__()
         self.config = config
@@ -483,7 +484,7 @@ class GDriveSyncWorker(QThread):
         self.direct_links = direct_links or []
         self.download_immediately = download_immediately
         self.existing_tracks = dict(existing_tracks or {})
-        self.extra_search_dirs = list(extra_search_dirs or [])
+        self.extra_search_dirs = list(extra_search_dirs or existing_local_dirs or [])
 
     def _refresh_access_token_if_needed(self) -> None:
         if self.config.refresh_token and self.config.client_id and self.config.client_secret:

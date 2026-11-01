@@ -2140,7 +2140,7 @@ class SpotiLinuxWindow(QMainWindow):
             covers_dir=self.store.covers_dir,
             direct_links=direct_links,
             download_immediately=download_immediately,
-            existing_local_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
+            extra_search_dirs=[self.store.music_library_dir, self.store.gdrive_cache_dir],
         )
         self._gdrive_worker.sync_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(f"☁️ {msg}"))
         self._gdrive_worker.sync_finished.connect(self._on_gdrive_sync_finished)
