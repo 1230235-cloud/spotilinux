@@ -1,19 +1,19 @@
 {
-  "versionCode": 23,
-  "versionName": "2.8.6",
-  "releaseDate": "2026-10-31",
+  "versionCode": 24,
+  "versionName": "2.9.0",
+  "releaseDate": "2026-11-01",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.8.6",
+    "version": "2.9.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Recuadro multi-línea para descarga masiva por lotes de canciones y videos desde YouTube",
-    "Subida autónoma directa a Google Drive (/Musica y /Videos) vía Proxy Serverless con cero configuración",
-    "Optimización preventiva de compresión de video H.264 para streaming ágil en móviles",
-    "Integración directa en la barra de herramientas del cliente con botón YouTube",
-    "Mejoras de rendimiento en sincronización multi-dispositivo y base de datos local SQLite"
+    "Cola de descargas múltiples con reintentos y panel de gestión",
+    "Ver/ocultar, cambiar y recuperar la contraseña de la cuenta (clave MAO-XXXX-YYYY)",
+    "Estabilidad: corregidos cierres inesperados al vincular, subir y reproducir desde Drive",
+    "Registro de errores en data/maomusic.log y manejo seguro de hilos",
+    "Comprobación de actualizaciones veraz con botón manual"
   ]
 }

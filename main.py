@@ -30,7 +30,7 @@ import doctor
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME
 from download_queue import DownloadQueue, QueueRunner
 from download_queue_ui import DownloadQueuePanel, QueueSignals
-from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, pyqtSignal, qInstallMessageHandler, QtMsgType
+from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, QUrl, pyqtSignal, qInstallMessageHandler, QtMsgType
 from PyQt6.QtGui import (
     QAction,
     QColor,
@@ -42,6 +42,7 @@ from PyQt6.QtGui import (
     QLinearGradient,
     QPainter,
     QPainterPath,
+    QDesktopServices,
     QPixmap,
     QShortcut,
 )
@@ -1379,22 +1380,75 @@ class AccountDialog(QDialog):
             self._set_mode("login")
 
 
+GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json"
+GITHUB_RELEASES_URL = "https://github.com/1230235-cloud/spotilinux/releases"
+
+
+def fetch_remote_version(url: str = GITHUB_VERSION_URL, timeout: int = 10) -> dict:
+    """Descarga y valida version.json remoto. Lanza excepción con mensaje claro si falla."""
+    req = urllib.request.Request(f"{url}?_t={int(time.time())}", headers={"User-Agent": "SpotiLinux-Desktop"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"GitHub respondió HTTP {resp.status}")
+        data = json.loads(resp.read().decode("utf-8"))
+    if not isinstance(data, dict) or "versionCode" not in data:
+        raise ValueError("version.json remoto inválido (falta versionCode)")
+    data["versionCode"] = int(data["versionCode"])
+    return data
+
+
 class GitHubDesktopUpdateWorker(QThread):
     update_available = pyqtSignal(dict)
+    up_to_date = pyqtSignal(dict)
+    check_failed = pyqtSignal(str)
 
     def run(self) -> None:
         try:
-            url = f"https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json?_t={int(time.time())}"
-            req = urllib.request.Request(url, headers={"User-Agent": "SpotiLinux-Desktop"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    remote_code = data.get("versionCode", 0)
-                    local_code = APP_VERSION_CODE
-                    if remote_code > local_code:
-                        self.update_available.emit(data)
-        except Exception:
-            pass
+            data = fetch_remote_version()
+        except Exception as exc:
+            logging.getLogger("maomusic").warning("Comprobación de actualización falló: %s", exc)
+            self.check_failed.emit(str(exc))
+            return
+        if data["versionCode"] > APP_VERSION_CODE:
+            self.update_available.emit(data)
+        else:
+            self.up_to_date.emit(data)
+
+
+class GitUpdateWorker(QThread):
+    """Aplica la actualización con git fetch + merge --ff-only (sin tocar cambios locales)."""
+
+    update_done = pyqtSignal(str)
+    update_failed = pyqtSignal(str)
+
+    def __init__(self, repo_dir: Path) -> None:
+        super().__init__()
+        self.repo_dir = repo_dir
+
+    def _git(self, *args: str) -> "subprocess.CompletedProcess":
+        import subprocess
+
+        return subprocess.run(
+            ["git", *args], cwd=str(self.repo_dir), capture_output=True, text=True, timeout=90
+        )
+
+    def run(self) -> None:
+        try:
+            fetch = self._git("fetch", "origin", "main")
+            if fetch.returncode != 0:
+                self.update_failed.emit(f"No se pudo contactar GitHub:\n{fetch.stderr or fetch.stdout}")
+                return
+            merge = self._git("merge", "--ff-only", "origin/main")
+            if merge.returncode != 0:
+                self.update_failed.emit(
+                    "No se pudo aplicar la actualización automáticamente (hay cambios locales en archivos versionados).\n\n"
+                    f"{(merge.stderr or merge.stdout).strip()}"
+                )
+                return
+            self.update_done.emit((merge.stdout or "").strip())
+        except Exception as exc:
+            logging.getLogger("maomusic").exception("Fallo al actualizar")
+            self.update_failed.emit(str(exc))
 
 
 class YouTubeBatchDownloadDialog(QDialog):
@@ -1543,6 +1597,7 @@ class SpotiLinuxWindow(QMainWindow):
         self._cloud_sync_worker: Optional[GDriveCloudPlaylistSyncWorker] = None
         self._upload_worker: Optional[GDriveUploadWorker] = None
         self._retired_workers: list = []
+        self._git_update_worker = None
 
         # Cola de descargas persistente no bloqueante (Fase 3 & 4)
         self.download_queue = DownloadQueue(self.base_dir / "data" / "download_queue.sqlite")
@@ -1632,31 +1687,64 @@ class SpotiLinuxWindow(QMainWindow):
         self._retire_worker("_updater_worker")
         self._updater_worker = GitHubDesktopUpdateWorker(self)
         self._updater_worker.update_available.connect(self._on_update_available)
+        if manual:
+            self._updater_worker.up_to_date.connect(
+                lambda info: QMessageBox.information(
+                    self, "Actualizaciones", f"✔ Ya tienes la última versión (v{APP_VERSION_NAME})."
+                )
+            )
+            self._updater_worker.check_failed.connect(
+                lambda err: QMessageBox.warning(
+                    self, "Actualizaciones", f"No se pudo comprobar si hay actualizaciones:\n{err}"
+                )
+            )
         self._updater_worker.start()
 
     def _on_update_available(self, info: dict) -> None:
         v_name = info.get("versionName", "Nueva")
         changelog_items = info.get("changelog", [])
         cl_text = "\n".join(f"• {x}" for x in changelog_items) if changelog_items else "Mejoras de rendimiento y corrección de errores."
+        is_git_repo = (Path(self.base_dir) / ".git").exists()
 
         msg = QMessageBox(self)
         msg.setWindowTitle("🚀 Actualización de MaoMusic Disponible")
-        msg.setText(f"<b>Se ha publicado una nueva versión oficial de MaoMusic (v{v_name}) en GitHub.</b>")
-        msg.setInformativeText(f"Novedades:\n{cl_text}\n\n¿Deseas actualizar el código automáticamente con git pull?")
-        btn_update = msg.addButton("Actualizar ahora (git pull)", QMessageBox.ButtonRole.AcceptRole)
+        msg.setText(f"<b>Hay una nueva versión de MaoMusic (v{v_name}); tienes la v{APP_VERSION_NAME}.</b>")
+        if is_git_repo:
+            msg.setInformativeText(f"Novedades:\n{cl_text}\n\n¿Deseas actualizar ahora desde GitHub?")
+            btn_update = msg.addButton("Actualizar ahora", QMessageBox.ButtonRole.AcceptRole)
+        else:
+            msg.setInformativeText(
+                f"Novedades:\n{cl_text}\n\nEsta instalación no es un repositorio git; descarga la nueva versión desde GitHub."
+            )
+            btn_update = msg.addButton("Abrir página de descargas", QMessageBox.ButtonRole.AcceptRole)
         msg.addButton("Más tarde", QMessageBox.ButtonRole.RejectRole)
         msg.exec()
 
-        if msg.clickedButton() == btn_update:
-            try:
-                import subprocess
-                res = subprocess.run(["git", "pull", "origin", "main"], cwd=str(self.base_dir), capture_output=True, text=True, timeout=30)
-                if res.returncode == 0:
-                    QMessageBox.information(self, "Actualización Completada", "✔ MaoMusic se actualizó exitosamente desde GitHub.\nPor favor reinicia la aplicación para disfrutar de las novedades.")
-                else:
-                    QMessageBox.warning(self, "Aviso de Git", f"No se pudo completar el pull automáticamente:\n{res.stderr or res.stdout}")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Fallo al ejecutar actualización: {e}")
+        if msg.clickedButton() != btn_update:
+            return
+        if not is_git_repo:
+            QDesktopServices.openUrl(QUrl(GITHUB_RELEASES_URL))
+            return
+        self._retire_worker("_git_update_worker")
+        self._git_update_worker = GitUpdateWorker(Path(self.base_dir))
+        self._git_update_worker.update_done.connect(self._on_git_update_done)
+        self._git_update_worker.update_failed.connect(
+            lambda err: QMessageBox.warning(self, "Actualización no aplicada", err)
+        )
+        self._git_update_worker.start()
+        self.statusBar().showMessage("Actualizando desde GitHub...", 5000)
+
+    def _on_git_update_done(self, _output: str) -> None:
+        reply = QMessageBox.question(
+            self,
+            "Actualización completada",
+            "✔ MaoMusic se actualizó desde GitHub.\n\n¿Reiniciar ahora para aplicar los cambios?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._stop_all_workers()
+            os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # ================================================================== #
     #                       CONSTRUCCIÓN DE LA UI                        #
@@ -1782,6 +1870,11 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_download_yt.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_download_yt.setToolTip("Descargar y sincronizar canciones o videos de YouTube directamente a Google Drive")
 
+        self.btn_check_updates = QPushButton(f"🔄  Buscar actualizaciones (v{APP_VERSION_NAME})")
+        self.btn_check_updates.setObjectName("ActionChipButton")
+        self.btn_check_updates.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_check_updates.setToolTip("Comprueba en GitHub si hay una versión más reciente de MaoMusic")
+
         self.btn_auto_scan_pc = QPushButton("🔍  Auto-Rastrear Música PC")
         self.btn_auto_scan_pc.setObjectName("ActionChipButton")
         self.btn_auto_scan_pc.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1799,6 +1892,7 @@ class SpotiLinuxWindow(QMainWindow):
         import_box.addWidget(self.btn_connect_gdrive)
         import_box.addWidget(self.btn_upload_gdrive)
         import_box.addWidget(self.btn_download_yt)
+        import_box.addWidget(self.btn_check_updates)
         import_box.addWidget(self.btn_auto_scan_pc)
         import_box.addWidget(self.btn_import_folder)
         import_box.addWidget(self.btn_import_files)
@@ -2160,6 +2254,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.playlist_list.customContextMenuRequested.connect(self._on_playlist_context_menu)
 
         self.btn_account_sidebar.clicked.connect(self.open_account_dialog)
+        self.btn_check_updates.clicked.connect(lambda: self._check_github_updates(manual=True))
         self.btn_connect_gdrive.clicked.connect(self.open_google_drive_dialog)
         self.btn_upload_gdrive.clicked.connect(self.upload_files_to_drive_dialog)
         self.btn_download_yt.clicked.connect(self.open_download_queue_panel)
@@ -3688,7 +3783,7 @@ class SpotiLinuxWindow(QMainWindow):
             pass
 
     def _stop_all_workers(self) -> None:
-        names = ("_updater_worker", "_upload_worker", "_gdrive_worker", "_stream_worker", "_cloud_sync_worker")
+        names = ("_updater_worker", "_git_update_worker", "_upload_worker", "_gdrive_worker", "_stream_worker", "_cloud_sync_worker")
         threads = [getattr(self, n, None) for n in names] + list(getattr(self, "_retired_workers", []))
         for th in threads:
             try:
