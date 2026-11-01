@@ -725,6 +725,8 @@ class GDriveStreamDownloadWorker(QThread):
         covers_dir: Path,
         existing_tracks: Optional[dict[str, TrackMetadata]] = None,
         extra_search_dirs: Optional[list[Path]] = None,
+        existing_local_dirs: Optional[list[Path]] = None,
+        verify_duplicates: Optional[bool] = None,
     ) -> None:
         super().__init__()
         self.track = track
@@ -732,7 +734,12 @@ class GDriveStreamDownloadWorker(QThread):
         self.cache_dir = cache_dir
         self.covers_dir = covers_dir
         self.existing_tracks = dict(existing_tracks or {})
-        self.extra_search_dirs = list(extra_search_dirs or [])
+        dirs = list(extra_search_dirs or [])
+        if not dirs and existing_local_dirs:
+            dirs = list(existing_local_dirs)
+        self.extra_search_dirs = dirs
+        if verify_duplicates is not None:
+            self.config.check_duplicates = bool(verify_duplicates)
 
     def run(self) -> None:
         if self.track.filepath.startswith("gdrive://"):

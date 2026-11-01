@@ -810,7 +810,7 @@ class GoogleDriveDialog(QDialog):
             api_key=self.inp_api_key.text(),
             folder_id=self.inp_folder.text().strip() or DEFAULT_ROOT_DRIVE_FOLDER_ID,
             musica_folder_id=self.config.musica_folder_id,
-            verify_duplicates=self.chk_dedup.isChecked(),
+            check_duplicates=self.chk_dedup.isChecked(),
         )
         links = [
             line.strip()
@@ -2269,10 +2269,9 @@ class SpotiLinuxWindow(QMainWindow):
         file_paths = [Path(f) for f in files]
         self.hero_banner.lbl_subtitle.setText("⬆️ Subiendo canciones a la carpeta «Musica» de Google Drive...")
         self._upload_worker = GDriveUploadWorker(
+            filepaths=file_paths,
             config=self.store.gdrive_config,
-            file_paths=file_paths,
             covers_dir=self.store.covers_dir,
-            verify_duplicates=self.store.gdrive_config.verify_duplicates,
         )
         self._upload_worker.upload_progress.connect(lambda msg: self.hero_banner.lbl_subtitle.setText(msg))
         self._upload_worker.upload_finished.connect(self._on_upload_to_drive_finished)
