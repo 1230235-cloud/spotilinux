@@ -84,10 +84,12 @@ from gdrive_sync import (
     download_cloud_database,
     extract_drive_id_from_url,
     fetch_google_user_profile,
+    generate_recovery_key,
     hash_password,
     merge_account_records,
     sync_cloud_playlists_with_drive,
     upload_cloud_database,
+    validate_recovery_key,
 )
 from generate_demos import ensure_demo_tracks
 from maomao_widget import MaomaoDancerWidget
@@ -820,7 +822,7 @@ class GoogleDriveDialog(QDialog):
 
 class AccountDialog(QDialog):
     """
-    Modal para Crear Cuenta (Usuario, Correo, Contraseña) o Iniciar Sesión.
+    Modal para Crear Cuenta, Iniciar Sesión, Cambiar Contraseña y Recuperar Cuenta.
     Guarda y sincroniza la base de datos de cuentas, playlists y canciones de Drive
     en https://drive.google.com/drive/folders/1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT (spotilinux_database.json).
     """
@@ -828,9 +830,9 @@ class AccountDialog(QDialog):
     def __init__(self, parent: QWidget, store: LibraryStore) -> None:
         super().__init__(parent)
         self.store = store
-        self.setWindowTitle("👤 Cuenta MaoMusic — Vincular Datos y Playlists en Google Drive")
-        self.setFixedSize(520, 480)
-        self.mode: str = "register"  # "register" | "login"
+        self.setWindowTitle("👤 Cuenta MaoMusic — Sincronización y Seguridad en Google Drive")
+        self.setMinimumSize(540, 520)
+        self.mode: str = "register"  # "register" | "login" | "change" | "recover"
         self.authenticated_account: Optional[dict] = None
         self.logged_out: bool = False
 
@@ -850,6 +852,7 @@ class AccountDialog(QDialog):
             QPushButton:hover { background-color: #1ED760; }
             QPushButton#TabBtn {
                 background-color: #262632; color: #CFCFD8; border: 1px solid #3E3E4E; border-radius: 14px;
+                padding: 6px 10px; font-size: 11px;
             }
             QPushButton#TabBtn[active="true"] {
                 background-color: rgba(29, 185, 84, 0.22); color: #1ED760; border: 1px solid #1ED760;
@@ -861,7 +864,7 @@ class AccountDialog(QDialog):
         )
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(22, 18, 22, 18)
+        lay.setContentsMargins(22, 16, 22, 16)
         lay.setSpacing(10)
 
         title = QLabel("👤 Cuenta MaoMusic Multi-Dispositivo")
@@ -869,7 +872,7 @@ class AccountDialog(QDialog):
         lay.addWidget(title)
 
         desc = QLabel(
-            f"Tus playlists y las canciones del Drive se guardan vinculadas a tu cuenta en:\n"
+            f"Tus playlists y canciones se sincronizan con tu cuenta en:\n"
             f"📁 Drive ID: {DEFAULT_ROOT_DRIVE_FOLDER_ID} ({CLOUD_DB_FILENAME} + carpeta «Musica»)"
         )
         desc.setWordWrap(True)
@@ -879,23 +882,33 @@ class AccountDialog(QDialog):
         if self.store.user_account.get("username"):
             curr_u = self.store.user_account.get("username")
             curr_e = self.store.user_account.get("email")
+            curr_k = self.store.user_account.get("recovery_key") or "No asignada (usa Recuperar)"
             active_box = QFrame()
             active_box.setStyleSheet(
                 "background-color: rgba(29, 185, 84, 0.12); border: 1px solid rgba(29, 185, 84, 0.4); border-radius: 8px;"
             )
-            ab_lay = QHBoxLayout(active_box)
-            ab_lay.setContentsMargins(10, 6, 10, 6)
+            ab_lay = QVBoxLayout(active_box)
+            ab_lay.setContentsMargins(10, 8, 10, 8)
+            ab_lay.setSpacing(4)
+
+            top_h = QHBoxLayout()
             lbl_curr = QLabel(f"✔ Sesión activa: <b>{curr_u}</b> ({curr_e})")
             lbl_curr.setStyleSheet("color: #1ED760; font-size: 12px; border: none; background: transparent;")
             btn_logout = QPushButton("Cerrar sesión")
             btn_logout.setObjectName("DangerBtn")
             btn_logout.clicked.connect(self._do_logout)
-            ab_lay.addWidget(lbl_curr, stretch=1)
-            ab_lay.addWidget(btn_logout)
+            top_h.addWidget(lbl_curr, stretch=1)
+            top_h.addWidget(btn_logout)
+            ab_lay.addLayout(top_h)
+
+            rec_lbl = QLabel(f"🛡️ Clave de recuperación: <b style='color:#FFF;'>{curr_k}</b>")
+            rec_lbl.setStyleSheet("color: #A6A6B4; font-size: 11px; border: none; background: transparent;")
+            ab_lay.addWidget(rec_lbl)
             lay.addWidget(active_box)
 
         tab_row = QHBoxLayout()
-        self.btn_tab_register = QPushButton("✨ Crear Cuenta Nueva")
+        tab_row.setSpacing(6)
+        self.btn_tab_register = QPushButton("✨ Crear Cuenta")
         self.btn_tab_register.setObjectName("TabBtn")
         self.btn_tab_register.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_tab_register.clicked.connect(lambda: self._set_mode("register"))
@@ -905,12 +918,24 @@ class AccountDialog(QDialog):
         self.btn_tab_login.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_tab_login.clicked.connect(lambda: self._set_mode("login"))
 
+        self.btn_tab_change = QPushButton("🔐 Cambiar Clave")
+        self.btn_tab_change.setObjectName("TabBtn")
+        self.btn_tab_change.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_tab_change.clicked.connect(lambda: self._set_mode("change"))
+
+        self.btn_tab_recover = QPushButton("🆘 Recuperar")
+        self.btn_tab_recover.setObjectName("TabBtn")
+        self.btn_tab_recover.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_tab_recover.clicked.connect(lambda: self._set_mode("recover"))
+
         tab_row.addWidget(self.btn_tab_register)
         tab_row.addWidget(self.btn_tab_login)
+        tab_row.addWidget(self.btn_tab_change)
+        tab_row.addWidget(self.btn_tab_recover)
         lay.addLayout(tab_row)
 
-        form = QFormLayout()
-        form.setSpacing(10)
+        self.form = QFormLayout()
+        self.form.setSpacing(10)
 
         self.lbl_user = QLabel("Usuario:")
         self.inp_username = QLineEdit(self.store.user_account.get("username", ""))
@@ -924,15 +949,29 @@ class AccountDialog(QDialog):
         self.inp_password = QLineEdit()
         self.inp_password.setEchoMode(QLineEdit.EchoMode.Password)
         self.inp_password.setPlaceholderText("Contraseña de tu cuenta MaoMusic")
+        self._add_password_toggle(self.inp_password)
 
+        self.lbl_new_pass = QLabel("Nueva Contraseña:")
+        self.inp_new_password = QLineEdit()
+        self.inp_new_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.inp_new_password.setPlaceholderText("Nueva contraseña segura")
+        self._add_password_toggle(self.inp_new_password)
+
+        self.lbl_recovery_key = QLabel("Clave de Recuperación:")
+        self.inp_recovery_key = QLineEdit()
+        self.inp_recovery_key.setPlaceholderText("Ej. MAO-ABCD-1234 o tu correo registrado")
+
+        self.lbl_token = QLabel("Token Drive (Opcional):")
         self.inp_token = QLineEdit(self.store.gdrive_config.access_token)
-        self.inp_token.setPlaceholderText("Opcional: Token OAuth2 de Google Drive para escritura directa en la nube")
+        self.inp_token.setPlaceholderText("Opcional: Token OAuth2 de Google Drive")
 
-        form.addRow(self.lbl_user, self.inp_username)
-        form.addRow(self.lbl_email, self.inp_email)
-        form.addRow(self.lbl_pass, self.inp_password)
-        form.addRow("Token Drive (Opcional):", self.inp_token)
-        lay.addLayout(form)
+        self.form.addRow(self.lbl_user, self.inp_username)
+        self.form.addRow(self.lbl_email, self.inp_email)
+        self.form.addRow(self.lbl_pass, self.inp_password)
+        self.form.addRow(self.lbl_new_pass, self.inp_new_password)
+        self.form.addRow(self.lbl_recovery_key, self.inp_recovery_key)
+        self.form.addRow(self.lbl_token, self.inp_token)
+        lay.addLayout(self.form)
 
         self.lbl_feedback = QLabel("Completa usuario, correo y contraseña para vincular tus datos.")
         self.lbl_feedback.setWordWrap(True)
@@ -946,7 +985,7 @@ class AccountDialog(QDialog):
         btn_cancel.setObjectName("TabBtn")
         btn_cancel.clicked.connect(self.reject)
 
-        self.btn_submit = QPushButton("✨ Crear Cuenta y Vincular Datos")
+        self.btn_submit = QPushButton("✨ Crear Cuenta y Guardar en Drive")
         self.btn_submit.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_submit.clicked.connect(self._on_submit)
 
@@ -957,27 +996,103 @@ class AccountDialog(QDialog):
 
         self._set_mode("register")
 
+    def _add_password_toggle(self, line_edit: QLineEdit) -> QAction:
+        act = QAction("👁", line_edit)
+        act.setToolTip("Mostrar / Ocultar contraseña")
+
+        def _toggle():
+            if line_edit.echoMode() == QLineEdit.EchoMode.Password:
+                line_edit.setEchoMode(QLineEdit.EchoMode.Normal)
+                act.setText("🔒")
+            else:
+                line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+                act.setText("👁")
+
+        act.triggered.connect(_toggle)
+        line_edit.addAction(act, QLineEdit.ActionPosition.TrailingPosition)
+        return act
+
     def _set_mode(self, mode: str) -> None:
         self.mode = mode
-        for btn, active in ((self.btn_tab_register, mode == "register"), (self.btn_tab_login, mode == "login")):
+        tabs = (
+            (self.btn_tab_register, mode == "register"),
+            (self.btn_tab_login, mode == "login"),
+            (self.btn_tab_change, mode == "change"),
+            (self.btn_tab_recover, mode == "recover"),
+        )
+        for btn, active in tabs:
             btn.setProperty("active", "true" if active else "false")
             btn.style().unpolish(btn)
             btn.style().polish(btn)
 
         if mode == "register":
             self.lbl_user.setText("Usuario:")
+            self.lbl_user.setVisible(True)
+            self.inp_username.setVisible(True)
             self.inp_username.setPlaceholderText("Nombre de usuario (ej. maomao_fan)")
             self.lbl_email.setVisible(True)
             self.inp_email.setVisible(True)
+            self.lbl_pass.setText("Contraseña:")
+            self.lbl_pass.setVisible(True)
+            self.inp_password.setVisible(True)
+            self.lbl_new_pass.setVisible(False)
+            self.inp_new_password.setVisible(False)
+            self.lbl_recovery_key.setVisible(False)
+            self.inp_recovery_key.setVisible(False)
             self.btn_submit.setText("✨ Crear Cuenta y Guardar en Drive")
-            self.lbl_feedback.setText("Se creará la cuenta con tus playlists y canciones del Drive.")
-        else:
+            self.lbl_feedback.setText("Se creará tu cuenta con una clave de recuperación única y sincronización a Drive.")
+
+        elif mode == "login":
             self.lbl_user.setText("Usuario o Correo:")
+            self.lbl_user.setVisible(True)
+            self.inp_username.setVisible(True)
             self.inp_username.setPlaceholderText("Escribe tu usuario o tu correo electrónico")
             self.lbl_email.setVisible(False)
             self.inp_email.setVisible(False)
+            self.lbl_pass.setText("Contraseña:")
+            self.lbl_pass.setVisible(True)
+            self.inp_password.setVisible(True)
+            self.lbl_new_pass.setVisible(False)
+            self.inp_new_password.setVisible(False)
+            self.lbl_recovery_key.setVisible(False)
+            self.inp_recovery_key.setVisible(False)
             self.btn_submit.setText("🔑 Iniciar Sesión y Recuperar Playlists")
             self.lbl_feedback.setText("Ingresa tu usuario/correo y contraseña para cargar tus playlists y canciones.")
+
+        elif mode == "change":
+            self.lbl_user.setText("Usuario o Correo:")
+            self.lbl_user.setVisible(True)
+            self.inp_username.setVisible(True)
+            self.inp_username.setPlaceholderText("Tu usuario o correo de la cuenta")
+            self.lbl_email.setVisible(False)
+            self.inp_email.setVisible(False)
+            self.lbl_pass.setText("Contraseña actual:")
+            self.lbl_pass.setVisible(True)
+            self.inp_password.setVisible(True)
+            self.lbl_new_pass.setText("Nueva Contraseña:")
+            self.lbl_new_pass.setVisible(True)
+            self.inp_new_password.setVisible(True)
+            self.lbl_recovery_key.setVisible(False)
+            self.inp_recovery_key.setVisible(False)
+            self.btn_submit.setText("🔐 Actualizar Contraseña en Drive")
+            self.lbl_feedback.setText("Ingresa tu contraseña actual y la nueva contraseña para cambiarla en todos tus dispositivos.")
+
+        elif mode == "recover":
+            self.lbl_user.setText("Usuario o Correo:")
+            self.lbl_user.setVisible(True)
+            self.inp_username.setVisible(True)
+            self.inp_username.setPlaceholderText("Tu usuario o correo registrado")
+            self.lbl_email.setVisible(False)
+            self.inp_email.setVisible(False)
+            self.lbl_pass.setVisible(False)
+            self.inp_password.setVisible(False)
+            self.lbl_recovery_key.setVisible(True)
+            self.inp_recovery_key.setVisible(True)
+            self.lbl_new_pass.setText("Nueva Contraseña:")
+            self.lbl_new_pass.setVisible(True)
+            self.inp_new_password.setVisible(True)
+            self.btn_submit.setText("🆘 Restablecer Contraseña")
+            self.lbl_feedback.setText("Ingresa tu clave de recuperación (ej. MAO-XXXX-YYYY) o tu correo para reestablecer tu clave.")
 
     def _do_logout(self) -> None:
         self.store.user_account = {}
@@ -1013,6 +1128,8 @@ class AccountDialog(QDialog):
         username = self.inp_username.text().strip()
         email = self.inp_email.text().strip().lower()
         password = self.inp_password.text()
+        new_password = self.inp_new_password.text()
+        recovery_key_input = self.inp_recovery_key.text().strip()
 
         if self.mode == "register":
             if not username or not email or not password:
@@ -1025,7 +1142,7 @@ class AccountDialog(QDialog):
             if "@" not in email:
                 QMessageBox.warning(self, "Correo inválido", "Por favor ingresa un correo electrónico válido.")
                 return
-        else:
+        elif self.mode == "login":
             if not username or not password:
                 QMessageBox.warning(
                     self,
@@ -1033,8 +1150,38 @@ class AccountDialog(QDialog):
                     "Por favor ingresa tu Usuario (o Correo) y tu Contraseña para iniciar sesión.",
                 )
                 return
+        elif self.mode == "change":
+            if not username or not password or not new_password:
+                QMessageBox.warning(
+                    self,
+                    "Campos requeridos",
+                    "Ingresa tu Usuario/Correo, tu Contraseña actual y la Nueva Contraseña.",
+                )
+                return
+            if len(new_password) < 4:
+                QMessageBox.warning(
+                    self,
+                    "Contraseña muy corta",
+                    "La nueva contraseña debe tener al menos 4 caracteres.",
+                )
+                return
+        elif self.mode == "recover":
+            if not username or not recovery_key_input or not new_password:
+                QMessageBox.warning(
+                    self,
+                    "Campos requeridos",
+                    "Ingresa tu Usuario/Correo, tu Clave de Recuperación y la Nueva Contraseña.",
+                )
+                return
+            if len(new_password) < 4:
+                QMessageBox.warning(
+                    self,
+                    "Contraseña muy corta",
+                    "La nueva contraseña debe tener al menos 4 caracteres.",
+                )
+                return
 
-        self.lbl_feedback.setText("☁️ Consultando base de datos en Google Drive...")
+        self.lbl_feedback.setText("☁️ Conectando con la base de datos en Google Drive...")
         QApplication.processEvents()
 
         db, existing_file_id = download_cloud_database(self.store.gdrive_config, self.store.accounts_db_path)
@@ -1048,25 +1195,39 @@ class AccountDialog(QDialog):
                 QMessageBox.warning(
                     self,
                     "Cuenta ya registrada",
-                    "Ya existe una cuenta con ese correo y una contraseña distinta. Usa «Iniciar Sesión».",
+                    "Ya existe una cuenta con ese correo y una contraseña distinta. Usa «Iniciar Sesión» o «Recuperar».",
                 )
                 return
 
+            recovery_key = (existing and existing.get("recovery_key")) or generate_recovery_key(email)
             new_record = {
                 "username": username,
                 "email": email,
                 "password_hash": pw_hash,
+                "recovery_key": recovery_key,
                 "updated_at": time.time(),
                 "playlists": {pid: pl.to_dict() for pid, pl in self.store.playlists.items()},
                 "liked_ids": list(self.store.liked_ids),
                 "drive_tracks": self._collect_current_drive_tracks(),
             }
             merged_record = merge_account_records(existing or {}, new_record)
+            merged_record["recovery_key"] = recovery_key
             accounts[acc_key] = merged_record
             upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
             self.authenticated_account = merged_record
+
+            QMessageBox.information(
+                self,
+                "🎉 Cuenta Creada Exitosamente",
+                f"Tu cuenta ha sido creada y sincronizada en Google Drive.\n\n"
+                f"🛡️ TU CLAVE DE RECUPERACIÓN ES:\n"
+                f"{recovery_key}\n\n"
+                f"Guárdala en un lugar seguro. Si alguna vez olvidas tu contraseña, "
+                f"esta clave te permitirá restablecerla al instante.",
+            )
             self.accept()
-        else:
+
+        elif self.mode == "login":
             ident_low = username.lower()
             found_key = None
             found_acc = None
@@ -1082,19 +1243,23 @@ class AccountDialog(QDialog):
                 QMessageBox.warning(
                     self,
                     "Cuenta no encontrada",
-                    f"No se encontró ninguna cuenta para «{username}».\nPuedes crearla en la pestaña «Crear Cuenta Nueva».",
+                    f"No se encontró ninguna cuenta para «{username}».\nPuedes crearla en la pestaña «Crear Cuenta».",
                 )
                 return
 
             if found_acc.get("password_hash") != pw_hash:
-                QMessageBox.warning(self, "Contraseña incorrecta", "La contraseña ingresada no coincide con la cuenta.")
+                QMessageBox.warning(self, "Contraseña incorrecta", "La contraseña ingresada no coincide con la cuenta. Si la olvidaste, usa la pestaña «Recuperar».")
                 return
 
-            # Fusionar datos locales con los de la cuenta recuperada y guardar
+            # Asignar recovery_key si no tenía
+            if not found_acc.get("recovery_key"):
+                found_acc["recovery_key"] = generate_recovery_key(found_acc.get("email", found_key))
+
             current_record = {
                 "username": found_acc.get("username", username),
                 "email": found_acc.get("email", found_key),
                 "password_hash": pw_hash,
+                "recovery_key": found_acc.get("recovery_key"),
                 "updated_at": time.time(),
                 "playlists": {pid: pl.to_dict() for pid, pl in self.store.playlists.items()},
                 "liked_ids": list(self.store.liked_ids),
@@ -1105,6 +1270,89 @@ class AccountDialog(QDialog):
             upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
             self.authenticated_account = merged_record
             self.accept()
+
+        elif self.mode == "change":
+            ident_low = username.lower()
+            found_key = None
+            found_acc = None
+            for k, acc in accounts.items():
+                if not isinstance(acc, dict):
+                    continue
+                if k.lower() == ident_low or str(acc.get("email", "")).lower() == ident_low or str(acc.get("username", "")).lower() == ident_low:
+                    found_key = k
+                    found_acc = acc
+                    break
+
+            if not found_acc:
+                QMessageBox.warning(self, "Cuenta no encontrada", f"No se encontró la cuenta «{username}».")
+                return
+
+            if found_acc.get("password_hash") != pw_hash:
+                QMessageBox.warning(self, "Contraseña incorrecta", "La contraseña actual no coincide.")
+                return
+
+            new_pw_hash = hash_password(new_password)
+            found_acc["password_hash"] = new_pw_hash
+            found_acc["updated_at"] = time.time()
+            if not found_acc.get("recovery_key"):
+                found_acc["recovery_key"] = generate_recovery_key(found_acc.get("email", found_key))
+
+            accounts[found_key] = found_acc
+            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
+
+            if self.store.user_account.get("email") == found_acc.get("email"):
+                self.store.user_account["password_hash"] = new_pw_hash
+                self.store.save()
+
+            QMessageBox.information(
+                self,
+                "🔐 Contraseña Actualizada",
+                "Tu contraseña ha sido cambiada y sincronizada correctamente en Google Drive.",
+            )
+            self._set_mode("login")
+
+        elif self.mode == "recover":
+            ident_low = username.lower()
+            found_key = None
+            found_acc = None
+            for k, acc in accounts.items():
+                if not isinstance(acc, dict):
+                    continue
+                if k.lower() == ident_low or str(acc.get("email", "")).lower() == ident_low or str(acc.get("username", "")).lower() == ident_low:
+                    found_key = k
+                    found_acc = acc
+                    break
+
+            if not found_acc:
+                QMessageBox.warning(self, "Cuenta no encontrada", f"No se encontró la cuenta «{username}».")
+                return
+
+            if not validate_recovery_key(found_acc, recovery_key_input):
+                QMessageBox.warning(
+                    self,
+                    "Clave inválida",
+                    "La clave de recuperación o correo ingresado no coincide con la cuenta registrada.",
+                )
+                return
+
+            new_pw_hash = hash_password(new_password)
+            if not found_acc.get("recovery_key") or found_acc.get("recovery_key").startswith("MAO-REC-"):
+                found_acc["recovery_key"] = generate_recovery_key(found_acc.get("email", found_key))
+
+            found_acc["password_hash"] = new_pw_hash
+            found_acc["updated_at"] = time.time()
+            accounts[found_key] = found_acc
+            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
+
+            QMessageBox.information(
+                self,
+                "🎉 Cuenta Recuperada",
+                f"¡Se ha restablecido la contraseña con éxito!\n\n"
+                f"Tu clave de recuperación es:\n{found_acc.get('recovery_key')}\n\n"
+                f"Ya puedes iniciar sesión con tu nueva contraseña.",
+            )
+            self.inp_password.setText(new_password)
+            self._set_mode("login")
 
 
 class GitHubDesktopUpdateWorker(QThread):

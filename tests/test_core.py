@@ -19,8 +19,10 @@ from gdrive_sync import (
     normalize_track_key,
     extract_drive_id_from_url,
     canonical_drive_track_id,
+    generate_recovery_key,
     hash_password,
     merge_account_records,
+    validate_recovery_key,
 )
 from storage import Playlist, extract_gd_id_from_filename
 
@@ -95,6 +97,7 @@ class TestSecurityAndAccounts(unittest.TestCase):
         acc1 = {
             "username": "usuario1",
             "updated_at": 100.0,
+            "recovery_key": "MAO-ABCD-1234",
             "liked_ids": ["t1", "t2"],
             "playlists": [{"id": "p1", "name": "Favoritos", "track_ids": ["t1"]}],
         }
@@ -110,6 +113,27 @@ class TestSecurityAndAccounts(unittest.TestCase):
         self.assertIn("t3", merged["liked_ids"])
         self.assertEqual(len(merged["playlists"]), 1)
         self.assertEqual(set(merged["playlists"][0]["track_ids"]), {"t1", "t3"})
+        self.assertEqual(merged["recovery_key"], "MAO-ABCD-1234")
+
+    def test_recovery_key_generation_and_validation(self):
+        key = generate_recovery_key()
+        self.assertTrue(key.startswith("MAO-"))
+        parts = key.split("-")
+        self.assertEqual(len(parts), 3)
+        self.assertEqual(len(parts[1]), 4)
+        self.assertEqual(len(parts[2]), 4)
+
+        acc = {"email": "test@maomusic.com", "recovery_key": key}
+        self.assertTrue(validate_recovery_key(acc, key))
+        self.assertTrue(validate_recovery_key(acc, key.lower()))
+        self.assertTrue(validate_recovery_key(acc, f"  {key}  "))
+        self.assertFalse(validate_recovery_key(acc, "MAO-WRON-GKEY"))
+        self.assertFalse(validate_recovery_key(acc, ""))
+
+        # Fallback para cuenta legacy
+        legacy_acc = {"email": "legacy@maomusic.com"}
+        self.assertTrue(validate_recovery_key(legacy_acc, "legacy@maomusic.com"))
+        self.assertTrue(validate_recovery_key(legacy_acc, "LEGACY@MAOMUSIC.COM"))
 
 
 class TestPlaylistModel(unittest.TestCase):

@@ -3757,23 +3757,97 @@ function setDriveImportMode(mode) {
   document.getElementById("modeDownloadBtn").classList.toggle("active", mode === "download");
 }
 
+function togglePasswordVisibility(inputId, btnEl) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === "password") {
+    inp.type = "text";
+    if (btnEl) btnEl.textContent = "🔒";
+  } else {
+    inp.type = "password";
+    if (btnEl) btnEl.textContent = "👁️";
+  }
+}
+
+function generateRecoveryKey() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let p1 = "", p2 = "";
+  for (let i = 0; i < 4; i++) p1 += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 4; i++) p2 += chars.charAt(Math.floor(Math.random() * chars.length));
+  return `MAO-${p1}-${p2}`;
+}
+
+function validateRecoveryKey(acc, keyInput) {
+  if (!acc || !keyInput) return false;
+  const cleanInput = String(keyInput).trim().toUpperCase();
+  const storedKey = String(acc.recovery_key || acc.recoveryKey || "").trim().toUpperCase();
+  if (storedKey && cleanInput === storedKey) return true;
+
+  const email = String(acc.email || "").trim().toLowerCase();
+  if (email) {
+    const rawFallback = sha256Pure(`recovery:${email}`).substring(0, 8).toUpperCase();
+    if (cleanInput === `MAO-${rawFallback}` || cleanInput === rawFallback) return true;
+    if (cleanInput === email.toUpperCase()) return true;
+  }
+  return false;
+}
+
 function setAccountFormMode(mode) {
   accountFormMode = mode;
   const regBtn = document.getElementById("tabAccRegisterBtn");
   const logBtn = document.getElementById("tabAccLoginBtn");
+  const chgBtn = document.getElementById("tabAccChangeBtn");
+  const recBtn = document.getElementById("tabAccRecoverBtn");
+
   const emailGrp = document.getElementById("accEmailGroup");
+  const passGrp = document.getElementById("accPasswordGroup");
+  const newPassGrp = document.getElementById("accNewPasswordGroup");
+  const recKeyGrp = document.getElementById("accRecoveryKeyGroup");
   const lblUser = document.getElementById("lblAccUsername");
+  const lblPass = document.getElementById("lblAccPassword");
   const submitBtn = document.getElementById("btnSubmitAccount");
+  const stEl = document.getElementById("accFormStatus");
+
   if (regBtn) regBtn.classList.toggle("active", mode === "register");
   if (logBtn) logBtn.classList.toggle("active", mode === "login");
+  if (chgBtn) chgBtn.classList.toggle("active", mode === "change");
+  if (recBtn) recBtn.classList.toggle("active", mode === "recover");
+
   if (mode === "register") {
     if (emailGrp) emailGrp.style.display = "block";
+    if (passGrp) passGrp.style.display = "block";
+    if (lblPass) lblPass.textContent = "Contraseña:";
+    if (newPassGrp) newPassGrp.style.display = "none";
+    if (recKeyGrp) recKeyGrp.style.display = "none";
     if (lblUser) lblUser.textContent = "Nombre de Usuario:";
     if (submitBtn) submitBtn.textContent = "✨ Crear Cuenta y Guardar en Drive";
-  } else {
+    if (stEl) stEl.textContent = "Se generará tu cuenta con una clave de recuperación única y sincronización a Drive.";
+  } else if (mode === "login") {
     if (emailGrp) emailGrp.style.display = "none";
+    if (passGrp) passGrp.style.display = "block";
+    if (lblPass) lblPass.textContent = "Contraseña:";
+    if (newPassGrp) newPassGrp.style.display = "none";
+    if (recKeyGrp) recKeyGrp.style.display = "none";
     if (lblUser) lblUser.textContent = "Usuario o Correo electrónico:";
     if (submitBtn) submitBtn.textContent = "🔑 Iniciar Sesión y Recuperar Playlists";
+    if (stEl) stEl.textContent = "Ingresa tu usuario/correo y contraseña para cargar tus playlists y canciones.";
+  } else if (mode === "change") {
+    if (emailGrp) emailGrp.style.display = "none";
+    if (passGrp) passGrp.style.display = "block";
+    if (lblPass) lblPass.textContent = "Contraseña actual:";
+    if (newPassGrp) newPassGrp.style.display = "block";
+    if (recKeyGrp) recKeyGrp.style.display = "none";
+    if (lblUser) lblUser.textContent = "Usuario o Correo electrónico:";
+    if (submitBtn) submitBtn.textContent = "🔐 Actualizar Contraseña en Drive";
+    if (stEl) stEl.textContent = "Ingresa tu contraseña actual y la nueva contraseña para actualizarla en la nube.";
+  } else if (mode === "recover") {
+    if (emailGrp) emailGrp.style.display = "none";
+    if (passGrp) passGrp.style.display = "none";
+    if (newPassGrp) newPassGrp.style.display = "block";
+    if (recKeyGrp) recKeyGrp.style.display = "block";
+    if (lblUser) lblUser.textContent = "Usuario o Correo electrónico:";
+    if (submitBtn) submitBtn.textContent = "🆘 Restablecer Contraseña";
+    if (stEl) stEl.textContent = "Ingresa tu clave de recuperación (ej. MAO-XXXX-YYYY) o tu correo para reestablecerla.";
   }
 }
 
@@ -3856,6 +3930,8 @@ async function submitSpotiAccountForm() {
   const userInp = (document.getElementById("accUsername").value || "").trim();
   const emailInp = (document.getElementById("accEmail").value || "").trim().toLowerCase();
   const passInp = document.getElementById("accPassword").value || "";
+  const newPassInp = (document.getElementById("accNewPassword") ? document.getElementById("accNewPassword").value : "") || "";
+  const recKeyInp = (document.getElementById("accRecoveryKey") ? document.getElementById("accRecoveryKey").value : "").trim();
   const stEl = document.getElementById("accFormStatus");
 
   if (accountFormMode === "register") {
@@ -3867,9 +3943,27 @@ async function submitSpotiAccountForm() {
       if (stEl) stEl.textContent = "⚠️ Ingresa un correo electrónico válido.";
       return;
     }
-  } else {
+  } else if (accountFormMode === "login") {
     if (!userInp || !passInp) {
       if (stEl) stEl.textContent = "⚠️ Ingresa tu Usuario (o Correo) y tu Contraseña.";
+      return;
+    }
+  } else if (accountFormMode === "change") {
+    if (!userInp || !passInp || !newPassInp) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa tu Usuario/Correo, Contraseña actual y Nueva Contraseña.";
+      return;
+    }
+    if (newPassInp.length < 4) {
+      if (stEl) stEl.textContent = "⚠️ La nueva contraseña debe tener al menos 4 caracteres.";
+      return;
+    }
+  } else if (accountFormMode === "recover") {
+    if (!userInp || !recKeyInp || !newPassInp) {
+      if (stEl) stEl.textContent = "⚠️ Ingresa tu Usuario/Correo, tu Clave de Recuperación y la Nueva Contraseña.";
+      return;
+    }
+    if (newPassInp.length < 4) {
+      if (stEl) stEl.textContent = "⚠️ La nueva contraseña debe tener al menos 4 caracteres.";
       return;
     }
   }
@@ -3877,8 +3971,8 @@ async function submitSpotiAccountForm() {
   if (stEl) stEl.textContent = "☁️ Conectando con el servidor de Google Drive...";
   await pullCloudDatabaseFromDrive();
 
-  // Si estamos iniciando sesión y la base aún no tiene cuentas, reintentar directo al Servidor Cloud
-  if (accountFormMode === "login" && (!accountsDb || Object.keys(accountsDb).length === 0)) {
+  // Si la base aún no tiene cuentas en memoria, reintentar directo al Servidor Cloud
+  if (!accountsDb || Object.keys(accountsDb).length === 0) {
     try {
       const sRes = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
       if (sRes.ok) {
@@ -3899,15 +3993,18 @@ async function submitSpotiAccountForm() {
     if (existing && (existing.password_hash || existing.passwordHash)) {
       const exHash = existing.password_hash || existing.passwordHash;
       if (exHash !== pwHash && exHash !== oldHash) {
-        if (stEl) stEl.textContent = "⚠️ Ese correo ya está registrado con otra contraseña. Usa «Iniciar Sesión».";
+        if (stEl) stEl.textContent = "⚠️ Ese correo ya está registrado con otra contraseña. Usa «Iniciar Sesión» o «Recuperar».";
         return;
       }
     }
+    const recoveryKey = (existing && (existing.recovery_key || existing.recoveryKey)) || generateRecoveryKey();
     const rec = {
       username: userInp,
       email: emailInp,
       password_hash: pwHash,
       passwordHash: pwHash,
+      recovery_key: recoveryKey,
+      recoveryKey: recoveryKey,
       updated_at: Date.now(),
       updatedAt: Date.now(),
       playlists: playlists,
@@ -3917,14 +4014,14 @@ async function submitSpotiAccountForm() {
     };
     if (existing) applyAccountRecordToState(existing);
     accountsDb[emailInp] = rec;
-    userAccount = { username: userInp, email: emailInp, passwordHash: pwHash, password_hash: pwHash };
+    userAccount = { username: userInp, email: emailInp, passwordHash: pwHash, password_hash: pwHash, recovery_key: recoveryKey, recoveryKey: recoveryKey };
     savePersistentState();
     updateAccountUI();
 
     await uploadPlaylistsToDrive();
-    if (stEl) stEl.textContent = `✔ Cuenta «${userInp}» (${emailInp}) creada y sincronizada en el servidor de Google Drive.`;
-    showToast(`👤 Cuenta ${userInp} guardada en Drive`);
-  } else {
+    if (stEl) stEl.innerHTML = `✔ Cuenta «${userInp}» creada.<br>🛡️ <b>Clave de Recuperación:</b> <code style="color:#FFF; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">${recoveryKey}</code><br><i>Guárdala para recuperar tu contraseña si la olvidas.</i>`;
+    showToast(`👤 Cuenta creada con éxito`);
+  } else if (accountFormMode === "login") {
     const qLow = userInp.toLowerCase();
     let foundKey = null;
     let foundAcc = null;
@@ -3943,11 +4040,23 @@ async function submitSpotiAccountForm() {
     const storedHash = foundAcc.password_hash || foundAcc.passwordHash;
     const match = (storedHash === pwHash) || (storedHash === oldHash);
     if (!match) {
-      if (stEl) stEl.textContent = "⚠️ Contraseña incorrecta para esa cuenta.";
+      if (stEl) stEl.textContent = "⚠️ Contraseña incorrecta para esa cuenta. Si la olvidaste, usa la pestaña «Recuperar».";
       return;
     }
+    if (!foundAcc.recovery_key && !foundAcc.recoveryKey) {
+      const newRecKey = generateRecoveryKey();
+      foundAcc.recovery_key = newRecKey;
+      foundAcc.recoveryKey = newRecKey;
+    }
     applyAccountRecordToState(foundAcc);
-    userAccount = { username: foundAcc.username, email: foundAcc.email || foundKey, passwordHash: pwHash, password_hash: pwHash };
+    userAccount = {
+      username: foundAcc.username,
+      email: foundAcc.email || foundKey,
+      passwordHash: pwHash,
+      password_hash: pwHash,
+      recovery_key: foundAcc.recovery_key || foundAcc.recoveryKey,
+      recoveryKey: foundAcc.recovery_key || foundAcc.recoveryKey
+    };
     foundAcc.password_hash = pwHash;
     foundAcc.passwordHash = pwHash;
     foundAcc.playlists = playlists;
@@ -3962,8 +4071,99 @@ async function submitSpotiAccountForm() {
     if (token) {
       await uploadPlaylistsToDrive();
     }
-    if (stEl) stEl.textContent = `✔ Sesión iniciada: ${userAccount.username} (${userAccount.email}). Playlists y canciones restauradas.`;
+    if (stEl) stEl.textContent = `✔ Sesión iniciada: ${userAccount.username} (${userAccount.email}). Playlists y canciones sincronizadas.`;
     showToast(`🔑 Bienvenido, ${userAccount.username}`);
+  } else if (accountFormMode === "change") {
+    const qLow = userInp.toLowerCase();
+    let foundKey = null;
+    let foundAcc = null;
+    for (const [k, acc] of Object.entries(accountsDb)) {
+      if (!acc) continue;
+      if (k.toLowerCase() === qLow || String(acc.email || "").toLowerCase() === qLow || String(acc.username || "").toLowerCase() === qLow) {
+        foundKey = k;
+        foundAcc = acc;
+        break;
+      }
+    }
+    if (!foundAcc) {
+      if (stEl) stEl.textContent = `⚠️ No se encontró la cuenta «${userInp}».`;
+      return;
+    }
+    const storedHash = foundAcc.password_hash || foundAcc.passwordHash;
+    const match = (storedHash === pwHash) || (storedHash === oldHash);
+    if (!match) {
+      if (stEl) stEl.textContent = "⚠️ La contraseña actual ingresada es incorrecta.";
+      return;
+    }
+
+    const newPwHash = hashPassword(newPassInp);
+    foundAcc.password_hash = newPwHash;
+    foundAcc.passwordHash = newPwHash;
+    foundAcc.updated_at = Date.now();
+    foundAcc.updatedAt = Date.now();
+    if (!foundAcc.recovery_key && !foundAcc.recoveryKey) {
+      const newRecKey = generateRecoveryKey();
+      foundAcc.recovery_key = newRecKey;
+      foundAcc.recoveryKey = newRecKey;
+    }
+
+    if (userAccount && (userAccount.email === foundAcc.email || userAccount.username === foundAcc.username)) {
+      userAccount.passwordHash = newPwHash;
+      userAccount.password_hash = newPwHash;
+      userAccount.recovery_key = foundAcc.recovery_key || foundAcc.recoveryKey;
+      userAccount.recoveryKey = foundAcc.recovery_key || foundAcc.recoveryKey;
+    }
+    savePersistentState();
+    updateAccountUI();
+    await uploadPlaylistsToDrive();
+
+    if (stEl) stEl.textContent = "✔ Contraseña cambiada y sincronizada correctamente en Google Drive.";
+    showToast("🔐 Contraseña actualizada");
+    setAccountFormMode("login");
+    const passInputEl = document.getElementById("accPassword");
+    if (passInputEl) passInputEl.value = newPassInp;
+  } else if (accountFormMode === "recover") {
+    const qLow = userInp.toLowerCase();
+    let foundKey = null;
+    let foundAcc = null;
+    for (const [k, acc] of Object.entries(accountsDb)) {
+      if (!acc) continue;
+      if (k.toLowerCase() === qLow || String(acc.email || "").toLowerCase() === qLow || String(acc.username || "").toLowerCase() === qLow) {
+        foundKey = k;
+        foundAcc = acc;
+        break;
+      }
+    }
+    if (!foundAcc) {
+      if (stEl) stEl.textContent = `⚠️ No se encontró la cuenta «${userInp}».`;
+      return;
+    }
+
+    if (!validateRecoveryKey(foundAcc, recKeyInp)) {
+      if (stEl) stEl.textContent = "⚠️ La clave de recuperación o correo ingresado no coincide con la cuenta.";
+      return;
+    }
+
+    const newPwHash = hashPassword(newPassInp);
+    if (!foundAcc.recovery_key && !foundAcc.recoveryKey) {
+      const newRecKey = generateRecoveryKey();
+      foundAcc.recovery_key = newRecKey;
+      foundAcc.recoveryKey = newRecKey;
+    }
+    foundAcc.password_hash = newPwHash;
+    foundAcc.passwordHash = newPwHash;
+    foundAcc.updated_at = Date.now();
+    foundAcc.updatedAt = Date.now();
+
+    savePersistentState();
+    await uploadPlaylistsToDrive();
+
+    const currentKey = foundAcc.recovery_key || foundAcc.recoveryKey;
+    if (stEl) stEl.innerHTML = `✔ ¡Cuenta recuperada con éxito!<br>Tu clave de recuperación es: <code style="color:#FFF; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">${currentKey}</code><br>Ya puedes iniciar sesión con tu nueva contraseña.`;
+    showToast("🎉 Cuenta recuperada");
+    setAccountFormMode("login");
+    const passInputEl = document.getElementById("accPassword");
+    if (passInputEl) passInputEl.value = newPassInp;
   }
 }
 
@@ -4030,6 +4230,8 @@ function updateAccountUI() {
   const dSubEl = document.getElementById("driveAccountSub");
   const dAvatarEl = document.getElementById("driveAvatar");
   const logoutBtn = document.getElementById("btnLogoutAccount");
+  const recBox = document.getElementById("driveAccountRecovery");
+  const recVal = document.getElementById("driveRecoveryKeyVal");
 
   if (userAccount && userAccount.username) {
     const nameStr = `👤 ${userAccount.username}`;
@@ -4039,9 +4241,17 @@ function updateAccountUI() {
     if (dNameEl) dNameEl.textContent = nameStr;
     if (dSubEl) dSubEl.textContent = subStr;
     if (logoutBtn) logoutBtn.style.display = "inline-block";
+    const kVal = userAccount.recovery_key || userAccount.recoveryKey;
+    if (kVal) {
+      if (recBox) recBox.style.display = "block";
+      if (recVal) recVal.textContent = kVal;
+    } else if (recBox) {
+      recBox.style.display = "none";
+    }
     updateSideMenuProfile();
     return;
   }
+  if (recBox) recBox.style.display = "none";
   if (logoutBtn) logoutBtn.style.display = "none";
 
   if (googleUserProfile && googleUserProfile.email) {

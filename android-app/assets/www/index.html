@@ -375,17 +375,20 @@
             <div class="account-info">
               <div class="account-name" id="driveAccountName">Sin cuenta vinculada</div>
               <div class="account-sub" id="driveAccountSub">Crea tu cuenta o inicia sesión abajo para vincular tus datos</div>
+              <div id="driveAccountRecovery" style="display:none; font-size:11px; color:#A6A6B4; margin-top:3px;">🛡️ Clave de recuperación: <b id="driveRecoveryKeyVal" style="color:#FFF; background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px;"></b></div>
             </div>
             <button class="btn-chip" id="btnLogoutAccount" style="display:none; font-size:10px; padding:5px 8px;" onclick="logoutSpotiAccount()">Salir</button>
           </div>
 
           <!-- Formulario de Creación / Inicio de Sesión de Cuenta MaoMusic -->
           <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px; margin-bottom:12px;">
-            <div style="display:flex; gap:6px; margin-bottom:8px;">
-              <button class="btn-chip active" id="tabAccRegisterBtn" style="flex:1;" onclick="setAccountFormMode('register')">✨ Crear Cuenta</button>
-              <button class="btn-chip" id="tabAccLoginBtn" style="flex:1;" onclick="setAccountFormMode('login')">🔑 Iniciar Sesión</button>
+            <div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:wrap;">
+              <button class="btn-chip active" id="tabAccRegisterBtn" style="flex:1; min-width:80px; font-size:11px; padding:7px 4px;" onclick="setAccountFormMode('register')">✨ Crear</button>
+              <button class="btn-chip" id="tabAccLoginBtn" style="flex:1; min-width:80px; font-size:11px; padding:7px 4px;" onclick="setAccountFormMode('login')">🔑 Entrar</button>
+              <button class="btn-chip" id="tabAccChangeBtn" style="flex:1; min-width:80px; font-size:11px; padding:7px 4px;" onclick="setAccountFormMode('change')">🔐 Clave</button>
+              <button class="btn-chip" id="tabAccRecoverBtn" style="flex:1; min-width:80px; font-size:11px; padding:7px 4px;" onclick="setAccountFormMode('recover')">🆘 Recuperar</button>
             </div>
-            <div class="field-group">
+            <div class="field-group" id="accUserGroup">
               <label id="lblAccUsername">Nombre de Usuario:</label>
               <input type="text" id="accUsername" placeholder="Ej. jinsoon005" />
             </div>
@@ -393,14 +396,28 @@
               <label>Correo electrónico:</label>
               <input type="email" id="accEmail" placeholder="ejemplo@correo.com" />
             </div>
-            <div class="field-group">
-              <label>Contraseña:</label>
-              <input type="password" id="accPassword" placeholder="Contraseña de tu cuenta MaoMusic" />
+            <div class="field-group" id="accPasswordGroup">
+              <label id="lblAccPassword">Contraseña:</label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="accPassword" placeholder="Contraseña de tu cuenta MaoMusic" style="padding-right:38px; width:100%;" />
+                <button type="button" class="btn-icon-toggle" onclick="togglePasswordVisibility('accPassword', this)" style="position:absolute; right:8px; background:transparent; border:none; color:#bbb; font-size:15px; cursor:pointer;" title="Ver u ocultar contraseña">👁️</button>
+              </div>
+            </div>
+            <div class="field-group" id="accNewPasswordGroup" style="display:none;">
+              <label id="lblAccNewPassword">Nueva Contraseña:</label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="accNewPassword" placeholder="Nueva contraseña segura" style="padding-right:38px; width:100%;" />
+                <button type="button" class="btn-icon-toggle" onclick="togglePasswordVisibility('accNewPassword', this)" style="position:absolute; right:8px; background:transparent; border:none; color:#bbb; font-size:15px; cursor:pointer;" title="Ver u ocultar contraseña">👁️</button>
+              </div>
+            </div>
+            <div class="field-group" id="accRecoveryKeyGroup" style="display:none;">
+              <label>Clave de Recuperación (o tu correo registrado):</label>
+              <input type="text" id="accRecoveryKey" placeholder="Ej. MAO-ABCD-1234 o tu correo registrado" />
             </div>
             <button class="btn-chip active" id="btnSubmitAccount" style="width:100%; padding:9px; margin-top:4px;" onclick="submitSpotiAccountForm()">
               ✨ Crear Cuenta y Guardar en Drive
             </button>
-            <div id="accFormStatus" style="margin-top:6px; font-size:11px; color:var(--green-bright);"></div>
+            <div id="accFormStatus" style="margin-top:6px; font-size:11px; color:var(--green-bright); word-break:break-word;"></div>
           </div>
 
           <div style="display:flex; gap:6px; margin-bottom:10px;">

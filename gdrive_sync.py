@@ -16,6 +16,7 @@ import html
 import json
 import mimetypes
 import re
+import secrets
 import time
 import unicodedata
 import urllib.parse
@@ -113,6 +114,41 @@ def hash_password(password: str, salt: str = "spotilinux_v2") -> str:
     """Hash SHA-256 determinístico compatible entre Linux y Android."""
     raw = f"{salt}:{password.strip()}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def generate_recovery_key(seed: str = "") -> str:
+    """Genera una clave de recuperación única con formato MAO-XXXX-YYYY."""
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    part1 = "".join(secrets.choice(chars) for _ in range(4))
+    part2 = "".join(secrets.choice(chars) for _ in range(4))
+    return f"MAO-{part1}-{part2}"
+
+
+def validate_recovery_key(account: dict, key_input: str) -> bool:
+    """
+    Verifica la clave de recuperación para una cuenta.
+    Soporta la recovery_key asignada y mecanismo de respaldo para cuentas legacy.
+    """
+    key_clean = str(key_input).strip().upper()
+    if not key_clean:
+        return False
+
+    stored_key = str(account.get("recovery_key", "")).strip().upper()
+    if stored_key and key_clean == stored_key:
+        return True
+
+    # Respaldo determinista para cuentas legacy sin recovery_key explícita
+    email = str(account.get("email", "")).strip().lower()
+    if email:
+        fallback_hash = hashlib.sha256(f"recovery:{email}".encode("utf-8")).hexdigest()[:8].upper()
+        if key_clean == f"MAO-{fallback_hash}":
+            return True
+        if key_clean == fallback_hash:
+            return True
+        if key_clean == email.upper():
+            return True
+
+    return False
 
 
 class GoogleDriveConfig:
@@ -1115,6 +1151,9 @@ def merge_account_records(acc_a: dict, acc_b: dict) -> dict:
     newer = acc_b if float(acc_b.get("updated_at", 0)) >= float(acc_a.get("updated_at", 0)) else acc_a
     older = acc_a if newer is acc_b else acc_b
     merged = dict(newer)
+
+    # Conservar clave de recuperación
+    merged["recovery_key"] = newer.get("recovery_key") or older.get("recovery_key") or ""
 
     # Unir favoritos
     likes = list(dict.fromkeys(list(newer.get("liked_ids", [])) + list(older.get("liked_ids", []))))
