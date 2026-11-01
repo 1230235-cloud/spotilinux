@@ -31,6 +31,18 @@ jobs:
         run: |
           python -m unittest discover tests -v
 
+  installer-check:
+    name: Verify Portable Installer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Bash Syntax & Dry-Run
+        run: |
+          bash -n install.sh
+          ./install.sh --dry-run --no-system-deps
+
   build-linux:
     name: Build Linux Native Binary
     needs: test-and-lint

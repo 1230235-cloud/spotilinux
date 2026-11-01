@@ -25,10 +25,13 @@ def resolve_binary(name: str) -> Optional[str]:
     # 1. Environment variable override (e.g. MAOMUSIC_YT_DLP, MAOMUSIC_FFMPEG)
     env_key = f"MAOMUSIC_{name.upper().replace('-', '_')}"
     env_override = os.environ.get(env_key)
-    if env_override:
+    if env_override is not None:
+        if env_override.strip().lower() in ("0", "none", "false", ""):
+            return None
         p = Path(env_override).expanduser()
         if p.is_file() and os.access(p, os.X_OK):
             return str(p.resolve())
+        return None
 
     # 2. Virtualenv or current interpreter bin directory
     try:

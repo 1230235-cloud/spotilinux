@@ -16,3 +16,7 @@ data/library.json
 data/library.sqlite*
 data/accounts_db.json
 music_library/
+
+# Lanzadores de escritorio generados dinámicamente con rutas locales
+MaoMusic.desktop
+SpotiLinux.desktop

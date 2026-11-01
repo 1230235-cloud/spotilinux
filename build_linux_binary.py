@@ -79,11 +79,8 @@ def build_elf_executable() -> Path:
     chunks = [f'"{payload_b64[i:i+120]}"' for i in range(0, len(payload_b64), 120)]
     c_b64_literal = "\n    ".join(chunks)
 
-    venv_py = str(BASE_DIR / "venv" / "bin" / "python")
-    base_dir_str = str(BASE_DIR)
-
     c_source = f"""/*
- * Ejecutable nativo ELF para Linux de SpotiLinux (Maomao & Google Drive Edition)
+ * Ejecutable nativo ELF para Linux de MaoMusic / SpotiLinux
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,9 +88,8 @@ def build_elf_executable() -> Path:
 #include <unistd.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <libgen.h>
 
-static const char *DEFAULT_PROJECT_DIR = "{base_dir_str}";
-static const char *VENV_PYTHON = "{venv_py}";
 static const char *EMBEDDED_ZIP_B64 =
     {c_b64_literal};
 
@@ -103,13 +99,34 @@ int file_exists(const char *path) {{
 }}
 
 int main(int argc, char *argv[]) {{
-    char main_script[PATH_MAX];
-    snprintf(main_script, sizeof(main_script), "%s/main.py", DEFAULT_PROJECT_DIR);
+    char exe_path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    char dir_candidate[PATH_MAX] = ".";
+    if (len > 0) {{
+        exe_path[len] = '\\0';
+        char exe_copy[PATH_MAX];
+        strncpy(exe_copy, exe_path, sizeof(exe_copy));
+        char *d = dirname(exe_copy);
+        if (d) strncpy(dir_candidate, d, sizeof(dir_candidate));
+    }}
 
-    /* Si la carpeta del proyecto está disponible, ejecutar directamente desde ella */
+    /* 1. Buscar main.py en dir_candidate o en su directorio padre (si el binario está en dist/) */
+    char project_dir[PATH_MAX];
+    char main_script[PATH_MAX];
+    char venv_python[PATH_MAX];
+
+    snprintf(project_dir, sizeof(project_dir), "%s", dir_candidate);
+    snprintf(main_script, sizeof(main_script), "%s/main.py", project_dir);
+
+    if (!file_exists(main_script)) {{
+        snprintf(project_dir, sizeof(project_dir), "%s/..", dir_candidate);
+        snprintf(main_script, sizeof(main_script), "%s/main.py", project_dir);
+    }}
+
     if (file_exists(main_script)) {{
-        chdir(DEFAULT_PROJECT_DIR);
-        const char *py_bin = file_exists(VENV_PYTHON) ? VENV_PYTHON : "python3";
+        chdir(project_dir);
+        snprintf(venv_python, sizeof(venv_python), "%s/venv/bin/python", project_dir);
+        const char *py_bin = file_exists(venv_python) ? venv_python : "python3";
         char **new_argv = malloc(sizeof(char *) * (argc + 2));
         new_argv[0] = (char *)py_bin;
         new_argv[1] = main_script;
@@ -118,15 +135,15 @@ int main(int argc, char *argv[]) {{
         }}
         new_argv[argc + 1] = NULL;
         execvp(py_bin, new_argv);
-        perror("Error al iniciar SpotiLinux");
+        perror("Error al iniciar MaoMusic");
         return 1;
     }}
 
-    /* Si el ejecutable fue movido a otra ruta, extraer el payload embebido en ~/.local/share/SpotiLinux */
+    /* 2. Si el ejecutable fue movido como standalone sin la carpeta original */
     const char *home = getenv("HOME");
     if (!home) home = "/tmp";
     char app_dir[PATH_MAX];
-    snprintf(app_dir, sizeof(app_dir), "%s/.local/share/SpotiLinux", home);
+    snprintf(app_dir, sizeof(app_dir), "%s/.local/share/MaoMusic", home);
     mkdir(app_dir, 0755);
 
     char b64_file[PATH_MAX];
@@ -147,9 +164,8 @@ int main(int argc, char *argv[]) {{
 
     chdir(app_dir);
     snprintf(main_script, sizeof(main_script), "%s/main.py", app_dir);
-    const char *py_bin = file_exists(VENV_PYTHON) ? VENV_PYTHON : "python3";
-    execlp(py_bin, py_bin, main_script, (char *)NULL);
-    perror("Error al ejecutar SpotiLinux");
+    execlp("python3", "python3", main_script, (char *)NULL);
+    perror("Error al ejecutar MaoMusic. Ejecuta ./install.sh para preparar el entorno.");
     return 1;
 }}
 """
