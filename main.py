@@ -34,10 +34,11 @@ import doctor
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME
 from download_queue import DownloadQueue, QueueRunner
 from download_queue_ui import DownloadQueuePanel, QueueSignals
-from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, QUrl, pyqtSignal, qInstallMessageHandler, QtMsgType
+from PyQt6.QtCore import Qt, QSize, QPoint, QRectF, QTimer, QThread, QUrl, pyqtSignal, qInstallMessageHandler, QtMsgType
 from PyQt6.QtGui import (
     QAction,
     QColor,
+    QCursor,
     QDragEnterEvent,
     QDropEvent,
     QFont,
@@ -207,50 +208,45 @@ class HeroBannerWidget(QFrame):
 
         self.btn_play_banner = QPushButton("▶")
         self.btn_play_banner.setObjectName("SpotifyGreenPlayBig")
-        self.btn_play_banner.setFixedSize(50, 50)
+        self.btn_play_banner.setFixedSize(46, 46)
         self.btn_play_banner.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play_banner.setToolTip("Reproducir vista actual")
 
-        self.btn_shuffle_banner = QPushButton("🔀 Aleatorio")
+        self.btn_shuffle_banner = QPushButton("🔀  Aleatorio")
         self.btn_shuffle_banner.setObjectName("ActionChipButton")
         self.btn_shuffle_banner.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_cloud_sync_banner = QPushButton("☁️ Conectar / Sincronizar Google Drive")
-        self.btn_cloud_sync_banner.setObjectName("ActionChipButton")
-        self.btn_cloud_sync_banner.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        self.btn_download_yt_banner = QPushButton("📥 YouTube")
-        self.btn_download_yt_banner.setObjectName("ActionChipButton")
-        self.btn_download_yt_banner.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_download_yt_banner.setToolTip("Buscar, descargar y sincronizar canciones o videos de YouTube a Google Drive")
-
-        self.btn_add_tracks = QPushButton("＋ Agregar canciones")
-        self.btn_add_tracks.setObjectName("ActionChipButton")
-        self.btn_add_tracks.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_add_tracks.setVisible(False)
-
-        self.btn_edit_playlist = QPushButton("✎ Editar")
-        self.btn_edit_playlist.setObjectName("ActionChipButton")
-        self.btn_edit_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_edit_playlist.setVisible(False)
-
-        self.btn_delete_playlist = QPushButton("🗑 Eliminar")
-        self.btn_delete_playlist.setObjectName("ActionChipButton")
-        self.btn_delete_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_delete_playlist.setVisible(False)
-
-        self.btn_download_playlist = QPushButton("⬇️ Descargar Playlist")
+        self.btn_download_playlist = QPushButton("⬇️  Descargar Playlist")
         self.btn_download_playlist.setObjectName("ActionChipButton")
         self.btn_download_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_download_playlist.setToolTip("Descarga las canciones de Google Drive de esta playlist")
         self.btn_download_playlist.setVisible(False)
 
+        self.btn_add_tracks = QPushButton("＋  Agregar canciones")
+        self.btn_add_tracks.setObjectName("ActionChipButton")
+        self.btn_add_tracks.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_add_tracks.setVisible(False)
+
+        self.btn_edit_playlist = QPushButton("✎  Editar")
+        self.btn_edit_playlist.setObjectName("ActionChipButton")
+        self.btn_edit_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_edit_playlist.setVisible(False)
+
+        self.btn_delete_playlist = QPushButton("🗑  Eliminar")
+        self.btn_delete_playlist.setObjectName("ActionChipButton")
+        self.btn_delete_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_delete_playlist.setVisible(False)
+
+        # Botones de compatibilidad invisibles
+        self.btn_cloud_sync_banner = QPushButton()
+        self.btn_cloud_sync_banner.setVisible(False)
+        self.btn_download_yt_banner = QPushButton()
+        self.btn_download_yt_banner.setVisible(False)
+
         actions_row.addWidget(self.btn_play_banner)
         actions_row.addWidget(self.btn_shuffle_banner)
-        actions_row.addWidget(self.btn_cloud_sync_banner)
-        actions_row.addWidget(self.btn_download_yt_banner)
-        actions_row.addWidget(self.btn_add_tracks)
         actions_row.addWidget(self.btn_download_playlist)
+        actions_row.addWidget(self.btn_add_tracks)
         actions_row.addWidget(self.btn_edit_playlist)
         actions_row.addWidget(self.btn_delete_playlist)
         actions_row.addStretch()
@@ -1879,54 +1875,37 @@ class SpotiLinuxWindow(QMainWindow):
         lib_lay.addWidget(self.playlist_list, stretch=1)
 
         import_box = QVBoxLayout()
-        import_box.setSpacing(6)
+        import_box.setSpacing(8)
 
-        self.btn_account_sidebar = QPushButton("👤  Crear / Iniciar Cuenta...")
+        self.btn_account_sidebar = QPushButton("👤  Mi Cuenta")
         self.btn_account_sidebar.setObjectName("ActionChipButton")
-        self.btn_account_sidebar.setProperty("active", "true")
         self.btn_account_sidebar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_account_sidebar.setToolTip("Crea tu cuenta con Usuario, Correo y Contraseña o inicia sesión para vincular datos en Drive")
+        self.btn_account_sidebar.setToolTip("Crea o inicia sesión con tu cuenta MaoMusic")
 
-        self.btn_connect_gdrive = QPushButton("☁️  Carpeta Drive (Musica)...")
-        self.btn_connect_gdrive.setObjectName("ActionChipButton")
-        self.btn_connect_gdrive.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_sidebar_tools = QPushButton("⚡  Herramientas && Nube ▾")
+        self.btn_sidebar_tools.setObjectName("ActionChipButton")
+        self.btn_sidebar_tools.setProperty("active", "true")
+        self.btn_sidebar_tools.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_sidebar_tools.setToolTip("Google Drive, descargas de YouTube, escaneo de música y actualizaciones")
 
-        self.btn_upload_gdrive = QPushButton("⬆️  Subir a Drive (Musica)...")
-        self.btn_upload_gdrive.setObjectName("ActionChipButton")
-        self.btn_upload_gdrive.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_upload_gdrive.setToolTip("Sube canciones MP3/FLAC/WAV de tu PC a la carpeta Musica del Drive compartido")
-
-        self.btn_download_yt = QPushButton("📥  Descargar de YouTube...")
-        self.btn_download_yt.setObjectName("ActionChipButton")
-        self.btn_download_yt.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_download_yt.setToolTip("Descargar y sincronizar canciones o videos de YouTube directamente a Google Drive")
-
-        self.btn_check_updates = QPushButton(f"🔄  Buscar actualizaciones (v{APP_VERSION_NAME})")
-        self.btn_check_updates.setObjectName("ActionChipButton")
-        self.btn_check_updates.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_check_updates.setToolTip("Comprueba en GitHub si hay una versión más reciente de MaoMusic")
-
-        self.btn_auto_scan_pc = QPushButton("🔍  Auto-Rastrear Música PC")
-        self.btn_auto_scan_pc.setObjectName("ActionChipButton")
-        self.btn_auto_scan_pc.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_auto_scan_pc.setToolTip("Rastrea ~/Music, ~/Música y ~/Downloads y guarda las canciones en music_library/")
-
-        self.btn_import_folder = QPushButton("📂  Escanear Carpeta...")
-        self.btn_import_folder.setObjectName("ActionChipButton")
-        self.btn_import_folder.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        self.btn_import_files = QPushButton("🎵  Importar Archivos...")
-        self.btn_import_files.setObjectName("ActionChipButton")
-        self.btn_import_files.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Botones de compatibilidad preservados como atributos invisibles para contratos y señales
+        self.btn_connect_gdrive = QPushButton()
+        self.btn_connect_gdrive.setVisible(False)
+        self.btn_upload_gdrive = QPushButton()
+        self.btn_upload_gdrive.setVisible(False)
+        self.btn_download_yt = QPushButton()
+        self.btn_download_yt.setVisible(False)
+        self.btn_check_updates = QPushButton()
+        self.btn_check_updates.setVisible(False)
+        self.btn_auto_scan_pc = QPushButton()
+        self.btn_auto_scan_pc.setVisible(False)
+        self.btn_import_folder = QPushButton()
+        self.btn_import_folder.setVisible(False)
+        self.btn_import_files = QPushButton()
+        self.btn_import_files.setVisible(False)
 
         import_box.addWidget(self.btn_account_sidebar)
-        import_box.addWidget(self.btn_connect_gdrive)
-        import_box.addWidget(self.btn_upload_gdrive)
-        import_box.addWidget(self.btn_download_yt)
-        import_box.addWidget(self.btn_check_updates)
-        import_box.addWidget(self.btn_auto_scan_pc)
-        import_box.addWidget(self.btn_import_folder)
-        import_box.addWidget(self.btn_import_files)
+        import_box.addWidget(self.btn_sidebar_tools)
         lib_lay.addLayout(import_box)
 
         left_col.addWidget(lib_card, stretch=1)
@@ -1959,6 +1938,13 @@ class SpotiLinuxWindow(QMainWindow):
             self.genre_buttons[g_label] = btn
             top_bar.addWidget(btn)
 
+        self.btn_top_tools = QPushButton("⚙️")
+        self.btn_top_tools.setObjectName("ActionChipButton")
+        self.btn_top_tools.setFixedSize(36, 32)
+        self.btn_top_tools.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_top_tools.setToolTip("Herramientas, Google Drive, descargas y configuración")
+        top_bar.addWidget(self.btn_top_tools)
+
         center_lay.addLayout(top_bar)
 
         self.hero_banner = HeroBannerWidget()
@@ -1981,30 +1967,27 @@ class SpotiLinuxWindow(QMainWindow):
         self.quick_scroll.setWidget(self.quick_grid_container)
         center_lay.addWidget(self.quick_scroll, stretch=1)
 
-        self.track_table = QTableWidget(0, 6)
+        self.track_table = QTableWidget(0, 4)
         self.track_table.setObjectName("TrackTable")
-        self.track_table.setHorizontalHeaderLabels(["#", "TÍTULO", "ÁLBUM / ORIGEN", "GÉNERO", "♥", "⏱"])
+        self.track_table.setHorizontalHeaderLabels(["#", "CANCIÓN", "♥", "⏱"])
+        self.track_table.horizontalHeader().setVisible(False)
         self.track_table.verticalHeader().setVisible(False)
         self.track_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.track_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.track_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.track_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.track_table.setShowGrid(False)
-        self.track_table.setIconSize(QSize(40, 40))
+        self.track_table.setIconSize(QSize(42, 42))
         self.track_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
         header = self.track_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        self.track_table.setColumnWidth(0, 42)
+        self.track_table.setColumnWidth(0, 38)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.track_table.setColumnWidth(2, 185)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        self.track_table.setColumnWidth(3, 120)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
-        self.track_table.setColumnWidth(4, 46)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        self.track_table.setColumnWidth(5, 64)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self.track_table.setColumnWidth(2, 44)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self.track_table.setColumnWidth(3, 70)
 
         center_lay.addWidget(self.track_table, stretch=1)
         parent_layout.addWidget(center_card, stretch=1)
@@ -2285,6 +2268,8 @@ class SpotiLinuxWindow(QMainWindow):
         self.playlist_list.customContextMenuRequested.connect(self._on_playlist_context_menu)
 
         self.btn_account_sidebar.clicked.connect(self.open_account_dialog)
+        self.btn_sidebar_tools.clicked.connect(lambda: self._open_tools_menu(self.btn_sidebar_tools))
+        self.btn_top_tools.clicked.connect(lambda: self._open_tools_menu(self.btn_top_tools))
         self.btn_check_updates.clicked.connect(lambda: self._check_github_updates(manual=True))
         self.btn_connect_gdrive.clicked.connect(self.open_google_drive_dialog)
         self.btn_upload_gdrive.clicked.connect(self.upload_files_to_drive_dialog)
@@ -2367,6 +2352,47 @@ class SpotiLinuxWindow(QMainWindow):
     # ================================================================== #
     #                  GOOGLE DRIVE CLOUD STREAMING                      #
     # ================================================================== #
+
+    def _open_tools_menu(self, source_button: Optional[QWidget] = None) -> None:
+        """Menú unificado de herramientas, Google Drive, descargas y mantenimiento."""
+        menu = QMenu(self)
+        menu.setObjectName("ToolsDropdownMenu")
+
+        act_account = menu.addAction("👤  Gestionar Cuenta MaoMusic...")
+        act_account.triggered.connect(self.open_account_dialog)
+
+        menu.addSeparator()
+
+        act_gdrive = menu.addAction("☁️  Vincular Carpeta Google Drive...")
+        act_gdrive.triggered.connect(self.open_google_drive_dialog)
+
+        act_upload = menu.addAction("⬆️  Subir Canciones a Drive...")
+        act_upload.triggered.connect(self.upload_files_to_drive_dialog)
+
+        act_yt = menu.addAction("📥  Descargas de YouTube...")
+        act_yt.triggered.connect(self.open_download_queue_panel)
+
+        menu.addSeparator()
+
+        act_scan_pc = menu.addAction("🔍  Auto-Rastrear Música en este PC")
+        act_scan_pc.triggered.connect(self.auto_scan_pc_music)
+
+        act_import_folder = menu.addAction("📂  Escanear Carpeta Local...")
+        act_import_folder.triggered.connect(self.import_folder_dialog)
+
+        act_import_files = menu.addAction("🎵  Importar Archivos de Audio...")
+        act_import_files.triggered.connect(self.import_files_dialog)
+
+        menu.addSeparator()
+
+        act_updates = menu.addAction(f"🔄  Buscar Actualizaciones (v{APP_VERSION_NAME})...")
+        act_updates.triggered.connect(lambda: self._check_github_updates(manual=True))
+
+        btn = source_button or self.sender()
+        if isinstance(btn, QWidget):
+            menu.exec(btn.mapToGlobal(QPoint(0, btn.height() + 4)))
+        else:
+            menu.exec(QCursor.pos())
 
     def open_account_dialog(self) -> None:
         dlg = AccountDialog(self, self.store)
@@ -2999,6 +3025,9 @@ class SpotiLinuxWindow(QMainWindow):
 
         query = self.search_input.text().strip().lower()
         if query:
+            if self.current_view == "home":
+                self.quick_scroll.setVisible(False)
+                self.track_table.setVisible(True)
             tracks = [
                 t
                 for t in tracks
@@ -3007,6 +3036,9 @@ class SpotiLinuxWindow(QMainWindow):
                 or query in t.album.lower()
                 or query in t.genre.lower()
             ]
+        elif self.current_view == "home":
+            self.quick_scroll.setVisible(True)
+            self.track_table.setVisible(False)
 
         self.displayed_tracks = tracks
 
@@ -3036,10 +3068,11 @@ class SpotiLinuxWindow(QMainWindow):
         active_id = self.engine.current_track.id if self.engine.current_track else None
 
         for row, track in enumerate(tracks):
-            self.track_table.setRowHeight(row, 54)
+            self.track_table.setRowHeight(row, 56)
             is_active = track.id == active_id
             is_cloud = track.filepath.startswith("gdrive://") or Path(track.filepath).name.startswith("gd_")
 
+            # Col 0: # / Play
             num_item = QTableWidgetItem("▶" if is_active else str(row + 1))
             num_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             num_item.setForeground(QColor("#1DB954") if is_active else QColor("#A7A7A7"))
@@ -3050,44 +3083,43 @@ class SpotiLinuxWindow(QMainWindow):
             num_item.setData(Qt.ItemDataRole.UserRole, track.id)
             self.track_table.setItem(row, 0, num_item)
 
-            cloud_tag = " ☁️" if is_cloud else ""
-            title_item = QTableWidgetItem(f"{track.title}{cloud_tag}\n{track.artist}")
-            title_item.setIcon(QIcon(make_rounded_pixmap(track.cover_path, 40, radius=5)))
+            # Col 1: Tarjeta con Portada + Título + Artista / Álbum
+            cloud_tag = "  ☁️" if is_cloud else ""
+            album_str = f"  •  {track.album}" if track.album and track.album != "Desconocido" else ""
+            title_text = f"{track.title}{cloud_tag}\n{track.artist}{album_str}"
+            title_item = QTableWidgetItem(title_text)
+            title_item.setIcon(QIcon(make_rounded_pixmap(track.cover_path, 42, radius=8)))
             title_item.setForeground(QColor("#1DB954") if is_active else QColor("#FFFFFF"))
             f_title = title_item.font()
             f_title.setBold(True)
             title_item.setFont(f_title)
             self.track_table.setItem(row, 1, title_item)
 
-            album_item = QTableWidgetItem(track.album)
-            album_item.setForeground(QColor("#B3B3B3"))
-            self.track_table.setItem(row, 2, album_item)
-
-            genre_item = QTableWidgetItem(track.genre or ("Google Drive" if is_cloud else "Local"))
-            genre_item.setForeground(QColor("#9E9EA8"))
-            self.track_table.setItem(row, 3, genre_item)
-
+            # Col 2: Me gusta (♥ / ♡)
             liked = self.store.is_liked(track.id)
             heart_item = QTableWidgetItem("♥" if liked else "♡")
             heart_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             heart_item.setForeground(QColor("#1DB954") if liked else QColor("#888888"))
             f_h = heart_item.font()
-            f_h.setPointSize(13)
+            f_h.setPointSize(14)
             heart_item.setFont(f_h)
-            self.track_table.setItem(row, 4, heart_item)
+            self.track_table.setItem(row, 2, heart_item)
 
+            # Col 3: Duración
             dur_txt = format_duration(track.duration) if track.duration > 0 else "Cloud ☁️"
             dur_item = QTableWidgetItem(dur_txt)
             dur_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             dur_item.setForeground(QColor("#A7A7A7"))
-            self.track_table.setItem(row, 5, dur_item)
+            self.track_table.setItem(row, 3, dur_item)
 
     # ================================================================== #
     #                     INTERACCIÓN CON CANCIONES                      #
     # ================================================================== #
 
-    def _on_table_double_clicked(self, row: int, _col: int) -> None:
+    def _on_table_double_clicked(self, row: int, col: int = 0) -> None:
         if 0 <= row < len(self.displayed_tracks):
+            if col == 2:
+                return
             track = self.displayed_tracks[row]
             self._play_track_or_stream_from_cloud(track, self.displayed_tracks)
 
@@ -3095,7 +3127,7 @@ class SpotiLinuxWindow(QMainWindow):
         if not (0 <= row < len(self.displayed_tracks)):
             return
         track = self.displayed_tracks[row]
-        if col == 4:
+        if col == 2:
             self.store.toggle_like(track.id)
             self._sync_playlists_to_cloud()
             self._refresh_track_table()

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Hoja de estilos QSS para MaoMusic Desktop — Inspirada en la interfaz limpia y moderna de MaoMusic Mobile:
+Hoja de estilos QSS para MaoMusic Desktop — Inspirada fielmente en la interfaz limpia de MaoMusic Mobile:
 Paleta OLED (#09090b / #121215 / #18181f), bordes sutiles traslúcidos (rgba 255,255,255,0.08),
-botones píldora ('btn-chip' border-radius 9999px), dock de reproducción flotante (#121216) y acento verde vibrante (#1ed760).
+botones píldora ('btn-chip' border-radius 9999px), dock de reproducción flotante (#121216),
+filas de canciones como tarjetas redondeadas modernas (sin aspecto de Excel) y acento verde vibrante (#1ed760).
 """
 
 SPOTIFY_QSS = """
@@ -15,27 +16,27 @@ QMainWindow, QWidget#RootContainer {
 /* Tarjetas principales limpias con elevación moderna */
 QFrame#SidebarCard, QFrame#MainCard, QFrame#RightCard {
     background-color: #121215;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
 }
 
 /* Dock flotante de reproducción estilo MaoMusic Mobile */
 QFrame#BottomPlayerBar {
     background-color: #121216;
     border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 14px;
+    border-radius: 16px;
 }
 
 QFrame#EqualizerCard {
     background-color: #16161c;
     border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
+    border-radius: 14px;
 }
 
 QFrame#NowPlayingMiniCard {
     background-color: #16161c;
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border-radius: 14px;
 }
 
 QPushButton {
@@ -113,8 +114,8 @@ QPushButton#SpotifyGreenPlayBig {
     background-color: #1ed760;
     color: #000000;
     border: none;
-    border-radius: 25px;
-    font-size: 20px;
+    border-radius: 24px;
+    font-size: 18px;
     font-weight: 800;
 }
 
@@ -237,36 +238,42 @@ QListWidget#PlaylistSidebarList::item:selected {
     font-weight: bold;
 }
 
-/* Tabla moderna de canciones sin rejilla pesada */
+/* Lista de canciones moderna estilo tarjetas (cero Excel) */
 QTableWidget#TrackTable {
     background-color: transparent;
     border: none;
     gridline-color: transparent;
     color: #e5e5ec;
-    selection-background-color: rgba(30, 215, 96, 0.16);
-    selection-color: #1ed760;
+    selection-background-color: transparent;
+    selection-color: #FFFFFF;
     outline: none;
     font-size: 13px;
 }
 
 QTableWidget#TrackTable::item {
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    margin: 2px 3px;
 }
 
 QTableWidget#TrackTable::item:hover {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+QTableWidget#TrackTable::item:selected {
+    background-color: rgba(30, 215, 96, 0.14);
+    border: 1px solid rgba(30, 215, 96, 0.35);
+    color: #1ed760;
 }
 
 QHeaderView::section {
     background-color: transparent;
-    color: #8e8e98;
+    color: transparent;
     border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 8px 10px;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.5px;
+    height: 0px;
 }
 
 /* Deslizadores modernos y sutiles */
@@ -352,7 +359,7 @@ QToolTip {
 
 QScrollBar:vertical {
     background: transparent;
-    width: 8px;
+    width: 7px;
     margin: 2px;
 }
 
@@ -379,18 +386,18 @@ QMenu {
     background-color: #16161c;
     color: #FFFFFF;
     border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 10px;
-    padding: 5px;
+    border-radius: 12px;
+    padding: 6px;
 }
 
 QMenu::item {
-    padding: 7px 18px;
-    border-radius: 6px;
+    padding: 8px 18px;
+    border-radius: 8px;
     font-size: 12.5px;
 }
 
 QMenu::item:selected {
-    background-color: #22222b;
+    background-color: #24242e;
     color: #1ed760;
 }
 
