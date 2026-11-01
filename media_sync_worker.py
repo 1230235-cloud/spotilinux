@@ -31,6 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+from binaries import resolve_binary
 from gdrive_sync import (
     DEFAULT_ROOT_DRIVE_FOLDER_ID,
     DEFAULT_MUSICA_FOLDER_ID,
@@ -87,11 +88,17 @@ class MediaDownloaderWorker:
 
     def _check_system_binaries(self) -> None:
         """Verifica dependencias fundamentales del sistema."""
-        for binary in ("yt-dlp", "ffmpeg"):
-            if not shutil.which(binary):
-                logger.error(f"Binario requerido no encontrado en PATH: {binary}")
-                raise RuntimeError(f"Falta herramienta de sistema: {binary}")
-        if not shutil.which("rclone"):
+        self.ytdlp_bin = resolve_binary("yt-dlp")
+        self.ffmpeg_bin = resolve_binary("ffmpeg")
+        self.rclone_bin = resolve_binary("rclone")
+
+        if not self.ytdlp_bin:
+            logger.error("Binario requerido no encontrado: yt-dlp")
+            raise RuntimeError("Falta herramienta de sistema: yt-dlp")
+        if not self.ffmpeg_bin:
+            logger.error("Binario requerido no encontrado: ffmpeg")
+            raise RuntimeError("Falta herramienta de sistema: ffmpeg")
+        if not self.rclone_bin:
             logger.info("Aviso: 'rclone' no está en PATH; se utilizará el Proxy Serverless de Google Drive como método principal.")
 
     def fetch_and_extract(self, query: str) -> ProcessedMedia:
@@ -107,7 +114,7 @@ class MediaDownloaderWorker:
         logger.info(f"Iniciando búsqueda y descarga para consulta: '{query}'")
 
         info_cmd = [
-            "yt-dlp",
+            self.ytdlp_bin or "yt-dlp",
             "--dump-json",
             "--default-search", "ytsearch",
             "--no-playlist",
@@ -142,7 +149,7 @@ class MediaDownloaderWorker:
 
         # 1. Descarga del video en MP4 (h264/avc1 + aac preferido para compatibilidad total con HTML5 y dispositivos)
         download_cmd = [
-            "yt-dlp",
+            self.ytdlp_bin or "yt-dlp",
             "--format", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio/best[ext=mp4]/best",
             "--merge-output-format", "mp4",
             "--no-playlist",
@@ -175,7 +182,7 @@ class MediaDownloaderWorker:
             logger.info(f"Video descargado ({size_mb:.1f}MB) excede 35MB; optimizando a 720p H.264...")
             opt_video_path = work_dir / f"opt_{safe_filename}.mp4"
             opt_cmd = [
-                "ffmpeg", "-y", "-i", str(video_path),
+                self.ffmpeg_bin or "ffmpeg", "-y", "-i", str(video_path),
                 "-vf", "scale='min(1280,iw)':-2",
                 "-c:v", "libx264", "-crf", "26", "-preset", "fast",
                 "-c:a", "aac", "-b:a", "128k",
@@ -195,7 +202,7 @@ class MediaDownloaderWorker:
         logger.info("Extrayendo stream de audio a MP3 320kbps con metadatos incrustados...")
 
         ffmpeg_cmd = [
-            "ffmpeg",
+            self.ffmpeg_bin or "ffmpeg",
             "-y",
             "-i", str(video_path),
             "-vn",
@@ -272,12 +279,13 @@ class MediaDownloaderWorker:
         results = {"video_synced": False, "audio_synced": False, "method": ""}
 
         # 1. Intentar vía Rclone si los remotos están definidos
-        if self.rclone_video_remote and self.rclone_audio_remote and shutil.which("rclone"):
+        rclone_exe = self.rclone_bin or resolve_binary("rclone")
+        if self.rclone_video_remote and self.rclone_audio_remote and rclone_exe:
             logger.info("Sincronizando mediante rclone a remotos configurados...")
             try:
                 # Subir video
                 v_res = subprocess.run(
-                    ["rclone", "copyto", str(media.video_path), f"{self.rclone_video_remote}/{media.video_path.name}"],
+                    [rclone_exe, "copyto", str(media.video_path), f"{self.rclone_video_remote}/{media.video_path.name}"],
                     capture_output=True,
                     text=True,
                 )
@@ -289,7 +297,7 @@ class MediaDownloaderWorker:
 
                 # Subir audio
                 a_res = subprocess.run(
-                    ["rclone", "copyto", str(media.audio_path), f"{self.rclone_audio_remote}/{media.audio_path.name}"],
+                    [rclone_exe, "copyto", str(media.audio_path), f"{self.rclone_audio_remote}/{media.audio_path.name}"],
                     capture_output=True,
                     text=True,
                 )

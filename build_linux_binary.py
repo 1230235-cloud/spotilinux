@@ -16,6 +16,9 @@ DIST_DIR = BASE_DIR / "dist"
 
 MODULES = [
     "main.py",
+    "app_version.py",
+    "binaries.py",
+    "media_sync_worker.py",
     "audio_engine.py",
     "rhythm.py",
     "visualizer_widget.py",

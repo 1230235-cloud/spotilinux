@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional
 import urllib.request
 
+from app_version import APP_VERSION_CODE, APP_VERSION_NAME
 from PyQt6.QtCore import Qt, QSize, QRectF, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
@@ -1114,7 +1115,7 @@ class GitHubDesktopUpdateWorker(QThread):
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     remote_code = data.get("versionCode", 0)
-                    local_code = 16  # v2.7.6
+                    local_code = APP_VERSION_CODE
                     if remote_code > local_code:
                         self.update_available.emit(data)
         except Exception:
