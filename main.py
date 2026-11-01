@@ -2048,6 +2048,14 @@ class SpotiLinuxWindow(QMainWindow):
         if hasattr(self, "hero_banner") and hasattr(self.hero_banner, "btn_download_yt_banner"):
             self.hero_banner.btn_download_yt_banner.setText(banner_badge_text)
 
+    def rescan_local_library(self) -> None:
+        """Re-escanea la carpeta de biblioteca local y actualiza la interfaz de forma agrupada."""
+        if hasattr(self, "store") and hasattr(self.store, "music_library_dir"):
+            self.store.scan_folder(self.store.music_library_dir)
+            self.store.save()
+            self._refresh_track_table()
+            self._refresh_playlist_sidebar()
+
     def open_download_queue_panel(self) -> None:
         """Abre o enfoca el panel flotante no bloqueante de la cola de descargas."""
         if self.download_queue_panel is None:

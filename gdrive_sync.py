@@ -137,6 +137,14 @@ class GoogleDriveConfig:
         self.musica_folder_id = extract_drive_id_from_url(musica_folder_id)
         self.check_duplicates = bool(check_duplicates)
 
+    @property
+    def verify_duplicates(self) -> bool:
+        return self.check_duplicates
+
+    @verify_duplicates.setter
+    def verify_duplicates(self, val: bool) -> None:
+        self.check_duplicates = bool(val)
+
     def to_dict(self) -> dict:
         return {
             "access_token": self.access_token,
