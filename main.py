@@ -26,6 +26,10 @@ from pathlib import Path
 from typing import Optional
 import urllib.request
 
+# Evitar deadlock nativo de PipeWire en Qt 6.12 usando la capa de compatibilidad PulseAudio de PipeWire
+if "QT_AUDIO_BACKEND" not in os.environ:
+    os.environ["QT_AUDIO_BACKEND"] = "pulseaudio"
+
 import doctor
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME
 from download_queue import DownloadQueue, QueueRunner

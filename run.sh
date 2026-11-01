@@ -11,6 +11,9 @@ done
 DIR="$(cd -P "$(dirname "$TARGET")" >/dev/null 2>&1 && pwd)"
 cd "$DIR"
 
+# Forzar el backend de pulseaudio para Qt Multimedia en PipeWire/Wayland (evita deadlock en pw_thread_loop_lock)
+export QT_AUDIO_BACKEND="${QT_AUDIO_BACKEND:-pulseaudio}"
+
 echo "➜ Iniciando MaoMusic Desktop..."
 
 if [ -x "$DIR/venv/bin/python" ]; then

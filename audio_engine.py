@@ -6,11 +6,16 @@ ecualizador paramétrico de 5 bandas y gestión de cola / Shuffle / Repeat.
 """
 
 import hashlib
+import os
 import random
 import subprocess
 import time
 from pathlib import Path
 from typing import Optional
+
+if "QT_AUDIO_BACKEND" not in os.environ:
+    os.environ["QT_AUDIO_BACKEND"] = "pulseaudio"
+
 import numpy as np
 from PyQt6.QtCore import QObject, QThread, QTimer, QUrl, pyqtSignal
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
