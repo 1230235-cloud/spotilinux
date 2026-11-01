@@ -369,6 +369,20 @@ def resolve_videos_subfolder_id(config: GoogleDriveConfig) -> Optional[tuple[str
     return None
 
 
+def find_free_port(start: int = 8765, end: int = 8775) -> int:
+    """Devuelve el primer puerto TCP libre en 127.0.0.1 dentro del rango; lanza OSError si no hay ninguno."""
+    import socket
+
+    for port in range(start, end + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise OSError(f"No hay puertos libres entre {start} y {end} para la autorización OAuth.")
+
+
 class GDriveOAuthLoopbackWorker(QThread):
     """Ejecuta el flujo OAuth 2.0 oficial en el navegador local y captura el token automáticamente."""
 
@@ -382,6 +396,11 @@ class GDriveOAuthLoopbackWorker(QThread):
         self.port = port
 
     def run(self) -> None:
+        try:
+            self.port = find_free_port(self.port, self.port + 10)
+        except OSError as exc:
+            self.oauth_error.emit(str(exc))
+            return
         redirect_uri = f"http://127.0.0.1:{self.port}/callback"
         auth_code_holder: dict[str, str] = {}
 
@@ -1266,7 +1285,7 @@ def upload_cloud_database(
     if not config.access_token:
         if cloud_synced:
             return True, "✔ Base de datos sincronizada con el servidor de la nube (Drive 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT)."
-        return True, "Base de datos guardada localmente (conecta Token OAuth para escribir en Google Drive)."
+        return False, "No se pudo sincronizar con la nube (sin conexión o servidor no disponible). Los cambios se guardaron solo en este equipo."
 
     root_id = fid
     file_id = existing_file_id if (existing_file_id and existing_file_id != "cloud_server") else _find_cloud_db_file_id(config, CLOUD_DB_FILENAME)

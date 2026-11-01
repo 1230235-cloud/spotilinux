@@ -148,3 +148,28 @@ class TestPlaylistModel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLinkingRobustness(unittest.TestCase):
+    def test_find_free_port_skips_busy_port(self):
+        import socket
+        from gdrive_sync import find_free_port
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as busy:
+            busy.bind(("127.0.0.1", 0))
+            busy_port = busy.getsockname()[1]
+            busy.listen(1)
+            free = find_free_port(busy_port, busy_port + 5)
+            self.assertNotEqual(free, busy_port)
+
+    def test_upload_reports_failure_when_cloud_unreachable(self):
+        import tempfile
+        from unittest.mock import patch
+        from gdrive_sync import GoogleDriveConfig, upload_cloud_database
+
+        with tempfile.TemporaryDirectory() as tmp, patch("gdrive_sync.requests") as req:
+            req.post.side_effect = Exception("offline")
+            req.put.side_effect = Exception("offline")
+            ok, _msg = upload_cloud_database(GoogleDriveConfig(), Path(tmp) / "db.json", {"accounts": {}})
+            self.assertFalse(ok)
+            self.assertTrue((Path(tmp) / "db.json").exists())

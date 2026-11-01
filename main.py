@@ -1127,6 +1127,13 @@ class AccountDialog(QDialog):
                 )
         return items
 
+    def _upload_db(self, db: dict, existing_file_id) -> bool:
+        """Sube la BD de cuentas y avisa honestamente si no se pudo sincronizar con la nube."""
+        ok, msg = upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
+        if not ok:
+            QMessageBox.warning(self, "Sincronización pendiente", msg)
+        return ok
+
     def _on_submit(self) -> None:
         tok = self.inp_token.text().strip()
         if tok:
@@ -1190,7 +1197,16 @@ class AccountDialog(QDialog):
                 return
 
         self.lbl_feedback.setText("☁️ Conectando con la base de datos en Google Drive...")
+        self.btn_submit.setEnabled(False)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         QApplication.processEvents()
+        try:
+            self._process_submit(username, email, password, new_password, recovery_key_input)
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.btn_submit.setEnabled(True)
+
+    def _process_submit(self, username: str, email: str, password: str, new_password: str, recovery_key_input: str) -> None:
 
         db, existing_file_id = download_cloud_database(self.store.gdrive_config, self.store.accounts_db_path)
         accounts = db.setdefault("accounts", {})
@@ -1221,7 +1237,7 @@ class AccountDialog(QDialog):
             merged_record = merge_account_records(existing or {}, new_record)
             merged_record["recovery_key"] = recovery_key
             accounts[acc_key] = merged_record
-            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
+            self._upload_db(db, existing_file_id)
             self.authenticated_account = merged_record
 
             QMessageBox.information(
@@ -1275,7 +1291,7 @@ class AccountDialog(QDialog):
             }
             merged_record = merge_account_records(found_acc, current_record)
             accounts[found_key] = merged_record
-            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
+            self._upload_db(db, existing_file_id)
             self.authenticated_account = merged_record
             self.accept()
 
@@ -1306,7 +1322,7 @@ class AccountDialog(QDialog):
                 found_acc["recovery_key"] = generate_recovery_key(found_acc.get("email", found_key))
 
             accounts[found_key] = found_acc
-            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
+            self._upload_db(db, existing_file_id)
 
             if self.store.user_account.get("email") == found_acc.get("email"):
                 self.store.user_account["password_hash"] = new_pw_hash
@@ -1350,7 +1366,7 @@ class AccountDialog(QDialog):
             found_acc["password_hash"] = new_pw_hash
             found_acc["updated_at"] = time.time()
             accounts[found_key] = found_acc
-            upload_cloud_database(self.store.gdrive_config, self.store.accounts_db_path, db, existing_file_id)
+            self._upload_db(db, existing_file_id)
 
             QMessageBox.information(
                 self,
