@@ -8,17 +8,15 @@
 
 ### Comandos Principales
 ```bash
-# Ejecutar en desarrollo (Linux Desktop)
-./run.sh   # o: ./venv/bin/python main.py
+# Diagnóstico de entorno e instalación portable en Linux
+./install.sh   # o diagnóstico: ./venv/bin/python doctor.py
+
+# Ejecutar en desarrollo y suite de pruebas
+./run.sh       # o: ./venv/bin/python main.py
+./venv/bin/python -m unittest discover tests -v
 
 # Compilar binario nativo Linux (genera dist/MaoMusic y ./MaoMusic)
 ./venv/bin/python build_linux_binary.py
-
-# Compilar y firmar APK de Android (genera dist/MaoMusic.apk y ./MaoMusic.apk)
-./build_android_apk.sh
-
-# Validar sintaxis Python / JS rápida
-./venv/bin/python -m py_compile main.py audio_engine.py gdrive_sync.py storage.py
 ```
 
 ## 2. Regla Estricta: PROHIBIDO Leer o Editar Carpetas Compiladas y Cachés
@@ -32,13 +30,15 @@
 ## 3. Mapa Modular del Proyecto
 
 - `/` (Raíz Python Desktop):
-  - `main.py`: Ventana principal PyQt6, vistas, reproductor y coordinación de hilos.
+  - `main.py`: Ventana principal PyQt6, reproductor, coordinación y badges de descargas.
+  - `download_queue.py` y `download_queue_ui.py`: Cola persistente SQLite y panel no bloqueante.
+  - `doctor.py`, `install.sh`, `binaries.py`: Diagnóstico de entorno, instalador y resolución de binarios.
   - `audio_engine.py`: Motor de reproducción de audio, ecualización y cálculo FFT.
   - `maomao_widget.py` y `visualizer_widget.py`: Renderizado procedimental de Maomao y barras de espectro.
   - `rhythm.py`: Detección de BPM, pulsos y fase rítmica.
-  - `gdrive_sync.py`: Sincronización bidireccional con Google Drive y cuentas en la nube.
-  - `storage.py` y `metadata.py`: Persistencia local (`data/library.json`), playlists y extracción ID3.
-  - `styles.py`: Tema visual oscuro OLED para PyQt6.
+  - `media_sync_worker.py` y `gdrive_sync.py`: Descarga YouTube, extracción MP3 y sincronización Drive.
+  - `storage.py` y `metadata.py`: Persistencia local (`library.json`, `library.sqlite`) y extracción ID3.
+  - `tests/`: Suite de pruebas unitarias (`test_core.py`, `test_doctor.py`, `test_download_queue.py`, etc.).
 - `android-app/`:
   - `AndroidManifest.xml`: Permisos, versión (`versionCode`/`versionName`) y declaración de servicios.
   - `src/com/spotilinux/mobile/`: Puente nativo (`MainActivity.java`), servicio en segundo plano (`MediaPlaybackService.java`) y proveedor de actualizaciones (`GenericFileProvider.java`).

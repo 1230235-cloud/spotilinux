@@ -240,18 +240,67 @@ A su vez, `MediaPlaybackService.java` (vía `MainActivity.notifyWebProgress` / `
 
 ---
 
-## 🛠️ 5. Comandos de Compilación y Ejecución
+## 🛠️ 5. Comandos de Compilación, Instalación y Cola de Descargas
 
-### 5.1 Ejecutar o Compilar la Versión de Escritorio Linux
+### 5.1 Instalación Portable en Linux (`install.sh`) y Diagnóstico (`doctor.py`)
+El repositorio cuenta con un instalador totalmente automatizado y portable para cualquier distribución de Linux:
 ```bash
-# 1. Ejecutar directamente con el entorno virtual:
-./run.sh
+# 1. Clonar e instalar en un solo paso:
+git clone https://github.com/tu-usuario/spotify-linux.git
+cd spotify-linux
+./install.sh
 
-# 2. Recompilar el ejecutable binario ELF nativo (genera dist/SpotiLinux):
+# 2. Ejecutar la aplicación:
+./run.sh   # o desde el menú de aplicaciones: MaoMusic
+```
+
+Opciones avanzadas del instalador:
+- `./install.sh --dry-run`: Simula todas las comprobaciones y comandos sin realizar cambios en el sistema.
+- `./install.sh --no-system-deps`: Omite la instalación de paquetes del gestor del sistema (útil en entornos sin permisos `sudo`).
+- `./install.sh --uninstall`: Elimina accesos directos, binarios en `~/.local/bin/maomusic` y el entorno virtual local.
+
+Diagnóstico automático del entorno con `doctor.py`:
+```bash
+./venv/bin/python doctor.py          # Diagnóstico en tabla CLI formateada
+./venv/bin/python doctor.py --online # Incluye prueba de conectividad y latencia con Google Drive
+./venv/bin/python doctor.py --json   # Salida estructurada JSON para integración continua o scripts
+```
+
+### 5.2 Cola de Descargas Persistente y Multi-Pista (GUI y CLI Headless)
+MaoMusic incluye una cola de descargas persistente sobre SQLite (`data/download_queue.sqlite`) en modo WAL, con reintentos automáticos ante cuotas de YouTube (HTTP 429) y recuperación tras cierres abruptos:
+
+- **Desde la Interfaz Gráfica**:
+  - Pulsa el botón `📥 Descargas` en la barra lateral o en el banner superior para abrir el **Panel de Cola de Descargas**.
+  - Permite encolar listas de canciones o enlaces, importar listas desde archivos `.txt`, pausar o reanudar el procesamiento, cambiar la concurrencia (1 a 3 descargas en paralelo) y reintentar fallos con un solo clic. La ventana principal se mantiene fluida y reactiva en todo momento (no bloqueante).
+
+- **Desde la Terminal (CLI Headless)**:
+  ```bash
+  # Agregar una o varias canciones a la cola
+  ./venv/bin/python media_sync_worker.py --queue-add "La Bicicleta Nightcore" "Envenename"
+
+  # Importar archivo de texto (.txt con una canción por línea)
+  ./venv/bin/python media_sync_worker.py --queue-import mi_lista.txt
+
+  # Ver la tabla de estado actual de la cola
+  ./venv/bin/python media_sync_worker.py --queue-list
+
+  # Procesar la cola en segundo plano o terminal hasta vaciarla (concurrencia de 1 a 3)
+  ./venv/bin/python media_sync_worker.py --queue-run --parallel 2
+
+  # Reintentar todas las descargas con error
+  ./venv/bin/python media_sync_worker.py --queue-retry-failed
+
+  # Limpiar de la base de datos las canciones completadas o canceladas
+  ./venv/bin/python media_sync_worker.py --queue-clear
+  ```
+
+### 5.3 Compilación del Ejecutable Nativo ELF para Linux
+```bash
+# Recompilar el ejecutable binario nativo (genera dist/MaoMusic y ./MaoMusic):
 ./venv/bin/python build_linux_binary.py
 ```
 
-### 5.2 Compilar y Firmar el APK de Android (`dist/SpotiLinux-Mobile.apk`)
+### 5.4 Compilar y Firmar el APK de Android (`dist/SpotiLinux-Mobile.apk`)
 El proyecto incluye un script autónomo (`build_android_apk.sh`) que utiliza OpenJDK 17 (`/usr/lib/jvm/java-17-openjdk`) y las herramientas oficiales del Android SDK (`aapt2`, `d8`, `zipalign`, `apksigner` de Build-Tools `34.0.0`):
 ```bash
 ./build_android_apk.sh
