@@ -5,7 +5,13 @@ set -euo pipefail
 # MaoMusic (SpotiLinux) — Instalador Portable y Automatizado para Linux Desktop
 # ==============================================================================
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET="${BASH_SOURCE[0]}"
+while [ -L "$TARGET" ]; do
+    DIR="$(cd -P "$(dirname "$TARGET")" >/dev/null 2>&1 && pwd)"
+    TARGET="$(readlink "$TARGET")"
+    [[ $TARGET != /* ]] && TARGET="$DIR/$TARGET"
+done
+DIR="$(cd -P "$(dirname "$TARGET")" >/dev/null 2>&1 && pwd)"
 cd "$DIR"
 
 DRY_RUN=0
