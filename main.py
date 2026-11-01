@@ -202,6 +202,11 @@ class HeroBannerWidget(QFrame):
         self.btn_cloud_sync_banner.setObjectName("ActionChipButton")
         self.btn_cloud_sync_banner.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        self.btn_download_yt_banner = QPushButton("📥 YouTube")
+        self.btn_download_yt_banner.setObjectName("ActionChipButton")
+        self.btn_download_yt_banner.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_download_yt_banner.setToolTip("Buscar, descargar y sincronizar canciones o videos de YouTube a Google Drive")
+
         self.btn_add_tracks = QPushButton("＋ Agregar canciones")
         self.btn_add_tracks.setObjectName("ActionChipButton")
         self.btn_add_tracks.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -226,6 +231,7 @@ class HeroBannerWidget(QFrame):
         actions_row.addWidget(self.btn_play_banner)
         actions_row.addWidget(self.btn_shuffle_banner)
         actions_row.addWidget(self.btn_cloud_sync_banner)
+        actions_row.addWidget(self.btn_download_yt_banner)
         actions_row.addWidget(self.btn_add_tracks)
         actions_row.addWidget(self.btn_download_playlist)
         actions_row.addWidget(self.btn_edit_playlist)
@@ -1476,6 +1482,11 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_upload_gdrive.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_upload_gdrive.setToolTip("Sube canciones MP3/FLAC/WAV de tu PC a la carpeta Musica del Drive compartido")
 
+        self.btn_download_yt = QPushButton("📥  Descargar de YouTube...")
+        self.btn_download_yt.setObjectName("ActionChipButton")
+        self.btn_download_yt.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_download_yt.setToolTip("Descargar y sincronizar canciones o videos de YouTube directamente a Google Drive")
+
         self.btn_auto_scan_pc = QPushButton("🔍  Auto-Rastrear Música PC")
         self.btn_auto_scan_pc.setObjectName("ActionChipButton")
         self.btn_auto_scan_pc.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1492,6 +1503,7 @@ class SpotiLinuxWindow(QMainWindow):
         import_box.addWidget(self.btn_account_sidebar)
         import_box.addWidget(self.btn_connect_gdrive)
         import_box.addWidget(self.btn_upload_gdrive)
+        import_box.addWidget(self.btn_download_yt)
         import_box.addWidget(self.btn_auto_scan_pc)
         import_box.addWidget(self.btn_import_folder)
         import_box.addWidget(self.btn_import_files)
@@ -1855,8 +1867,10 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_account_sidebar.clicked.connect(self.open_account_dialog)
         self.btn_connect_gdrive.clicked.connect(self.open_google_drive_dialog)
         self.btn_upload_gdrive.clicked.connect(self.upload_files_to_drive_dialog)
+        self.btn_download_yt.clicked.connect(self.download_from_youtube_dialog)
         self.btn_quick_cloud.clicked.connect(self.open_google_drive_dialog)
         self.hero_banner.btn_cloud_sync_banner.clicked.connect(self.open_google_drive_dialog)
+        self.hero_banner.btn_download_yt_banner.clicked.connect(self.download_from_youtube_dialog)
 
         self.btn_auto_scan_pc.clicked.connect(self.auto_scan_pc_music)
         self.btn_import_folder.clicked.connect(self.import_folder_dialog)
