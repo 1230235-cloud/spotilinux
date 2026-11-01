@@ -56,10 +56,7 @@ class TestMediaSyncWorker(unittest.TestCase):
         mock_resp.json.return_value = {"status": "ok", "file_id": "test_drive_id_123"}
         mock_post.return_value = mock_resp
 
-        with patch("shutil.which", side_effect=lambda b: f"/usr/bin/{b}" if b in ("yt-dlp", "ffmpeg") else None), \
-             patch("pathlib.Path.read_bytes", return_value=b"fake_media_data"), \
-             patch("pathlib.Path.stat") as mock_stat:
-            mock_stat.return_value.st_size = 5 * 1024 * 1024
+        with patch("shutil.which", side_effect=lambda b: f"/usr/bin/{b}" if b in ("yt-dlp", "ffmpeg") else None):
             worker = MediaDownloaderWorker(server_url="https://mock.script.google.com/exec")
             media = ProcessedMedia(
                 query="Test Song",
@@ -72,7 +69,10 @@ class TestMediaSyncWorker(unittest.TestCase):
                 duration=180.0,
                 video_id="id123",
             )
-            with patch.object(Path, "exists", return_value=True):
+            with patch("pathlib.Path.read_bytes", return_value=b"fake_media_data"), \
+                 patch("pathlib.Path.stat") as mock_stat, \
+                 patch.object(Path, "exists", return_value=True):
+                mock_stat.return_value = MagicMock(st_size=5 * 1024 * 1024, st_mode=0o100644)
                 res = worker.sync_to_cloud(media)
                 self.assertTrue(res["video_synced"])
                 self.assertTrue(res["audio_synced"])
