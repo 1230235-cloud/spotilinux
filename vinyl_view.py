@@ -12,7 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal, QUrl, QTime
+from PyQt6.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal, QUrl, QTime, QSize
+import icons
 from PyQt6.QtGui import (
     QColor,
     QPainter,
@@ -285,13 +286,17 @@ class VinylStandbyOverlay(QFrame):
         self.lbl_clock.setObjectName("VinylClock")
         self.lbl_clock.setStyleSheet("color: #FFFFFF; font-size: 20px; font-weight: 800; letter-spacing: 1.5px;")
 
-        self.btn_toggle_video = QPushButton("🎬  Video: ON", self)
+        self.btn_toggle_video = QPushButton(" Video: ON", self)
         self.btn_toggle_video.setObjectName("ActionChipButton")
+        self.btn_toggle_video.setIcon(icons.get_icon("video", "#e4e4ec", 14))
+        self.btn_toggle_video.setIconSize(QSize(14, 14))
         self.btn_toggle_video.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_toggle_video.clicked.connect(self._on_toggle_video)
 
-        self.btn_exit = QPushButton("✕  Salir", self)
+        self.btn_exit = QPushButton(" Salir", self)
         self.btn_exit.setObjectName("GhostSmallButton")
+        self.btn_exit.setIcon(icons.get_icon("close", "#e4e4ec", 14))
+        self.btn_exit.setIconSize(QSize(14, 14))
         self.btn_exit.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_exit.clicked.connect(self.close_overlay)
 
@@ -343,33 +348,43 @@ class VinylStandbyOverlay(QFrame):
         ctrls_row.setSpacing(14)
         ctrls_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.btn_shuffle = QPushButton("🔀", self)
+        self.btn_shuffle = QPushButton(self)
         self.btn_shuffle.setObjectName("TransportIconBtn")
         self.btn_shuffle.setFixedSize(36, 36)
+        self.btn_shuffle.setIcon(icons.get_icon("shuffle", "#a6a6b4", 18))
+        self.btn_shuffle.setIconSize(QSize(18, 18))
         self.btn_shuffle.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_shuffle.clicked.connect(self.shuffle_requested)
 
-        self.btn_prev = QPushButton("⏮", self)
+        self.btn_prev = QPushButton(self)
         self.btn_prev.setObjectName("TransportIconBtn")
         self.btn_prev.setFixedSize(36, 36)
+        self.btn_prev.setIcon(icons.get_icon("prev", "#e4e4ec", 18))
+        self.btn_prev.setIconSize(QSize(18, 18))
         self.btn_prev.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_prev.clicked.connect(self.prev_requested)
 
-        self.btn_play = QPushButton("▶", self)
+        self.btn_play = QPushButton(self)
         self.btn_play.setObjectName("TransportPlayButton")
         self.btn_play.setFixedSize(46, 46)
+        self.btn_play.setIcon(icons.get_icon("play", "#000000", 22))
+        self.btn_play.setIconSize(QSize(22, 22))
         self.btn_play.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play.clicked.connect(self.play_pause_requested)
 
-        self.btn_next = QPushButton("⏭", self)
+        self.btn_next = QPushButton(self)
         self.btn_next.setObjectName("TransportIconBtn")
         self.btn_next.setFixedSize(36, 36)
+        self.btn_next.setIcon(icons.get_icon("next", "#e4e4ec", 18))
+        self.btn_next.setIconSize(QSize(18, 18))
         self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_next.clicked.connect(self.next_requested)
 
-        self.btn_repeat = QPushButton("🔁", self)
+        self.btn_repeat = QPushButton(self)
         self.btn_repeat.setObjectName("TransportIconBtn")
         self.btn_repeat.setFixedSize(36, 36)
+        self.btn_repeat.setIcon(icons.get_icon("repeat", "#a6a6b4", 18))
+        self.btn_repeat.setIconSize(QSize(18, 18))
         self.btn_repeat.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_repeat.clicked.connect(self.repeat_requested)
 
@@ -408,7 +423,8 @@ class VinylStandbyOverlay(QFrame):
         self.video_enabled = not self.video_enabled
         if not self.video_enabled:
             self.stop_video()
-        self.btn_toggle_video.setText("🎬  Video: ON" if self.video_enabled else "🎬  Video: OFF")
+        self.btn_toggle_video.setText(" Video: ON" if self.video_enabled else " Video: OFF")
+        self.btn_toggle_video.setIcon(icons.get_icon("video", "#1ed760" if self.video_enabled else "#a6a6b4", 14))
 
     def find_video_for_track(self, track_filepath: str, title: str, artist: str) -> Optional[Path]:
         """Busca si existe un video local correspondiente al archivo o título de la canción."""
@@ -453,7 +469,8 @@ class VinylStandbyOverlay(QFrame):
     ) -> None:
         self.lbl_track_title.setText(title or "MaoMusic")
         self.lbl_track_artist.setText(artist or "Tocadiscos OLED")
-        self.btn_play.setText("⏸" if is_playing else "▶")
+        self.btn_play.setText("")
+        self.btn_play.setIcon(icons.get_icon("pause" if is_playing else "play", "#000000", 22))
         self.vinyl_disc.set_playing(is_playing)
         self.vinyl_disc.set_cover(cover_path)
 

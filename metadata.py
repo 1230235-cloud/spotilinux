@@ -152,6 +152,9 @@ def clean_track_title(name: str) -> str:
     t = re.sub(r"\s*°•[^\s•]+•°\s*", " ", t)
     t = re.sub(r"\s*[\(\[]\s*[\)\]]", "", t)
     t = re.sub(r"\s+", " ", t).strip()
+    gd_match = re.match(r"^gd[_\s]+([a-zA-Z0-9_-]{10,})", t, flags=re.I)
+    if gd_match:
+        t = f"Pista en la Nube ({gd_match.group(1)[:8]}…)"
     if t and t[0].islower():
         t = t[0].upper() + t[1:]
     return t or str(name or "Canción").strip()

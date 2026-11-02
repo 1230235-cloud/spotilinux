@@ -35,6 +35,7 @@ from app_version import APP_VERSION_CODE, APP_VERSION_NAME
 from download_queue import DownloadQueue, QueueRunner
 from download_queue_ui import DownloadQueuePanel, QueueSignals
 from vinyl_view import VinylStandbyOverlay
+import icons
 from PyQt6.QtCore import Qt, QSize, QPoint, QRectF, QTimer, QThread, QUrl, pyqtSignal, qInstallMessageHandler, QtMsgType
 from PyQt6.QtGui import (
     QAction,
@@ -207,34 +208,46 @@ class HeroBannerWidget(QFrame):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(10)
 
-        self.btn_play_banner = QPushButton("▶")
+        self.btn_play_banner = QPushButton()
         self.btn_play_banner.setObjectName("SpotifyGreenPlayBig")
         self.btn_play_banner.setFixedSize(46, 46)
+        self.btn_play_banner.setIcon(icons.get_icon("play", "#000000", 22))
+        self.btn_play_banner.setIconSize(QSize(22, 22))
         self.btn_play_banner.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play_banner.setToolTip("Reproducir vista actual")
 
-        self.btn_shuffle_banner = QPushButton("🔀  Aleatorio")
+        self.btn_shuffle_banner = QPushButton(" Aleatorio")
         self.btn_shuffle_banner.setObjectName("ActionChipButton")
+        self.btn_shuffle_banner.setIcon(icons.get_icon("shuffle", "#e4e4ec", 16))
+        self.btn_shuffle_banner.setIconSize(QSize(16, 16))
         self.btn_shuffle_banner.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_download_playlist = QPushButton("⬇️  Descargar Playlist")
+        self.btn_download_playlist = QPushButton(" Descargar Playlist")
         self.btn_download_playlist.setObjectName("ActionChipButton")
+        self.btn_download_playlist.setIcon(icons.get_icon("download", "#e4e4ec", 16))
+        self.btn_download_playlist.setIconSize(QSize(16, 16))
         self.btn_download_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_download_playlist.setToolTip("Descarga las canciones de Google Drive de esta playlist")
         self.btn_download_playlist.setVisible(False)
 
-        self.btn_add_tracks = QPushButton("＋  Agregar canciones")
+        self.btn_add_tracks = QPushButton(" Agregar canciones")
         self.btn_add_tracks.setObjectName("ActionChipButton")
+        self.btn_add_tracks.setIcon(icons.get_icon("plus", "#e4e4ec", 16))
+        self.btn_add_tracks.setIconSize(QSize(16, 16))
         self.btn_add_tracks.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_add_tracks.setVisible(False)
 
-        self.btn_edit_playlist = QPushButton("✎  Editar")
+        self.btn_edit_playlist = QPushButton(" Editar")
         self.btn_edit_playlist.setObjectName("ActionChipButton")
+        self.btn_edit_playlist.setIcon(icons.get_icon("edit", "#e4e4ec", 16))
+        self.btn_edit_playlist.setIconSize(QSize(16, 16))
         self.btn_edit_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_edit_playlist.setVisible(False)
 
-        self.btn_delete_playlist = QPushButton("🗑  Eliminar")
+        self.btn_delete_playlist = QPushButton(" Eliminar")
         self.btn_delete_playlist.setObjectName("ActionChipButton")
+        self.btn_delete_playlist.setIcon(icons.get_icon("trash", "#e4e4ec", 16))
+        self.btn_delete_playlist.setIconSize(QSize(16, 16))
         self.btn_delete_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_delete_playlist.setVisible(False)
 
@@ -349,11 +362,13 @@ class QuickAccessCard(QFrame):
         text_col.addStretch()
         lay.addLayout(text_col, stretch=1)
 
-        self.btn_play_mini = QPushButton("▶")
+        self.btn_play_mini = QPushButton()
         self.btn_play_mini.setFixedSize(30, 30)
+        self.btn_play_mini.setIcon(icons.get_icon("play", "#000000", 14))
+        self.btn_play_mini.setIconSize(QSize(14, 14))
         self.btn_play_mini.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play_mini.setStyleSheet(
-            "background-color: #1DB954; color: #000000; border-radius: 15px; font-weight: bold; font-size: 12px; border: none;"
+            "background-color: #1ed760; border-radius: 15px; border: none;"
         )
         if self.play_callback:
             self.btn_play_mini.clicked.connect(self.play_callback)
@@ -1829,24 +1844,34 @@ class SpotiLinuxWindow(QMainWindow):
         nav_lay.addLayout(logo_row)
         nav_lay.addSpacing(6)
 
-        self.btn_nav_home = QPushButton("🏠   Inicio")
+        self.btn_nav_home = QPushButton("  Inicio")
         self.btn_nav_home.setObjectName("NavButton")
+        self.btn_nav_home.setIcon(icons.get_icon("home", "#a0a0ab", 18))
+        self.btn_nav_home.setIconSize(QSize(18, 18))
         self.btn_nav_home.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_nav_library = QPushButton("💿   Tu Biblioteca")
+        self.btn_nav_library = QPushButton("  Tu Biblioteca")
         self.btn_nav_library.setObjectName("NavButton")
+        self.btn_nav_library.setIcon(icons.get_icon("library", "#a0a0ab", 18))
+        self.btn_nav_library.setIconSize(QSize(18, 18))
         self.btn_nav_library.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_nav_gdrive = QPushButton("☁️   Mi Google Drive")
+        self.btn_nav_gdrive = QPushButton("  Mi Google Drive")
         self.btn_nav_gdrive.setObjectName("NavButton")
+        self.btn_nav_gdrive.setIcon(icons.get_icon("cloud", "#a0a0ab", 18))
+        self.btn_nav_gdrive.setIconSize(QSize(18, 18))
         self.btn_nav_gdrive.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_nav_liked = QPushButton("💜   Canciones que te gustan")
+        self.btn_nav_liked = QPushButton("  Canciones que te gustan")
         self.btn_nav_liked.setObjectName("NavButton")
+        self.btn_nav_liked.setIcon(icons.get_icon("heart", "#a0a0ab", 18))
+        self.btn_nav_liked.setIconSize(QSize(18, 18))
         self.btn_nav_liked.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_nav_recent = QPushButton("🕘   Escuchado recientemente")
+        self.btn_nav_recent = QPushButton("  Escuchado recientemente")
         self.btn_nav_recent.setObjectName("NavButton")
+        self.btn_nav_recent.setIcon(icons.get_icon("clock", "#a0a0ab", 18))
+        self.btn_nav_recent.setIconSize(QSize(18, 18))
         self.btn_nav_recent.setCursor(Qt.CursorShape.PointingHandCursor)
 
         for b in (self.btn_nav_home, self.btn_nav_library, self.btn_nav_gdrive, self.btn_nav_liked, self.btn_nav_recent):
@@ -1864,8 +1889,10 @@ class SpotiLinuxWindow(QMainWindow):
         pl_header = QHBoxLayout()
         lbl_pl = QLabel("PLAYLISTS")
         lbl_pl.setStyleSheet("color: #B3B3B3; font-size: 11px; font-weight: 800; letter-spacing: 1px;")
-        self.btn_new_playlist = QPushButton("＋ Nueva")
+        self.btn_new_playlist = QPushButton(" Nueva")
         self.btn_new_playlist.setObjectName("GhostSmallButton")
+        self.btn_new_playlist.setIcon(icons.get_icon("plus", "#e4e4ec", 14))
+        self.btn_new_playlist.setIconSize(QSize(14, 14))
         self.btn_new_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
 
         pl_header.addWidget(lbl_pl)
@@ -1882,13 +1909,17 @@ class SpotiLinuxWindow(QMainWindow):
         import_box = QVBoxLayout()
         import_box.setSpacing(8)
 
-        self.btn_account_sidebar = QPushButton("👤  Mi Cuenta")
+        self.btn_account_sidebar = QPushButton(" Mi Cuenta")
         self.btn_account_sidebar.setObjectName("ActionChipButton")
+        self.btn_account_sidebar.setIcon(icons.get_icon("user", "#e4e4ec", 14))
+        self.btn_account_sidebar.setIconSize(QSize(14, 14))
         self.btn_account_sidebar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_account_sidebar.setToolTip("Crea o inicia sesión con tu cuenta MaoMusic")
 
-        self.btn_sidebar_tools = QPushButton("⚡  Herramientas && Nube ▾")
+        self.btn_sidebar_tools = QPushButton(" Herramientas y Nube ▾")
         self.btn_sidebar_tools.setObjectName("ActionChipButton")
+        self.btn_sidebar_tools.setIcon(icons.get_icon("tools", "#e4e4ec", 14))
+        self.btn_sidebar_tools.setIconSize(QSize(14, 14))
         self.btn_sidebar_tools.setProperty("active", "true")
         self.btn_sidebar_tools.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_sidebar_tools.setToolTip("Google Drive, descargas de YouTube, escaneo de música y actualizaciones")
@@ -1926,22 +1957,24 @@ class SpotiLinuxWindow(QMainWindow):
         top_bar = QHBoxLayout()
         top_bar.setSpacing(8)
 
-        self.btn_toggle_sidebar = QPushButton("☰")
+        self.btn_toggle_sidebar = QPushButton()
         self.btn_toggle_sidebar.setObjectName("ActionChipButton")
         self.btn_toggle_sidebar.setFixedSize(36, 32)
+        self.btn_toggle_sidebar.setIcon(icons.get_icon("menu", "#e4e4ec", 18))
+        self.btn_toggle_sidebar.setIconSize(QSize(18, 18))
         self.btn_toggle_sidebar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_toggle_sidebar.setToolTip("Mostrar / Ocultar barra lateral (Ctrl+B)")
         top_bar.addWidget(self.btn_toggle_sidebar)
 
         self.search_input = QLineEdit()
         self.search_input.setObjectName("SearchInput")
-        self.search_input.setPlaceholderText("🔍 ¿Qué quieres reproducir? (título, artista, álbum...)")
+        self.search_input.setPlaceholderText("¿Qué quieres reproducir? (título, artista, álbum...)")
         self.search_input.setClearButtonEnabled(True)
         self.search_input.setMinimumWidth(200)
         top_bar.addWidget(self.search_input, stretch=1)
 
         self.genre_buttons: dict[str, QPushButton] = {}
-        for g_label in ("Todo", "Cloud ☁️", "Synthwave", "Lo-Fi", "House", "Electro"):
+        for g_label in ("Todo", "Cloud", "Synthwave", "Lo-Fi", "House", "Electro"):
             btn = QPushButton(g_label)
             btn.setObjectName("ActionChipButton")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2154,9 +2187,11 @@ class SpotiLinuxWindow(QMainWindow):
         title_col.addStretch()
         left_box.addLayout(title_col)
 
-        self.btn_bar_like = QPushButton("♡")
+        self.btn_bar_like = QPushButton()
         self.btn_bar_like.setObjectName("TransportIconBtn")
         self.btn_bar_like.setFixedSize(34, 34)
+        self.btn_bar_like.setIcon(icons.get_icon("heart", "#a6a6b4", 18))
+        self.btn_bar_like.setIconSize(QSize(18, 18))
         self.btn_bar_like.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_bar_like.setToolTip("Guardar en Canciones que te gustan (Ctrl+L)")
         left_box.addWidget(self.btn_bar_like)
@@ -2171,37 +2206,49 @@ class SpotiLinuxWindow(QMainWindow):
         btns_row.setSpacing(12)
         btns_row.addStretch()
 
-        self.btn_shuffle = QPushButton("🔀")
+        self.btn_shuffle = QPushButton()
         self.btn_shuffle.setObjectName("TransportIconBtn")
         self.btn_shuffle.setFixedSize(34, 34)
+        self.btn_shuffle.setIcon(icons.get_icon("shuffle", "#1ed760" if self.engine.shuffle else "#a6a6b4", 18))
+        self.btn_shuffle.setIconSize(QSize(18, 18))
         self.btn_shuffle.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_shuffle.setToolTip("Modo aleatorio (Shuffle)")
         self._refresh_button_active(self.btn_shuffle, self.engine.shuffle)
 
-        self.btn_prev = QPushButton("⏮")
+        self.btn_prev = QPushButton()
         self.btn_prev.setObjectName("TransportIconBtn")
         self.btn_prev.setFixedSize(34, 34)
+        self.btn_prev.setIcon(icons.get_icon("prev", "#e4e4ec", 18))
+        self.btn_prev.setIconSize(QSize(18, 18))
         self.btn_prev.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_prev.setToolTip("Anterior (Ctrl+Izquierda)")
 
-        self.btn_play_pause = QPushButton("▶")
+        self.btn_play_pause = QPushButton()
         self.btn_play_pause.setObjectName("TransportPlayButton")
         self.btn_play_pause.setFixedSize(44, 44)
+        self.btn_play_pause.setIcon(icons.get_icon("play", "#000000", 22))
+        self.btn_play_pause.setIconSize(QSize(22, 22))
         self.btn_play_pause.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play_pause.setToolTip("Reproducir / Pausar (Espacio)")
 
-        self.btn_next = QPushButton("⏭")
+        self.btn_next = QPushButton()
         self.btn_next.setObjectName("TransportIconBtn")
         self.btn_next.setFixedSize(34, 34)
+        self.btn_next.setIcon(icons.get_icon("next", "#e4e4ec", 18))
+        self.btn_next.setIconSize(QSize(18, 18))
         self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_next.setToolTip("Siguiente (Ctrl+Derecha)")
 
-        self.btn_repeat = QPushButton(self._repeat_icon_text())
+        self.btn_repeat = QPushButton()
         self.btn_repeat.setObjectName("TransportIconBtn")
         self.btn_repeat.setFixedSize(34, 34)
+        rep_active = self.engine.repeat_mode != "off"
+        rep_icon = "repeat_one" if self.engine.repeat_mode == "one" else "repeat"
+        self.btn_repeat.setIcon(icons.get_icon(rep_icon, "#1ed760" if rep_active else "#a6a6b4", 18))
+        self.btn_repeat.setIconSize(QSize(18, 18))
         self.btn_repeat.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_repeat.setToolTip("Modo de repetición (Desactivado / Todo / Una canción)")
-        self._refresh_button_active(self.btn_repeat, self.engine.repeat_mode != "off")
+        self._refresh_button_active(self.btn_repeat, rep_active)
 
         for b in (self.btn_shuffle, self.btn_prev, self.btn_play_pause, self.btn_next, self.btn_repeat):
             btns_row.addWidget(b)
@@ -2232,24 +2279,32 @@ class SpotiLinuxWindow(QMainWindow):
         right_box.setSpacing(8)
         right_box.addStretch()
 
-        self.btn_vinyl_mode = QPushButton("💿  Vinilo")
+        self.btn_vinyl_mode = QPushButton(" Vinilo")
         self.btn_vinyl_mode.setObjectName("GhostSmallButton")
+        self.btn_vinyl_mode.setIcon(icons.get_icon("vinyl", "#dcdcdc", 14))
+        self.btn_vinyl_mode.setIconSize(QSize(14, 14))
         self.btn_vinyl_mode.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_vinyl_mode.setToolTip("Modo Reposo / Tocadiscos con Video de fondo (Ctrl+V)")
 
-        self.btn_quick_eq = QPushButton("🎚  EQ")
+        self.btn_quick_eq = QPushButton(" EQ")
         self.btn_quick_eq.setObjectName("GhostSmallButton")
+        self.btn_quick_eq.setIcon(icons.get_icon("equalizer", "#dcdcdc", 14))
+        self.btn_quick_eq.setIconSize(QSize(14, 14))
         self.btn_quick_eq.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_quick_eq.setToolTip("Abrir Ecualizador de 5 bandas")
 
-        self.btn_toggle_right = QPushButton("◫  Panel")
+        self.btn_toggle_right = QPushButton(" Panel")
         self.btn_toggle_right.setObjectName("GhostSmallButton")
+        self.btn_toggle_right.setIcon(icons.get_icon("panel", "#dcdcdc", 14))
+        self.btn_toggle_right.setIconSize(QSize(14, 14))
         self.btn_toggle_right.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_toggle_right.setToolTip("Mostrar / Ocultar panel derecho (Maomao, Espectro y Cola)")
 
-        self.btn_mute = QPushButton("🔊")
+        self.btn_mute = QPushButton()
         self.btn_mute.setObjectName("TransportIconBtn")
         self.btn_mute.setFixedSize(34, 34)
+        self.btn_mute.setIcon(icons.get_icon("volume_high", "#a6a6b4", 18))
+        self.btn_mute.setIconSize(QSize(18, 18))
         self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.vol_slider = QSlider(Qt.Orientation.Horizontal)
@@ -2746,28 +2801,29 @@ class SpotiLinuxWindow(QMainWindow):
         acc_text_col.addWidget(lbl_sub)
         acc_lay.addLayout(acc_text_col, stretch=1)
 
-        btn_acc = QPushButton("👤 Mi Cuenta" if has_spoti_acc else "👤 Crear / Login")
+        btn_acc = QPushButton(" Mi Cuenta" if has_spoti_acc else " Crear / Login")
         btn_acc.setObjectName("ActionChipButton")
+        btn_acc.setIcon(icons.get_icon("user", "#000000" if not has_spoti_acc else "#e4e4ec", 14))
+        btn_acc.setIconSize(QSize(14, 14))
         btn_acc.setProperty("active", "false" if has_spoti_acc else "true")
         btn_acc.setFixedHeight(32)
         btn_acc.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_acc.clicked.connect(self.open_account_dialog)
         acc_lay.addWidget(btn_acc)
 
-        btn_sync = QPushButton("🔄 Sincronizar" if (has_spoti_acc or has_user or has_token) else "☁️ Conectar Drive")
+        btn_sync = QPushButton(" Sincronizar" if (has_spoti_acc or has_user or has_token) else " Conectar Drive")
         btn_sync.setObjectName("ActionChipButton")
+        btn_sync.setIcon(icons.get_icon("refresh" if (has_spoti_acc or has_user or has_token) else "cloud", "#e4e4ec", 14))
+        btn_sync.setIconSize(QSize(14, 14))
         btn_sync.setFixedHeight(32)
-        btn_sync.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_sync.clicked.connect(self._sync_or_connect_google)
-        acc_lay.addWidget(btn_sync)
         btn_sync.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_sync.clicked.connect(self._sync_or_connect_google)
         acc_lay.addWidget(btn_sync)
 
         self.quick_grid_main_layout.addWidget(acc_frame)
 
-        # 2. Encabezado de Sección: "🎵 Tus Playlists Disponibles"
-        sec_header = QLabel("🎵 Tus Playlists Disponibles")
+        # 2. Encabezado de Sección: "Tus Playlists"
+        sec_header = QLabel("Tus Playlists")
         sec_header.setStyleSheet("color: #FFFFFF; font-size: 16px; font-weight: 800; margin-top: 4px;")
         self.quick_grid_main_layout.addWidget(sec_header)
 
@@ -2913,23 +2969,37 @@ class SpotiLinuxWindow(QMainWindow):
         key = self.home_preview_key
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(8)
-        btn_play = QPushButton("▶  Reproducir")
+        btn_play = QPushButton(" Reproducir")
         btn_play.setObjectName("ActionChipButton")
+        btn_play.setIcon(icons.get_icon("play", "#000000", 14))
+        btn_play.setIconSize(QSize(14, 14))
         btn_play.setProperty("active", "true")
         btn_play.clicked.connect(lambda _c=False, k=key: self._play_home_key(k))
-        btn_shuffle = QPushButton("🔀 Aleatorio")
+
+        btn_shuffle = QPushButton(" Aleatorio")
         btn_shuffle.setObjectName("ActionChipButton")
+        btn_shuffle.setIcon(icons.get_icon("shuffle", "#e4e4ec", 14))
+        btn_shuffle.setIconSize(QSize(14, 14))
         btn_shuffle.clicked.connect(lambda _c=False, k=key: self._play_home_key(k, shuffle=True))
-        btn_open = QPushButton("↗ Abrir")
+
+        btn_open = QPushButton(" Abrir")
         btn_open.setObjectName("ActionChipButton")
+        btn_open.setIcon(icons.get_icon("library", "#e4e4ec", 14))
+        btn_open.setIconSize(QSize(14, 14))
         btn_open.setToolTip("Abrir la playlist completa (editar, quitar o agregar canciones)")
         btn_open.clicked.connect(lambda _c=False, k=key: self.switch_view(k))
-        btn_dl = QPushButton("⬇️ Descargar")
+
+        btn_dl = QPushButton(" Descargar")
         btn_dl.setObjectName("ActionChipButton")
+        btn_dl.setIcon(icons.get_icon("download", "#e4e4ec", 14))
+        btn_dl.setIconSize(QSize(14, 14))
         btn_dl.setToolTip("Descargar canciones de Google Drive de esta playlist a music_library/")
         btn_dl.clicked.connect(lambda _c=False, k=key: self._download_entire_playlist(k))
-        btn_collapse = QPushButton("➕ Mostrar lista" if self.home_preview_collapsed else "➖ Reducir lista")
+
+        btn_collapse = QPushButton(" Mostrar lista" if self.home_preview_collapsed else " Reducir lista")
         btn_collapse.setObjectName("ActionChipButton")
+        btn_collapse.setIcon(icons.get_icon("plus" if self.home_preview_collapsed else "close", "#e4e4ec", 12))
+        btn_collapse.setIconSize(QSize(12, 12))
         btn_collapse.clicked.connect(self._toggle_home_preview_collapsed)
         for b in (btn_play, btn_shuffle, btn_open, btn_dl, btn_collapse):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -3710,13 +3780,16 @@ class SpotiLinuxWindow(QMainWindow):
 
     def _update_like_button_ui(self, track_id: str) -> None:
         liked = self.store.is_liked(track_id)
-        self.btn_bar_like.setText("♥" if liked else "♡")
+        self.btn_bar_like.setText("")
+        self.btn_bar_like.setIcon(icons.get_icon("heart_filled" if liked else "heart", "#1ed760" if liked else "#a6a6b4", 18))
         self._refresh_button_active(self.btn_bar_like, liked)
 
     def _on_engine_state_changed(self, is_playing: bool) -> None:
-        icon = "⏸" if is_playing else "▶"
-        self.btn_play_pause.setText(icon)
-        self.hero_banner.btn_play_banner.setText(icon)
+        icon_name = "pause" if is_playing else "play"
+        self.btn_play_pause.setText("")
+        self.btn_play_pause.setIcon(icons.get_icon(icon_name, "#000000", 22))
+        self.hero_banner.btn_play_banner.setText("")
+        self.hero_banner.btn_play_banner.setIcon(icons.get_icon(icon_name, "#000000", 22))
 
         if hasattr(self, "vinyl_overlay") and self.vinyl_overlay.isVisible():
             t = self.engine.current_track
@@ -3760,12 +3833,10 @@ class SpotiLinuxWindow(QMainWindow):
         self.store.volume = value
         self.store.save()
         self.engine.set_volume(value)
-        if value == 0:
-            self.btn_mute.setText("🔇")
-        elif value < 50:
-            self.btn_mute.setText("🔉")
-        else:
-            self.btn_mute.setText("🔊")
+        self._muted = (value == 0)
+        self.btn_mute.setText("")
+        icon_name = "volume_mute" if value == 0 else "volume_high"
+        self.btn_mute.setIcon(icons.get_icon(icon_name, "#1ed760" if value > 0 else "#a6a6b4", 18))
 
     def toggle_mute(self) -> None:
         if not self._muted and self.vol_slider.value() > 0:
@@ -3786,15 +3857,17 @@ class SpotiLinuxWindow(QMainWindow):
     def _update_shuffle_ui(self) -> None:
         is_shuf = bool(self.engine.shuffle)
         self._refresh_button_active(self.btn_shuffle, is_shuf)
+        self.btn_shuffle.setText("")
+        self.btn_shuffle.setIcon(icons.get_icon("shuffle", "#1ed760" if is_shuf else "#a6a6b4", 18))
         if is_shuf:
-            self.btn_shuffle.setText("🔀 •")
             self.btn_shuffle.setToolTip("Modo aleatorio: ACTIVADO (clic para desactivar)")
-            self.hero_banner.btn_shuffle_banner.setText("🔀 Aleatorio: ACTIVADO")
+            self.hero_banner.btn_shuffle_banner.setText(" Aleatorio: ACTIVADO")
+            self.hero_banner.btn_shuffle_banner.setIcon(icons.get_icon("shuffle", "#000000", 16))
             self._refresh_button_active(self.hero_banner.btn_shuffle_banner, True)
         else:
-            self.btn_shuffle.setText("🔀")
             self.btn_shuffle.setToolTip("Modo aleatorio: DESACTIVADO (clic para activar)")
-            self.hero_banner.btn_shuffle_banner.setText("🔀 Aleatorio")
+            self.hero_banner.btn_shuffle_banner.setText(" Aleatorio")
+            self.hero_banner.btn_shuffle_banner.setIcon(icons.get_icon("shuffle", "#e4e4ec", 16))
             self._refresh_button_active(self.hero_banner.btn_shuffle_banner, False)
 
     def cycle_repeat_mode(self) -> None:
@@ -3803,13 +3876,16 @@ class SpotiLinuxWindow(QMainWindow):
         self.engine.repeat_mode = modes[idx]
         self.store.repeat_mode = self.engine.repeat_mode
         self.store.save()
-        self.btn_repeat.setText(self._repeat_icon_text())
-        self._refresh_button_active(self.btn_repeat, self.engine.repeat_mode != "off")
+        is_rep = self.engine.repeat_mode != "off"
+        rep_icon = "repeat_one" if self.engine.repeat_mode == "one" else "repeat"
+        self.btn_repeat.setText("")
+        self.btn_repeat.setIcon(icons.get_icon(rep_icon, "#1ed760" if is_rep else "#a6a6b4", 18))
+        self._refresh_button_active(self.btn_repeat, is_rep)
 
     def _repeat_icon_text(self) -> str:
         if self.engine.repeat_mode == "one":
-            return "🔂"
-        return "🔁"
+            return "1"
+        return ""
 
     def toggle_current_track_like(self) -> None:
         if not self.engine.current_track:

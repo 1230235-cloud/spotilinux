@@ -31,10 +31,10 @@ class TestVinylView(unittest.TestCase):
         overlay.update_state("Test Title", "Test Artist", None, "test.mp3", False)
         self.assertEqual(overlay.lbl_track_title.text(), "Test Title")
         self.assertEqual(overlay.lbl_track_artist.text(), "Test Artist")
-        self.assertEqual(overlay.btn_play.text(), "▶")
+        self.assertFalse(overlay.btn_play.icon().isNull())
 
         overlay.update_state("Test Title", "Test Artist", None, "test.mp3", True)
-        self.assertEqual(overlay.btn_play.text(), "⏸")
+        self.assertFalse(overlay.btn_play.icon().isNull())
 
         overlay.close_overlay()
         self.assertFalse(overlay.isVisible())

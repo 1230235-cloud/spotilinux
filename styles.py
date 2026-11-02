@@ -41,6 +41,29 @@ QFrame#NowPlayingMiniCard {
 
 QPushButton {
     outline: none;
+    background-color: #18181f;
+    color: #e4e4ec;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #242430;
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+QPushButton:pressed {
+    background-color: #121217;
+}
+
+QPushButton:disabled {
+    color: #555562;
+    background-color: #121216;
+    border-color: rgba(255, 255, 255, 0.03);
 }
 
 /* Botones de navegación lateral con diseño de píldora */
@@ -132,9 +155,8 @@ QPushButton#TransportPlayButton {
     background-color: #1ed760;
     color: #000000;
     border: none;
-    border-radius: 21px;
-    font-size: 16px;
-    font-weight: 800;
+    border-radius: 22px;
+    padding: 0px;
 }
 
 QPushButton#TransportPlayButton:hover {
@@ -151,15 +173,13 @@ QPushButton#TransportIconBtn {
     color: #a6a6b4;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 17px;
-    font-size: 13px;
-    font-weight: 600;
     padding: 0px;
 }
 
 QPushButton#TransportIconBtn:hover {
     color: #FFFFFF;
     background-color: #242430;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.20);
 }
 
 QPushButton#TransportIconBtn:pressed {
@@ -168,29 +188,36 @@ QPushButton#TransportIconBtn:pressed {
 
 QPushButton#TransportIconBtn[active="true"] {
     color: #1ed760;
-    background-color: rgba(30, 215, 96, 0.16);
-    border: 1px solid rgba(30, 215, 96, 0.42);
+    background-color: rgba(30, 215, 96, 0.18);
+    border: 1px solid rgba(30, 215, 96, 0.50);
     font-weight: bold;
 }
 
 QPushButton#GhostSmallButton {
     background-color: #18181f;
-    color: #DCDCDC;
+    color: #e5e5ec;
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 9999px;
-    padding: 5px 12px;
-    font-size: 11px;
+    padding: 6px 14px;
+    font-size: 11.5px;
     font-weight: 700;
 }
 
 QPushButton#GhostSmallButton:hover {
-    background-color: #22222a;
-    border-color: rgba(30, 215, 96, 0.40);
+    background-color: #24242d;
+    border-color: rgba(30, 215, 96, 0.50);
     color: #FFFFFF;
 }
 
 QPushButton#GhostSmallButton:pressed {
     background-color: #141418;
+}
+
+QPushButton#GhostSmallButton[active="true"] {
+    background-color: rgba(30, 215, 96, 0.16);
+    color: #1ed760;
+    border: 1px solid rgba(30, 215, 96, 0.50);
+    font-weight: 800;
 }
 
 /* Buscador redondeado estilo píldora */
