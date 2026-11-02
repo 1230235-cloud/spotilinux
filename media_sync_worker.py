@@ -298,29 +298,88 @@ class MediaDownloaderWorker:
                 video_path = opt_video_path
                 logger.info(f"✔ Video optimizado con éxito a {video_path.stat().st_size / (1024*1024):.1f}MB")
 
-        thumb_candidates = list(work_dir.glob("*.jpg"))
-        thumbnail_path = thumb_candidates[0] if thumb_candidates else None
+        thumb_candidates = (
+            list(work_dir.glob("*.jpg"))
+            + list(work_dir.glob("*.jpeg"))
+            + list(work_dir.glob("*.png"))
+            + list(work_dir.glob("*.webp"))
+        )
+        thumbnail_path = None
+        if thumb_candidates:
+            raw_thumb = thumb_candidates[0]
+            if raw_thumb.suffix.lower() == ".jpg":
+                thumbnail_path = raw_thumb
+            else:
+                converted_jpg = work_dir / f"{safe_filename}_cover.jpg"
+                try:
+                    from PIL import Image
+                    with Image.open(raw_thumb) as im:
+                        im.convert("RGB").save(converted_jpg, format="JPEG", quality=92)
+                    thumbnail_path = converted_jpg
+                except Exception:
+                    thumbnail_path = raw_thumb
 
-        # 2. Extracción de audio en alta fidelidad (MP3 320k) directamente desde el video descargado
+        # Incrustar carátula en el contenedor de video MP4 si está disponible
+        if thumbnail_path and thumbnail_path.exists():
+            cov_video = work_dir / f"cov_{safe_filename}.mp4"
+            embed_v_cmd = [
+                self.ffmpeg_bin or "ffmpeg",
+                "-y",
+                "-i", str(video_path),
+                "-i", str(thumbnail_path),
+                "-map", "0",
+                "-map", "1",
+                "-c", "copy",
+                "-disposition:v:1", "attached_pic",
+                str(cov_video),
+            ]
+            v_res = subprocess.run(embed_v_cmd, capture_output=True, text=True)
+            if v_res.returncode == 0 and cov_video.exists():
+                video_path.unlink(missing_ok=True)
+                video_path = cov_video
+                logger.info("✔ Carátula incrustada con éxito en el contenedor de video MP4.")
+
+        # 2. Extracción de audio en alta fidelidad (MP3 320k) directamente desde el video descargado con carátula incrustada
         if progress_cb:
-            progress_cb("convert", 72.0, "Extrayendo audio MP3 320kbps con metadatos incrustados...")
+            progress_cb("convert", 72.0, "Extrayendo audio MP3 320kbps con carátula y metadatos incrustados...")
 
         audio_path = work_dir / f"{safe_filename}.mp3"
-        logger.info("Extrayendo stream de audio a MP3 320kbps con metadatos incrustados...")
+        logger.info("Extrayendo stream de audio a MP3 320kbps con carátula y metadatos incrustados...")
 
-        ffmpeg_cmd = [
-            self.ffmpeg_bin or "ffmpeg",
-            "-y",
-            "-i", str(video_path),
-            "-vn",
-            "-acodec", "libmp3lame",
-            "-b:a", "320k",
-            "-metadata", f"title={final_track_title}",
-            "-metadata", f"artist={artist_guess}",
-            "-metadata", "album=MaoMusic Cloud Library",
-            "-metadata", "comment=MaoMusic Media Sync Worker",
-            str(audio_path),
-        ]
+        if thumbnail_path and thumbnail_path.exists():
+            ffmpeg_cmd = [
+                self.ffmpeg_bin or "ffmpeg",
+                "-y",
+                "-i", str(video_path),
+                "-i", str(thumbnail_path),
+                "-map", "0:a",
+                "-map", "1:0",
+                "-c:a", "libmp3lame",
+                "-b:a", "320k",
+                "-c:v", "mjpeg",
+                "-id3v2_version", "3",
+                "-metadata:s:v", "title=Album cover",
+                "-metadata:s:v", "comment=Cover (front)",
+                "-metadata", f"title={final_track_title}",
+                "-metadata", f"artist={artist_guess}",
+                "-metadata", "album=MaoMusic Cloud Library",
+                "-metadata", "comment=MaoMusic Media Sync Worker",
+                str(audio_path),
+            ]
+        else:
+            ffmpeg_cmd = [
+                self.ffmpeg_bin or "ffmpeg",
+                "-y",
+                "-i", str(video_path),
+                "-vn",
+                "-acodec", "libmp3lame",
+                "-b:a", "320k",
+                "-metadata", f"title={final_track_title}",
+                "-metadata", f"artist={artist_guess}",
+                "-metadata", "album=MaoMusic Cloud Library",
+                "-metadata", "comment=MaoMusic Media Sync Worker",
+                str(audio_path),
+            ]
 
         ff_res = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
         if ff_res.returncode != 0 or not audio_path.exists() or audio_path.stat().st_size < 1024:
@@ -329,7 +388,7 @@ class MediaDownloaderWorker:
             raise RuntimeError(f"Error en ffmpeg al extraer audio para {query}: {ff_res.stderr}")
 
         if progress_cb:
-            progress_cb("convert", 84.0, "Audio MP3 extraído con éxito")
+            progress_cb("convert", 84.0, "Audio MP3 con carátula incrustada extraído con éxito")
 
         return ProcessedMedia(
             query=query,
@@ -553,8 +612,31 @@ class MediaDownloaderWorker:
             if keep_local:
                 dest = local_destination or BASE_DIR / "music_library"
                 dest.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(media.audio_path, dest / media.audio_path.name)
-                logger.info(f"Copia local guardada en: {dest / media.audio_path.name}")
+                dest_audio = dest / media.audio_path.name
+                shutil.copy2(media.audio_path, dest_audio)
+                logger.info(f"Copia local de audio guardada en: {dest_audio}")
+
+                # Guardar copia local del video descargado en music_library/videos/ para sincronización con modo vinilo
+                if media.video_path and media.video_path.exists():
+                    v_dir = dest / "videos"
+                    v_dir.mkdir(parents=True, exist_ok=True)
+                    dest_video = v_dir / media.video_path.name
+                    shutil.copy2(media.video_path, dest_video)
+                    logger.info(f"Copia local de video guardada en: {dest_video}")
+
+                # Guardar carátula en archivo .jpg junto a la canción y en la caché de carátulas
+                if media.thumbnail_path and media.thumbnail_path.exists():
+                    dest_cover = dest / f"{media.audio_path.stem}.jpg"
+                    shutil.copy2(media.thumbnail_path, dest_cover)
+                    try:
+                        from metadata import compute_track_id
+                        tid = compute_track_id(dest_audio)
+                        covers_cache_dir = BASE_DIR / "data" / "covers_cache"
+                        covers_cache_dir.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(media.thumbnail_path, covers_cache_dir / f"{tid}.jpg")
+                    except Exception as e:
+                        logger.warning(f"No se pudo indexar carátula en caché: {e}")
+                    logger.info(f"Carátula guardada en: {dest_cover}")
 
             if progress_cb:
                 progress_cb("done", 100.0, "Descarga y sincronización completadas")

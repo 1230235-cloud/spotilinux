@@ -79,6 +79,47 @@ class TestMediaSyncWorker(unittest.TestCase):
                 self.assertEqual(res["method"], "serverless_proxy")
                 self.assertEqual(res.get("audio_file_id"), "test_drive_id_123")
 
+    def test_local_keep_saves_audio_video_and_cover(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            work_dir = tmp_path / "work"
+            work_dir.mkdir()
+            dest_dir = tmp_path / "music_library"
+
+            dummy_audio = work_dir / "track.mp3"
+            dummy_audio.write_bytes(b"dummy_mp3_data_here")
+            dummy_video = work_dir / "track.mp4"
+            dummy_video.write_bytes(b"dummy_mp4_data_here")
+            dummy_thumb = work_dir / "track.jpg"
+            dummy_thumb.write_bytes(b"dummy_jpg_cover_data")
+
+            media = ProcessedMedia(
+                query="Song",
+                video_title="Song",
+                clean_title="Song",
+                artist="Artist",
+                video_path=dummy_video,
+                audio_path=dummy_audio,
+                thumbnail_path=dummy_thumb,
+                duration=120.0,
+                video_id="xyz",
+            )
+
+            worker = MediaDownloaderWorker()
+            with patch.object(worker, "fetch_and_extract", return_value=media), \
+                 patch.object(worker, "sync_to_cloud", return_value={"status": "local_only"}), \
+                 patch.object(worker, "missing_binaries", return_value=[]):
+                res = worker.process_query("Song", keep_local=True, local_destination=dest_dir)
+                self.assertEqual(res["status"], "success")
+
+                # Verify audio is saved
+                self.assertTrue((dest_dir / "track.mp3").exists())
+                # Verify video is saved
+                self.assertTrue((dest_dir / "videos" / "track.mp4").exists())
+                # Verify cover art is saved alongside
+                self.assertTrue((dest_dir / "track.jpg").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
