@@ -34,6 +34,7 @@ import doctor
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME
 from download_queue import DownloadQueue, QueueRunner
 from download_queue_ui import DownloadQueuePanel, QueueSignals
+from vinyl_view import VinylStandbyOverlay
 from PyQt6.QtCore import Qt, QSize, QPoint, QRectF, QTimer, QThread, QUrl, pyqtSignal, qInstallMessageHandler, QtMsgType
 from PyQt6.QtGui import (
     QAction,
@@ -1676,15 +1677,11 @@ class SpotiLinuxWindow(QMainWindow):
         QTimer.singleShot(2500, self._check_github_updates)
 
     def _check_first_run_welcome(self) -> None:
-        # Sincronizar automáticamente la carpeta compartida 1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT / Musica al iniciar
         if self.store.gdrive_config.access_token and not self.store.google_user.get("name"):
             u = fetch_google_user_profile(self.store.gdrive_config.access_token)
             if u:
                 self.store.google_user = u
                 self.store.save()
-        if self.store.gdrive_config.access_token or self.store.user_account.get("email"):
-            self._sync_playlists_to_cloud()
-        self.start_gdrive_sync(silent_view_keep=True)
 
         if self.store.welcome_shown:
             return
@@ -1796,8 +1793,16 @@ class SpotiLinuxWindow(QMainWindow):
         root_layout.addLayout(panels_row, stretch=1)
         self._build_bottom_player_bar(root_layout)
 
+        # Overlay de tocadiscos de vinilo giratorio y video de fondo (Modo Reposo)
+        self.vinyl_overlay = VinylStandbyOverlay(self.base_dir, self)
+        self.vinyl_overlay.setVisible(False)
+
     def _build_left_sidebar(self, parent_layout: QHBoxLayout) -> None:
-        left_col = QVBoxLayout()
+        self.sidebar_container = QWidget()
+        self.sidebar_container.setObjectName("SidebarContainer")
+        self.sidebar_container.setFixedWidth(258)
+        left_col = QVBoxLayout(self.sidebar_container)
+        left_col.setContentsMargins(0, 0, 0, 0)
         left_col.setSpacing(8)
 
         nav_card = QFrame()
@@ -1909,7 +1914,7 @@ class SpotiLinuxWindow(QMainWindow):
         lib_lay.addLayout(import_box)
 
         left_col.addWidget(lib_card, stretch=1)
-        parent_layout.addLayout(left_col)
+        parent_layout.addWidget(self.sidebar_container)
 
     def _build_center_panel(self, parent_layout: QHBoxLayout) -> None:
         center_card = QFrame()
@@ -1921,11 +1926,18 @@ class SpotiLinuxWindow(QMainWindow):
         top_bar = QHBoxLayout()
         top_bar.setSpacing(8)
 
+        self.btn_toggle_sidebar = QPushButton("☰")
+        self.btn_toggle_sidebar.setObjectName("ActionChipButton")
+        self.btn_toggle_sidebar.setFixedSize(36, 32)
+        self.btn_toggle_sidebar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_sidebar.setToolTip("Mostrar / Ocultar barra lateral (Ctrl+B)")
+        top_bar.addWidget(self.btn_toggle_sidebar)
+
         self.search_input = QLineEdit()
         self.search_input.setObjectName("SearchInput")
         self.search_input.setPlaceholderText("🔍 ¿Qué quieres reproducir? (título, artista, álbum...)")
         self.search_input.setClearButtonEnabled(True)
-        self.search_input.setMinimumWidth(210)
+        self.search_input.setMinimumWidth(200)
         top_bar.addWidget(self.search_input, stretch=1)
 
         self.genre_buttons: dict[str, QPushButton] = {}
@@ -1938,12 +1950,9 @@ class SpotiLinuxWindow(QMainWindow):
             self.genre_buttons[g_label] = btn
             top_bar.addWidget(btn)
 
-        self.btn_top_tools = QPushButton("⚙️")
-        self.btn_top_tools.setObjectName("ActionChipButton")
-        self.btn_top_tools.setFixedSize(36, 32)
-        self.btn_top_tools.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_top_tools.setToolTip("Herramientas, Google Drive, descargas y configuración")
-        top_bar.addWidget(self.btn_top_tools)
+        # Botón de compatibilidad invisible
+        self.btn_top_tools = QPushButton()
+        self.btn_top_tools.setVisible(False)
 
         center_lay.addLayout(top_bar)
 
@@ -2147,6 +2156,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         self.btn_bar_like = QPushButton("♡")
         self.btn_bar_like.setObjectName("TransportIconBtn")
+        self.btn_bar_like.setFixedSize(34, 34)
         self.btn_bar_like.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_bar_like.setToolTip("Guardar en Canciones que te gustan (Ctrl+L)")
         left_box.addWidget(self.btn_bar_like)
@@ -2158,33 +2168,37 @@ class SpotiLinuxWindow(QMainWindow):
         center_col.setSpacing(6)
 
         btns_row = QHBoxLayout()
-        btns_row.setSpacing(14)
+        btns_row.setSpacing(12)
         btns_row.addStretch()
 
         self.btn_shuffle = QPushButton("🔀")
         self.btn_shuffle.setObjectName("TransportIconBtn")
+        self.btn_shuffle.setFixedSize(34, 34)
         self.btn_shuffle.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_shuffle.setToolTip("Modo aleatorio (Shuffle)")
         self._refresh_button_active(self.btn_shuffle, self.engine.shuffle)
 
         self.btn_prev = QPushButton("⏮")
         self.btn_prev.setObjectName("TransportIconBtn")
+        self.btn_prev.setFixedSize(34, 34)
         self.btn_prev.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_prev.setToolTip("Anterior (Ctrl+Izquierda)")
 
         self.btn_play_pause = QPushButton("▶")
         self.btn_play_pause.setObjectName("TransportPlayButton")
-        self.btn_play_pause.setFixedSize(36, 36)
+        self.btn_play_pause.setFixedSize(44, 44)
         self.btn_play_pause.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play_pause.setToolTip("Reproducir / Pausar (Espacio)")
 
         self.btn_next = QPushButton("⏭")
         self.btn_next.setObjectName("TransportIconBtn")
+        self.btn_next.setFixedSize(34, 34)
         self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_next.setToolTip("Siguiente (Ctrl+Derecha)")
 
         self.btn_repeat = QPushButton(self._repeat_icon_text())
         self.btn_repeat.setObjectName("TransportIconBtn")
+        self.btn_repeat.setFixedSize(34, 34)
         self.btn_repeat.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_repeat.setToolTip("Modo de repetición (Desactivado / Todo / Una canción)")
         self._refresh_button_active(self.btn_repeat, self.engine.repeat_mode != "off")
@@ -2218,32 +2232,37 @@ class SpotiLinuxWindow(QMainWindow):
         right_box.setSpacing(8)
         right_box.addStretch()
 
-        self.btn_quick_cloud = QPushButton("☁️ Drive")
-        self.btn_quick_cloud.setObjectName("GhostSmallButton")
-        self.btn_quick_cloud.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_quick_cloud.setToolTip("Configurar o sincronizar Google Drive")
+        self.btn_vinyl_mode = QPushButton("💿  Vinilo")
+        self.btn_vinyl_mode.setObjectName("GhostSmallButton")
+        self.btn_vinyl_mode.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_vinyl_mode.setToolTip("Modo Reposo / Tocadiscos con Video de fondo (Ctrl+V)")
 
-        self.btn_quick_eq = QPushButton("🎚 EQ")
+        self.btn_quick_eq = QPushButton("🎚  EQ")
         self.btn_quick_eq.setObjectName("GhostSmallButton")
         self.btn_quick_eq.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_quick_eq.setToolTip("Abrir Ecualizador de 5 bandas")
 
-        self.btn_toggle_right = QPushButton("◫ Panel")
+        self.btn_toggle_right = QPushButton("◫  Panel")
         self.btn_toggle_right.setObjectName("GhostSmallButton")
         self.btn_toggle_right.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_toggle_right.setToolTip("Mostrar / Ocultar panel derecho (Maomao, Espectro y Cola)")
 
         self.btn_mute = QPushButton("🔊")
         self.btn_mute.setObjectName("TransportIconBtn")
+        self.btn_mute.setFixedSize(34, 34)
         self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.vol_slider = QSlider(Qt.Orientation.Horizontal)
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setValue(self.store.volume)
-        self.vol_slider.setFixedWidth(92)
+        self.vol_slider.setFixedWidth(88)
         self.vol_slider.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        right_box.addWidget(self.btn_quick_cloud)
+        # Botón de compatibilidad invisible
+        self.btn_quick_cloud = QPushButton()
+        self.btn_quick_cloud.setVisible(False)
+
+        right_box.addWidget(self.btn_vinyl_mode)
         right_box.addWidget(self.btn_quick_eq)
         right_box.addWidget(self.btn_toggle_right)
         right_box.addWidget(self.btn_mute)
@@ -2270,6 +2289,13 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_account_sidebar.clicked.connect(self.open_account_dialog)
         self.btn_sidebar_tools.clicked.connect(lambda: self._open_tools_menu(self.btn_sidebar_tools))
         self.btn_top_tools.clicked.connect(lambda: self._open_tools_menu(self.btn_top_tools))
+        self.btn_toggle_sidebar.clicked.connect(self._toggle_sidebar)
+        self.btn_vinyl_mode.clicked.connect(self._open_vinyl_mode)
+        self.vinyl_overlay.play_pause_requested.connect(self.engine.toggle_play_pause)
+        self.vinyl_overlay.prev_requested.connect(self.engine.previous_track)
+        self.vinyl_overlay.next_requested.connect(lambda: self.engine.next_track(auto_triggered=False))
+        self.vinyl_overlay.shuffle_requested.connect(self.toggle_shuffle)
+        self.vinyl_overlay.repeat_requested.connect(self.cycle_repeat_mode)
         self.btn_check_updates.clicked.connect(lambda: self._check_github_updates(manual=True))
         self.btn_connect_gdrive.clicked.connect(self.open_google_drive_dialog)
         self.btn_upload_gdrive.clicked.connect(self.upload_files_to_drive_dialog)
@@ -2348,6 +2374,33 @@ class SpotiLinuxWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.search_input.setFocus)
         QShortcut(QKeySequence("Ctrl+L"), self, activated=self.toggle_current_track_like)
         QShortcut(QKeySequence("Ctrl+M"), self, activated=self.toggle_mute)
+        QShortcut(QKeySequence("Ctrl+B"), self, activated=self._toggle_sidebar)
+        QShortcut(QKeySequence("Ctrl+V"), self, activated=self._open_vinyl_mode)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "vinyl_overlay") and self.vinyl_overlay.isVisible():
+            self.vinyl_overlay.setGeometry(self.rect())
+
+    def _toggle_sidebar(self) -> None:
+        """Muestra u oculta la barra lateral izquierda."""
+        if hasattr(self, "sidebar_container"):
+            self.sidebar_container.setVisible(not self.sidebar_container.isVisible())
+
+    def _open_vinyl_mode(self) -> None:
+        """Abre el tocadiscos giratorio con video de fondo o fondo atmosférico."""
+        if not hasattr(self, "vinyl_overlay"):
+            return
+        t = self.engine.current_track
+        title = t.title if t else "MaoMusic"
+        artist = t.artist if t else "Tocadiscos OLED"
+        cov = t.cover_path if t else None
+        fpath = t.filepath if t else ""
+        self.vinyl_overlay.setGeometry(self.rect())
+        self.vinyl_overlay.update_state(title, artist, cov, fpath, self.engine.is_playing())
+        self.vinyl_overlay.setVisible(True)
+        self.vinyl_overlay.raise_()
+        self.vinyl_overlay.setFocus()
 
     # ================================================================== #
     #                  GOOGLE DRIVE CLOUD STREAMING                      #
@@ -2701,25 +2754,12 @@ class SpotiLinuxWindow(QMainWindow):
         btn_acc.clicked.connect(self.open_account_dialog)
         acc_lay.addWidget(btn_acc)
 
-        btn_up = QPushButton("⬆️ Subir")
-        btn_up.setObjectName("ActionChipButton")
-        btn_up.setFixedHeight(32)
-        btn_up.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_up.setToolTip("Subir nuevas canciones a la carpeta Musica del Drive")
-        btn_up.clicked.connect(self.upload_files_to_drive_dialog)
-        acc_lay.addWidget(btn_up)
-
-        btn_yt = QPushButton("📥 YouTube")
-        btn_yt.setObjectName("ActionChipButton")
-        btn_yt.setFixedHeight(32)
-        btn_yt.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_yt.setToolTip("Buscar, descargar y sincronizar música y videos de YouTube automáticamente")
-        btn_yt.clicked.connect(self.download_from_youtube_dialog)
-        acc_lay.addWidget(btn_yt)
-
-        btn_sync = QPushButton("🔄 Drive" if (has_spoti_acc or has_user or has_token) else "☁️ Drive")
+        btn_sync = QPushButton("🔄 Sincronizar" if (has_spoti_acc or has_user or has_token) else "☁️ Conectar Drive")
         btn_sync.setObjectName("ActionChipButton")
         btn_sync.setFixedHeight(32)
+        btn_sync.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_sync.clicked.connect(self._sync_or_connect_google)
+        acc_lay.addWidget(btn_sync)
         btn_sync.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_sync.clicked.connect(self._sync_or_connect_google)
         acc_lay.addWidget(btn_sync)
@@ -3659,6 +3699,15 @@ class SpotiLinuxWindow(QMainWindow):
         self.visualizer.set_accent_color(track.dominant_color)
         self.visualizer.set_cover(track.cover_path)
 
+        if hasattr(self, "vinyl_overlay") and self.vinyl_overlay.isVisible():
+            self.vinyl_overlay.update_state(
+                title=track.title,
+                artist=track.artist,
+                cover_path=track.cover_path,
+                track_filepath=track.filepath,
+                is_playing=self.engine.is_playing(),
+            )
+
     def _update_like_button_ui(self, track_id: str) -> None:
         liked = self.store.is_liked(track_id)
         self.btn_bar_like.setText("♥" if liked else "♡")
@@ -3668,6 +3717,14 @@ class SpotiLinuxWindow(QMainWindow):
         icon = "⏸" if is_playing else "▶"
         self.btn_play_pause.setText(icon)
         self.hero_banner.btn_play_banner.setText(icon)
+
+        if hasattr(self, "vinyl_overlay") and self.vinyl_overlay.isVisible():
+            t = self.engine.current_track
+            title = t.title if t else "MaoMusic"
+            artist = t.artist if t else "Tocadiscos OLED"
+            cov = t.cover_path if t else None
+            fpath = t.filepath if t else ""
+            self.vinyl_overlay.update_state(title, artist, cov, fpath, is_playing)
 
     def _on_engine_position_changed(self, pos_ms: int, dur_ms: int) -> None:
         if not self._seeking_slider:
@@ -3679,6 +3736,9 @@ class SpotiLinuxWindow(QMainWindow):
                 self.seek_slider.blockSignals(False)
         if dur_ms > 0:
             self.lbl_dur_time.setText(format_duration(dur_ms / 1000.0))
+
+        if hasattr(self, "vinyl_overlay") and self.vinyl_overlay.isVisible():
+            self.vinyl_overlay.sync_playback_position(pos_ms / 1000.0, self.engine.is_playing())
 
     def _on_seek_preview(self, value: int) -> None:
         if self._seeking_slider:

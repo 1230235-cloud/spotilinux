@@ -132,8 +132,8 @@ QPushButton#TransportPlayButton {
     background-color: #1ed760;
     color: #000000;
     border: none;
-    border-radius: 19px;
-    font-size: 15px;
+    border-radius: 21px;
+    font-size: 16px;
     font-weight: 800;
 }
 
@@ -145,31 +145,31 @@ QPushButton#TransportPlayButton:pressed {
     background-color: #17a84b;
 }
 
-/* Iconos de transporte (prev, next, shuffle, repeat) */
+/* Iconos de transporte (prev, next, shuffle, repeat, mute) estilo dark elegante */
 QPushButton#TransportIconBtn {
-    background-color: transparent;
-    color: #a0a0ab;
-    border: 1px solid transparent;
-    border-radius: 9999px;
-    font-size: 14px;
+    background-color: #18181f;
+    color: #a6a6b4;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 17px;
+    font-size: 13px;
     font-weight: 600;
-    padding: 5px 9px;
+    padding: 0px;
 }
 
 QPushButton#TransportIconBtn:hover {
     color: #FFFFFF;
-    background-color: #18181f;
-    border-color: rgba(255, 255, 255, 0.08);
+    background-color: #242430;
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 QPushButton#TransportIconBtn:pressed {
-    background-color: #141418;
+    background-color: #131317;
 }
 
 QPushButton#TransportIconBtn[active="true"] {
     color: #1ed760;
-    background-color: rgba(30, 215, 96, 0.14);
-    border: 1px solid rgba(30, 215, 96, 0.35);
+    background-color: rgba(30, 215, 96, 0.16);
+    border: 1px solid rgba(30, 215, 96, 0.42);
     font-weight: bold;
 }
 
@@ -423,5 +423,40 @@ QFrame#CompactTrackRow:hover {
 QFrame#CompactTrackRow[playing="true"] {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(30, 215, 96, 0.18), stop:1 #151f19);
     border-color: rgba(30, 215, 96, 0.55);
+}
+
+/* Modo Reposo / Tocadiscos OLED con Video */
+QFrame#VinylStandbyOverlay {
+    background-color: #09090c;
+}
+
+QLabel#VinylClock {
+    color: #FFFFFF;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+QLabel#VinylTitle {
+    color: #FFFFFF;
+    font-size: 22px;
+    font-weight: 800;
+}
+
+QLabel#VinylArtist {
+    color: #1ed760;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#VinylBadge {
+    color: #8e8e98;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 3px 10px;
 }
 """
