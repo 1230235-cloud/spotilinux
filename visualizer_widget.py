@@ -62,6 +62,12 @@ class AudioVisualizerWidget(QWidget):
         self.beat_frac: float = 0.0   # 0 en el beat, →1 antes del siguiente
         self.beat_onset: float = 0.0
         self._playing: bool = False
+        self.free_stage_mode: bool = False
+
+    def set_free_stage_mode(self, enabled: bool) -> None:
+        """Activa la optimización de proporciones y reflejo especular completo en Modo Libre."""
+        self.free_stage_mode = bool(enabled)
+        self.update()
 
     def set_beat(self, bpm: float, beat_pos: float, confidence: float, onset: float) -> None:
         """Sincroniza el pulso visual con la rejilla de beats real de la canción."""
@@ -202,13 +208,26 @@ class AudioVisualizerWidget(QWidget):
         n = len(self.bars)
         if n == 0:
             return
+        is_free = self.free_stage_mode or (h >= 180.0)
         pad_x = 14.0
-        pad_top = 24.0
-        pad_bottom = 14.0
+        pad_top = 28.0 if is_free else 24.0
+        pad_bottom = (h * 0.24) if is_free else 14.0
         usable_w = max(10.0, w - pad_x * 2)
         usable_h = max(10.0, h - pad_top - pad_bottom)
 
-        gap = 3.2
+        if is_free:
+            # Resplandor radial de sub-graves en Modo Libre
+            pulse = float(np.clip(beat_kick * 0.45 + bass_e * 0.55, 0.0, 1.0))
+            ambient_r = min(w * 0.50, h * 0.75 * (0.85 + pulse * 0.35))
+            ambient_grad = QRadialGradient(w / 2.0, h * 0.54, ambient_r)
+            ambient_grad.setColorAt(0.0, QColor(30, 215, 96, int(25 + pulse * 40)))
+            ambient_grad.setColorAt(0.55, QColor(0, 210, 255, int(10 + pulse * 20)))
+            ambient_grad.setColorAt(1.0, QColor(0, 0, 0, 0))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(ambient_grad)
+            painter.drawEllipse(QPointF(w / 2.0, h * 0.54), ambient_r, ambient_r)
+
+        gap = 3.6 if is_free else 3.2
         bar_w = max(2.5, (usable_w - gap * (n - 1)) / n)
 
         # Línea base con pulso en cada beat
@@ -247,19 +266,23 @@ class AudioVisualizerWidget(QWidget):
             rect = QRectF(x, y, bar_w, bh)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bar_grad)
-            painter.drawRoundedRect(rect, 2.5, 2.5)
+            painter.drawRoundedRect(rect, 3.0 if is_free else 2.5, 3.0 if is_free else 2.5)
 
-            # Reflejo tenue bajo la línea base
-            refl_h = min(bh * 0.28, pad_bottom - 3.0)
+            # Reflejo especular degradado bajo la línea base
+            refl_max = pad_bottom - 4.0 if is_free else (pad_bottom - 3.0)
+            refl_h = min(refl_max, bh * (0.35 if is_free else 0.28))
             if refl_h > 1.0:
-                painter.setBrush(QColor(30, 215, 96, 42))
+                ref_grad = QLinearGradient(0, h - pad_bottom + 1.0, 0, h - pad_bottom + 1.0 + refl_h)
+                ref_grad.setColorAt(0.0, QColor(30, 215, 96, 65 if is_free else 42))
+                ref_grad.setColorAt(1.0, QColor(0, 0, 0, 0))
+                painter.setBrush(ref_grad)
                 painter.drawRoundedRect(QRectF(x, h - pad_bottom + 2.0, bar_w, refl_h), 2.0, 2.0)
 
             # Indicador de pico flotante
             pk = float(np.clip(self.peaks[i], 0.03, 1.0))
             py = h - pad_bottom - pk * usable_h - 3.2
             painter.setBrush(QColor(255, 120, 165, 230) if pk > 0.82 else QColor(210, 255, 235, 215))
-            painter.drawRoundedRect(QRectF(x, max(pad_top - 4, py), bar_w, 2.4), 1.0, 1.0)
+            painter.drawRoundedRect(QRectF(x, max(pad_top - 4, py), bar_w, 2.8 if is_free else 2.4), 1.2, 1.2)
 
     def _draw_wave(
         self,

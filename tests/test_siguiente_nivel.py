@@ -91,14 +91,16 @@ class TestSiguienteNivel(unittest.TestCase):
         self.assertEqual(restored.cover_url, pl.cover_url)
         self.assertEqual(restored.cover_drive_id, pl.cover_drive_id)
 
-    def test_stylesheets_modes(self):
-        """Verifica que los estilos claros y oscuros estén definidos y tengan bordes de píldora."""
+    def test_visual_modes_dark_and_free(self):
+        """Verifica que el estilo mantenga diseño de píldora y el visualizador soporte modo libre."""
+        from visualizer_widget import AudioVisualizerWidget
         dark = get_stylesheet("dark")
-        light = get_stylesheet("light")
         self.assertIn("#09090b", dark)
-        self.assertIn("#f5f6f8", light)
         self.assertIn("border-radius: 9999px", dark)
-        self.assertIn("border-radius: 9999px", light)
+        vis = AudioVisualizerWidget()
+        self.assertFalse(vis.free_stage_mode)
+        vis.set_free_stage_mode(True)
+        self.assertTrue(vis.free_stage_mode)
 
     def test_resolve_imagenes_subfolder(self):
         """Verifica que resolve_imagenes_subfolder_id detecte carpetas de imágenes."""

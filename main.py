@@ -2181,10 +2181,10 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_maomao_style.setObjectName("GhostSmallButton")
         self.btn_maomao_style.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_visual_mode = QPushButton("🌙 Oscuro")
+        self.btn_visual_mode = QPushButton("🌙 Normal")
         self.btn_visual_mode.setObjectName("GhostSmallButton")
         self.btn_visual_mode.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_visual_mode.setToolTip("Alternar modo: Oscuro, Claro y Libre")
+        self.btn_visual_mode.setToolTip("Alternar modo de escenario: Normal y Libre")
         self.btn_visual_mode.clicked.connect(self.cycle_visual_mode)
 
         maomao_header.addWidget(lbl_mm)
@@ -2525,37 +2525,36 @@ class SpotiLinuxWindow(QMainWindow):
         self.visualizer.set_beat(bpm, beat_pos, conf, onset)
 
     def cycle_visual_mode(self) -> None:
-        modes = ["dark", "light", "free"]
+        modes = ["dark", "free"]
         cur = getattr(self, "_visual_mode", "dark")
         nxt_idx = (modes.index(cur) + 1) % len(modes) if cur in modes else 0
         self.set_visual_mode(modes[nxt_idx])
 
     def set_visual_mode(self, mode: str) -> None:
+        if mode not in ("dark", "free"):
+            mode = "dark"
         self._visual_mode = mode
         from styles import get_stylesheet
         from PyQt6.QtWidgets import QApplication
 
-        labels = {"dark": "🌙 Oscuro", "light": "☀️ Claro", "free": "📊 Libre"}
+        labels = {"dark": "🌙 Normal", "free": "📊 Libre"}
         if hasattr(self, "btn_visual_mode"):
-            self.btn_visual_mode.setText(labels.get(mode, "🌙 Oscuro"))
+            self.btn_visual_mode.setText(labels.get(mode, "🌙 Normal"))
 
         app = QApplication.instance()
+        if app:
+            app.setStyleSheet(get_stylesheet("dark"))
+
         if mode == "free":
-            if app:
-                app.setStyleSheet(get_stylesheet("dark"))
             self.maomao_widget.setVisible(False)
+            if hasattr(self.visualizer, "set_free_stage_mode"):
+                self.visualizer.set_free_stage_mode(True)
             self.visualizer.setMinimumHeight(280)
-            self.visualizer.setMaximumHeight(350)
-        elif mode == "light":
-            if app:
-                app.setStyleSheet(get_stylesheet("light"))
-            self.maomao_widget.setVisible(True)
-            self.visualizer.setMinimumHeight(112)
-            self.visualizer.setMaximumHeight(125)
+            self.visualizer.setMaximumHeight(380)
         else: # dark
-            if app:
-                app.setStyleSheet(get_stylesheet("dark"))
             self.maomao_widget.setVisible(True)
+            if hasattr(self.visualizer, "set_free_stage_mode"):
+                self.visualizer.set_free_stage_mode(False)
             self.visualizer.setMinimumHeight(112)
             self.visualizer.setMaximumHeight(125)
 

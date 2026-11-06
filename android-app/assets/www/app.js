@@ -798,28 +798,27 @@ async function deleteTempPlaybackSession() {
 /* FASE 6: MODOS VISUALES ("dark" | "light" | "free")                        */
 /* ========================================================================= */
 function setAppVisualMode(mode) {
-  if (!["dark", "light", "free"].includes(mode)) mode = "dark";
+  if (mode !== "free") mode = "dark";
   appVisualMode = mode;
   localStorage.setItem("app_visual_mode", mode);
 
-  if (mode === "light") {
-    document.body.setAttribute("data-theme", "light");
-    document.body.removeAttribute("data-stage-mode");
-  } else if (mode === "free") {
-    document.body.setAttribute("data-theme", "dark");
+  if (mode === "free") {
     document.body.setAttribute("data-stage-mode", "free");
   } else {
-    document.body.setAttribute("data-theme", "dark");
     document.body.removeAttribute("data-stage-mode");
   }
 
-  ["btnModeDark", "btnModeLight", "btnModeFree"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove("active");
-  });
-  if (mode === "dark" && document.getElementById("btnModeDark")) document.getElementById("btnModeDark").classList.add("active");
-  if (mode === "light" && document.getElementById("btnModeLight")) document.getElementById("btnModeLight").classList.add("active");
-  if (mode === "free" && document.getElementById("btnModeFree")) document.getElementById("btnModeFree").classList.add("active");
+  const lbl = document.querySelector(".stage-label");
+  if (lbl) {
+    lbl.textContent = mode === "free" ? "ESPECTRO EN VIVO • MODO LIBRE" : "ESCENARIO MAOMAO";
+  }
+
+  const btnDark = document.getElementById("btnModeDark");
+  const btnFree = document.getElementById("btnModeFree");
+  if (btnDark) btnDark.classList.toggle("active", mode === "dark");
+  if (btnFree) btnFree.classList.toggle("active", mode === "free");
+
+  requestAnimationFrame(() => syncCanvasDimensions());
 }
 
 /* ========================================================================= */
@@ -955,13 +954,25 @@ function toggleCurrentPlaylistFilter() {
 function updatePlaylistFilterButtonUI() {
   const btn = document.getElementById("btnTogglePlFilter");
   if (!btn) return;
+  const lbl = document.getElementById("lblTogglePlFilter");
   if (playlistFilterConfig.enabled) {
+    btn.classList.add("neon-outline");
     btn.classList.add("active");
-    btn.textContent = "⚡ Filtro: ON";
+    if (lbl) lbl.textContent = "Filtro: ON";
   } else {
+    btn.classList.remove("neon-outline");
     btn.classList.remove("active");
-    btn.textContent = "⚡ Filtro: OFF";
+    if (lbl) lbl.textContent = "Filtro: OFF";
   }
+}
+
+function togglePlRuleSwitch(switchId) {
+  const el = document.getElementById(switchId);
+  if (!el) return;
+  const isCurrentlyOn = el.dataset.checked === "true" || el.classList.contains("on");
+  const newState = !isCurrentlyOn;
+  el.dataset.checked = newState ? "true" : "false";
+  el.classList.toggle("on", newState);
 }
 
 function openPlaylistFilterRulesModal() {
@@ -970,8 +981,16 @@ function openPlaylistFilterRulesModal() {
   const chkDl = document.getElementById("chkPlFilterDownloaded");
   const chkSh = document.getElementById("chkPlFilterShort");
   const txtEx = document.getElementById("txtPlFilterExclude");
-  if (chkDl) chkDl.checked = !!playlistFilterConfig.hideNotDownloaded;
-  if (chkSh) chkSh.checked = !!playlistFilterConfig.hideShortTracks;
+  if (chkDl) {
+    const isDl = !!playlistFilterConfig.hideNotDownloaded;
+    chkDl.dataset.checked = isDl ? "true" : "false";
+    chkDl.classList.toggle("on", isDl);
+  }
+  if (chkSh) {
+    const isSh = !!playlistFilterConfig.hideShortTracks;
+    chkSh.dataset.checked = isSh ? "true" : "false";
+    chkSh.classList.toggle("on", isSh);
+  }
   if (txtEx) txtEx.value = (playlistFilterConfig.excludeKeywords || []).join(", ");
   modal.classList.add("open");
 }
@@ -985,8 +1004,8 @@ function savePlaylistFilterRules() {
   const chkDl = document.getElementById("chkPlFilterDownloaded");
   const chkSh = document.getElementById("chkPlFilterShort");
   const txtEx = document.getElementById("txtPlFilterExclude");
-  playlistFilterConfig.hideNotDownloaded = chkDl ? chkDl.checked : false;
-  playlistFilterConfig.hideShortTracks = chkSh ? chkSh.checked : false;
+  playlistFilterConfig.hideNotDownloaded = chkDl ? (chkDl.dataset.checked === "true" || chkDl.classList.contains("on")) : false;
+  playlistFilterConfig.hideShortTracks = chkSh ? (chkSh.dataset.checked === "true" || chkSh.classList.contains("on")) : false;
   if (txtEx) {
     playlistFilterConfig.excludeKeywords = txtEx.value
       .split(",")
@@ -1035,6 +1054,7 @@ function savePersistentStateDebounced(delayMs = 350) {
 }
 
 function savePersistentState() {
+  invalidatePlaylistCache();
   const cloudTracksOnly = tracks.filter(t => t.cloud || t.driveId || String(t.id).startsWith("gd_"));
   const likedIds = tracks.filter(t => t.liked).map(t => t.id);
   const chkDedup = document.getElementById("chkVerifyDuplicates");
@@ -2379,8 +2399,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 29;
-const CURRENT_APP_VERSION_NAME = "2.11.1";
+const CURRENT_APP_VERSION_CODE = 30;
+const CURRENT_APP_VERSION_NAME = "2.11.2";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -2625,8 +2645,74 @@ function findTrackByPlaylistId(tid) {
   return null;
 }
 
+let playlistCacheVersion = 0;
+let cachedPlaylistLookupVersion = -1;
+let trackToPlaylistsMap = new Map(); // track.id -> Array<Playlist>
+let playlistToTracksMap = new Map(); // playlist.id -> Array<Track>
+
+function invalidatePlaylistCache() {
+  playlistCacheVersion++;
+}
+
+function getActiveSourcePlaylists() {
+  let sourcePlaylists = playlists;
+  if (userAccount && userAccount.email && accountsDb && accountsDb[userAccount.email] && Array.isArray(accountsDb[userAccount.email].playlists)) {
+    sourcePlaylists = accountsDb[userAccount.email].playlists;
+    if (playlists !== sourcePlaylists && sourcePlaylists.length > 0) {
+      playlists = sourcePlaylists;
+    }
+  } else if (userAccount && Array.isArray(userAccount.playlists)) {
+    sourcePlaylists = userAccount.playlists;
+    if (playlists !== sourcePlaylists && sourcePlaylists.length > 0) {
+      playlists = sourcePlaylists;
+    }
+  }
+  return Array.isArray(sourcePlaylists) ? sourcePlaylists : [];
+}
+
+function ensurePlaylistCacheFresh() {
+  if (cachedPlaylistLookupVersion === playlistCacheVersion) return;
+  trackToPlaylistsMap.clear();
+  playlistToTracksMap.clear();
+
+  const sourcePlaylists = getActiveSourcePlaylists();
+
+  // Pre-normalizar campos en tracks para consultas ultra rápidas
+  for (let i = 0; i < tracks.length; i++) {
+    const t = tracks[i];
+    if (!t) continue;
+    if (!t._normTitle && t.title) t._normTitle = normalizeFullTitle(cleanTrackTitle(t.title));
+    if (!t._srcHash && t.src) t._srcHash = "saved_" + javaHashCode(t.src);
+    if (!t._fileHash && t.filePath) t._fileHash = "saved_" + javaHashCode(t.filePath);
+    trackToPlaylistsMap.set(t.id, []);
+  }
+
+  for (let p = 0; p < sourcePlaylists.length; p++) {
+    const pl = sourcePlaylists[p];
+    if (!pl || !Array.isArray(pl.trackIds)) continue;
+    const matchedTracks = [];
+    const seenTrackIds = new Set();
+    for (let k = 0; k < pl.trackIds.length; k++) {
+      const tid = pl.trackIds[k];
+      const trk = findTrackByPlaylistId(tid);
+      if (trk && !seenTrackIds.has(trk.id)) {
+        seenTrackIds.add(trk.id);
+        matchedTracks.push(trk);
+        const arr = trackToPlaylistsMap.get(trk.id);
+        if (arr) arr.push(pl);
+      }
+    }
+    playlistToTracksMap.set(pl.id, matchedTracks);
+  }
+  cachedPlaylistLookupVersion = playlistCacheVersion;
+}
+
 function getPlaylistTracks(pl) {
   if (!pl || !Array.isArray(pl.trackIds)) return [];
+  ensurePlaylistCacheFresh();
+  if (playlistToTracksMap.has(pl.id)) {
+    return playlistToTracksMap.get(pl.id);
+  }
   const matched = [];
   const matchedIds = new Set();
   for (const tid of pl.trackIds) {
@@ -2640,31 +2726,12 @@ function getPlaylistTracks(pl) {
 }
 
 function getTrackPlaylists(track) {
-  if (!track) return [];
-  // Asegurar que si hay cuenta activa en sesión, tomamos las playlists de la cuenta
-  let sourcePlaylists = playlists;
-  if (userAccount && userAccount.email && accountsDb && accountsDb[userAccount.email] && Array.isArray(accountsDb[userAccount.email].playlists)) {
-    sourcePlaylists = accountsDb[userAccount.email].playlists;
-    if (playlists !== sourcePlaylists && sourcePlaylists.length > 0) {
-      playlists = sourcePlaylists;
-    }
-  } else if (userAccount && Array.isArray(userAccount.playlists)) {
-    sourcePlaylists = userAccount.playlists;
-    if (playlists !== sourcePlaylists && sourcePlaylists.length > 0) {
-      playlists = sourcePlaylists;
-    }
+  if (!track || !track.id) return [];
+  ensurePlaylistCacheFresh();
+  if (trackToPlaylistsMap.has(track.id)) {
+    return trackToPlaylistsMap.get(track.id);
   }
-  if (!Array.isArray(sourcePlaylists)) return [];
-
-  const res = [];
-  for (const pl of sourcePlaylists) {
-    if (!pl || !Array.isArray(pl.trackIds)) continue;
-    const isMember = pl.trackIds.some(tid => trackMatchesPlaylistId(track, tid));
-    if (isMember) {
-      res.push(pl);
-    }
-  }
-  return res;
+  return [];
 }
 
 function getTrackPlaylistName(track) {
@@ -3461,10 +3528,20 @@ function createTrackRowElement(t, filtered) {
   return div;
 }
 
-function renderTracks() {
+let lastRenderedTracksCacheKey = "";
+
+function renderTracks(forceRebuild = false) {
   const listEl = document.getElementById("trackList");
   if (!listEl) return;
   const filtered = getFilteredTracks();
+  const searchQ = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
+  const currentKey = `${playlistCacheVersion}_${filtered.length}_${activeFilter}_${searchQ}_${isMultiSelectMode}`;
+
+  if (!forceRebuild && lastRenderedTracksCacheKey === currentKey && listEl.children.length > 0) {
+    // La lista ya está en pantalla con los datos exactos: no tocar el DOM para transiciones instantáneas a 60 FPS
+    return;
+  }
+  lastRenderedTracksCacheKey = currentKey;
   listEl.innerHTML = "";
 
   if (filtered.length === 0) {
@@ -3950,15 +4027,16 @@ function openPlaylistSelectFilterModal() {
   if (!modal || !choices) return;
   choices.innerHTML = "";
 
-  const makeFilterBtn = (text, filterVal, isActive) => {
+  const makeFilterChoice = (iconSvg, text, countNum, filterVal, isActive) => {
     const btn = document.createElement("button");
-    btn.className = "btn-chip" + (isActive ? " active" : "");
-    btn.style.textAlign = "left";
-    btn.style.padding = "10px 14px";
-    btn.style.display = "flex";
-    btn.style.justifyContent = "space-between";
-    btn.style.alignItems = "center";
-    btn.innerHTML = text;
+    btn.className = "pl-dark-choice-row" + (isActive ? " active" : "");
+    btn.innerHTML = `
+      <div class="pl-dark-choice-left">
+        <div class="pl-dark-choice-icon">${iconSvg}</div>
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(text)}</span>
+      </div>
+      <span class="pl-dark-choice-badge">${countNum} temas</span>
+    `;
     btn.onclick = () => {
       closePlaylistSelectFilterModal();
       setFilter(filterVal);
@@ -3966,21 +4044,25 @@ function openPlaylistSelectFilterModal() {
     return btn;
   };
 
-  // Opción 1: Ver todas las canciones
-  choices.appendChild(makeFilterBtn(`<span>🎵 Todas las canciones</span><span style="font-size:10px; opacity:0.7;">${tracks.length}</span>`, "all", activeFilter === "all"));
+  // 1. Ver todas las canciones
+  const icMusic = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+  choices.appendChild(makeFilterChoice(icMusic, "Todas las canciones", tracks.length, "all", activeFilter === "all"));
 
-  // Opción 2: Favoritos
+  // 2. Favoritos
   const likedCount = tracks.filter(t => t.liked).length;
-  choices.appendChild(makeFilterBtn(`<span>♥ Tus Favoritos</span><span style="font-size:10px; opacity:0.7;">${likedCount}</span>`, "pl:pl_liked", activeFilter === "pl:pl_liked"));
+  const icHeart = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+  choices.appendChild(makeFilterChoice(icHeart, "Tus Favoritos", likedCount, "pl:pl_liked", activeFilter === "pl:pl_liked"));
 
-  // Opción 3: Google Drive
+  // 3. Google Drive
   const cloudCount = tracks.filter(t => t.cloud).length;
-  choices.appendChild(makeFilterBtn(`<span>☁️ Google Drive</span><span style="font-size:10px; opacity:0.7;">${cloudCount}</span>`, "pl:pl_cloud", activeFilter === "pl:pl_cloud"));
+  const icCloud = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
+  choices.appendChild(makeFilterChoice(icCloud, "Google Drive", cloudCount, "pl:pl_cloud", activeFilter === "pl:pl_cloud"));
 
   // Playlists del usuario
+  const icFolder = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
   playlists.forEach(pl => {
     const plTracks = getPlaylistTracks(pl);
-    choices.appendChild(makeFilterBtn(`<span>📁 ${escapeHtml(pl.name)}</span><span style="font-size:10px; opacity:0.7;">${plTracks.length}</span>`, "pl:" + pl.id, activeFilter === ("pl:" + pl.id)));
+    choices.appendChild(makeFilterChoice(icFolder, pl.name, plTracks.length, "pl:" + pl.id, activeFilter === ("pl:" + pl.id)));
   });
 
   modal.classList.add("open");
@@ -4361,23 +4443,21 @@ function openAddToPlaylistModal(trackIdsOrId) {
       : targetIds.every(id => pl.trackIds.includes(id));
 
     const btn = document.createElement("button");
-    btn.className = "btn-chip" + (isMember ? " active" : "");
-    btn.style.textAlign = "left";
-    btn.style.padding = "10px 14px";
-    btn.style.display = "flex";
-    btn.style.justifyContent = "space-between";
-    btn.style.alignItems = "center";
-    btn.style.width = "100%";
-    btn.style.marginBottom = "6px";
+    btn.className = "pl-dark-choice-row" + (isMember ? " active" : "");
+    btn.style.marginBottom = "7px";
 
     if (isMember) {
       btn.innerHTML = `
-        <span style="display:flex; align-items:center; gap:8px;">
-          <span style="color:var(--green-bright); font-weight:800; font-size:14px;">✔</span>
-          <span style="font-weight:700;">${escapeHtml(pl.name)}</span>
-          <span style="font-size:10px; opacity:0.85; color:var(--green-bright);">(En esta playlist)</span>
-        </span>
-        <span style="font-size:11px; font-weight:600; color:#ef4444; padding:3px 7px; border-radius:6px; background:rgba(239, 68, 68, 0.12);">Quitar ✕</span>
+        <div class="pl-dark-choice-left">
+          <div class="pl-dark-choice-icon" style="background:rgba(30,215,96,0.22); border-color:rgba(30,215,96,0.5);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div style="overflow:hidden;">
+            <div style="font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(pl.name)}</div>
+            <div style="font-size:10px; color:var(--green-bright);">(Ya añadida)</div>
+          </div>
+        </div>
+        <span class="pl-dark-choice-badge remove">Quitar ✕</span>
       `;
       btn.onclick = () => {
         pl.trackIds = pl.trackIds.filter(tid => {
@@ -4388,11 +4468,13 @@ function openAddToPlaylistModal(trackIdsOrId) {
       };
     } else {
       btn.innerHTML = `
-        <span style="display:flex; align-items:center; gap:8px;">
-          <span style="color:var(--muted); font-weight:800; font-size:14px;">＋</span>
-          <span>${escapeHtml(pl.name)}</span>
-        </span>
-        <span style="font-size:11px; opacity:0.6;">${pl.trackIds.length} canciones</span>
+        <div class="pl-dark-choice-left">
+          <div class="pl-dark-choice-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(pl.name)}</div>
+        </div>
+        <span class="pl-dark-choice-badge">${pl.trackIds.length} temas</span>
       `;
       btn.onclick = () => {
         let addedCnt = 0;
@@ -5854,9 +5936,11 @@ function switchTab(tab) {
     const smBtn = document.getElementById("smNav" + k.charAt(0).toUpperCase() + k.slice(1));
     if (smBtn) smBtn.classList.toggle("active", k === tab);
   });
-  if (tab === "home") renderHomePlaylists();
-  if (tab === "songs") renderTracks();
-  if (tab === "drive") updateAccountUI();
+  requestAnimationFrame(() => {
+    if (tab === "home") renderHomePlaylists();
+    if (tab === "songs") renderTracks();
+    if (tab === "drive") updateAccountUI();
+  });
 }
 
 function setFilter(flt) {
@@ -6577,6 +6661,12 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high, targetCanvas, targetC
   const vCtx = targetCtx || (vCanvas ? vCanvas.getContext("2d") : null);
   if (!vCanvas || !vCtx) return;
 
+  const rect = vCanvas.getBoundingClientRect();
+  const targetW = Math.max(120, Math.round(rect.width || vCanvas.clientWidth || 360));
+  const targetH = Math.max(36, Math.round(rect.height || vCanvas.clientHeight || (appVisualMode === "free" ? 210 : 56)));
+  if (Math.abs(vCanvas.width - targetW) > 2) vCanvas.width = targetW;
+  if (Math.abs(vCanvas.height - targetH) > 2) vCanvas.height = targetH;
+
   if (typeof vCtx.roundRect !== "function") {
     vCtx.roundRect = function(x, y, w, h, radii) {
       if (typeof radii === "undefined") radii = 0;
@@ -6594,36 +6684,61 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high, targetCanvas, targetC
   const w = vCanvas.width, h = vCanvas.height;
   vCtx.clearRect(0, 0, w, h);
 
+  const isFreeStage = appVisualMode === "free" || h >= 110;
+
+  // Halo ambiental reactivo al ritmo para el Modo Libre
+  if (isFreeStage) {
+    const pulseAmt = isPlaying ? (beatPulse * 0.45 + (bass || 0) * 0.55) : 0.08;
+    const glowRad = Math.max(40, Math.min(w * 0.48, h * 0.75 * (0.85 + pulseAmt * 0.35)));
+    const ambientGrad = vCtx.createRadialGradient(w / 2, h * 0.56, 10, w / 2, h * 0.56, glowRad);
+    ambientGrad.addColorStop(0, `rgba(30, 215, 96, ${(0.10 + pulseAmt * 0.16).toFixed(3)})`);
+    ambientGrad.addColorStop(0.5, `rgba(0, 210, 255, ${(0.04 + pulseAmt * 0.08).toFixed(3)})`);
+    ambientGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+    vCtx.fillStyle = ambientGrad;
+    vCtx.beginPath();
+    vCtx.arc(w / 2, h * 0.56, glowRad, 0, Math.PI * 2);
+    vCtx.fill();
+  }
+
   // Líneas guía sutiles de analizador profesional
-  vCtx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+  vCtx.strokeStyle = isFreeStage ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.04)";
   vCtx.lineWidth = 1;
-  [0.3, 0.6].forEach(f => {
+  const guideFracs = isFreeStage ? [0.22, 0.44, 0.66] : [0.3, 0.6];
+  guideFracs.forEach((f, idx) => {
     const gy = Math.round(h * f) + 0.5;
     vCtx.beginPath();
-    vCtx.moveTo(6, gy);
-    vCtx.lineTo(w - 6, gy);
+    vCtx.moveTo(8, gy);
+    vCtx.lineTo(w - 8, gy);
     vCtx.stroke();
+    if (isFreeStage) {
+      vCtx.font = "9px monospace";
+      vCtx.fillStyle = "rgba(255, 255, 255, 0.18)";
+      vCtx.textAlign = "right";
+      const dbLabels = ["-3 dB", "-6 dB", "-12 dB"];
+      vCtx.fillText(dbLabels[idx] || "", w - 10, gy - 3);
+    }
   });
 
   // Indicador de verificación rítmica en vivo en el analizador (♩ BPM + 4 pulsos del compás)
   if (isPlaying && currentBpm > 0) {
     vCtx.font = "bold 9px sans-serif";
     vCtx.fillStyle = "rgba(210, 240, 225, 0.78)";
-    vCtx.fillText(`♩ ${Math.round(currentBpm)} BPM`, 8, 10);
+    vCtx.textAlign = "left";
+    vCtx.fillText(`♩ ${Math.round(currentBpm)} BPM`, 8, isFreeStage ? 14 : 10);
     const beatInBar = ((Math.floor(beatPos) % 4) + 4) % 4;
     for (let b = 0; b < 4; b++) {
       const active = b === beatInBar;
       vCtx.fillStyle = active ? (b === 0 ? "#1ed760" : "#00d2ff") : "rgba(255,255,255,0.20)";
       vCtx.beginPath();
-      vCtx.arc(58 + b * 7, 7, active ? 2.4 : 1.6, 0, Math.PI * 2);
+      vCtx.arc(58 + b * 7, isFreeStage ? 11 : 7, active ? 2.4 : 1.6, 0, Math.PI * 2);
       vCtx.fill();
     }
   }
 
   if (visMode === 1) {
     // Modo Onda Neón sincronizada con el espectro real y el pulso del beat
-    const midY = h * 0.52;
-    const ampScale = h * 0.40 * (0.82 + 0.25 * beatPulse);
+    const midY = h * (isFreeStage ? 0.50 : 0.52);
+    const ampScale = h * (isFreeStage ? 0.38 : 0.40) * (0.82 + 0.25 * beatPulse);
     const pts = [];
     const nPts = 56;
 
@@ -6669,12 +6784,12 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high, targetCanvas, targetC
     return;
   }
 
-  // Modo Barras de Espectro con cabezales flotantes (Peak Caps) y reflejo inferior
+  // Modo Barras de Espectro con cabezales flotantes (Peak Caps) y reflejo adaptativo
   const n = NUM_SPEC_BARS;
-  const gap = 3;
-  const barW = Math.max(2, (w - 16 - gap * (n - 1)) / n);
-  const baseLine = h - 7;
-  const maxBarH = baseLine - 5;
+  const gap = isFreeStage ? (w > 420 ? 4 : 3) : 3;
+  const barW = Math.max(isFreeStage ? 3 : 2, (w - 16 - gap * (n - 1)) / n);
+  const baseLine = isFreeStage ? Math.round(h * 0.74) : (h - 7);
+  const maxBarH = isFreeStage ? (baseLine - 28) : (baseLine - 5);
 
   // Línea base que pulsa suavemente con el beat
   vCtx.strokeStyle = `rgba(30, 215, 96, ${(0.18 + 0.35 * beatPulse * danceAmp).toFixed(2)})`;
@@ -6704,19 +6819,26 @@ function drawSpectrum(beatPos, beatPulse, bass, mid, high, targetCanvas, targetC
     }
     vCtx.fillStyle = barGrad;
     vCtx.beginPath();
-    vCtx.roundRect(x, y, barW, bh, 2);
+    vCtx.roundRect(x, y, barW, bh, isFreeStage ? Math.min(4, barW / 2) : 2);
     vCtx.fill();
 
     // Cabezal de pico flotante
     const pkH = Math.max(bh, specPeaks[i] * maxBarH);
     const pkY = Math.max(2, baseLine - pkH - 2.5);
     vCtx.fillStyle = val > 0.72 ? "#ffffff" : (i % 2 === 0 ? "#80ffaa" : "#88ecff");
-    vCtx.fillRect(x, pkY, barW, 1.8);
+    vCtx.fillRect(x, pkY, barW, isFreeStage ? 2.4 : 1.8);
 
-    // Sutil reflejo inferior
-    const refH = Math.min(5, bh * 0.16);
-    vCtx.fillStyle = i % 2 === 0 ? "rgba(29, 185, 84, 0.22)" : "rgba(0, 210, 255, 0.22)";
-    vCtx.fillRect(x, baseLine + 1, barW, refH);
+    // Reflejo inferior adaptativo
+    const maxRefH = isFreeStage ? (h - baseLine - 4) : 5;
+    const refH = Math.min(maxRefH, bh * (isFreeStage ? 0.32 : 0.16));
+    if (refH > 0.5) {
+      const refGrad = vCtx.createLinearGradient(0, baseLine + 1, 0, baseLine + 1 + refH);
+      const colTop = i % 2 === 0 ? "rgba(29, 185, 84, 0.28)" : "rgba(0, 210, 255, 0.28)";
+      refGrad.addColorStop(0, colTop);
+      refGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+      vCtx.fillStyle = refGrad;
+      vCtx.fillRect(x, baseLine + 1, barW, refH);
+    }
   }
 }
 

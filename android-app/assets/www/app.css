@@ -12,80 +12,359 @@
     --jade: #2a7666;
   }
 
-  body[data-theme="light"] {
-    --bg: #f5f6f8;
-    --card: #ffffff;
-    --card-elev: #e8eaed;
-    --card-border: rgba(0, 0, 0, 0.08);
-    --green: #16a34a;
-    --green-bright: #15803d;
-    --green-glow: rgba(22, 163, 74, 0.25);
-    --text: #111827;
-    --muted: #4b5563;
-    --crimson: #be123c;
-    --jade: #0f766e;
-  }
-  body[data-theme="light"] .top-header,
-  body[data-theme="light"] .bottom-nav {
-    background: rgba(245, 246, 248, 0.96);
-    border-color: rgba(0, 0, 0, 0.08);
-  }
-  body[data-theme="light"] .modal-card,
-  body[data-theme="light"] .side-menu-drawer {
-    background: #ffffff;
-    color: #111827;
-    border-color: rgba(0, 0, 0, 0.12);
-  }
-  body[data-theme="light"] .btn-chip {
-    background: #e5e7eb;
-    color: #111827;
-    border-color: rgba(0, 0, 0, 0.12);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  }
-  body[data-theme="light"] .btn-chip:hover {
-    background: #d1d5db;
-    border-color: #16a34a;
-    color: #111827;
-  }
-  body[data-theme="light"] .btn-chip.active {
-    background: #16a34a;
-    color: #ffffff;
-    border-color: #16a34a;
-  }
-  body[data-theme="light"] .track-item {
-    background: rgba(0, 0, 0, 0.02);
-    border-color: rgba(0, 0, 0, 0.06);
-  }
-  body[data-theme="light"] .track-item:hover {
-    background: rgba(0, 0, 0, 0.05);
-  }
-  body[data-theme="light"] .track-item.playing {
-    background: rgba(22, 163, 74, 0.12);
-    border-color: #16a34a;
-  }
-  body[data-theme="light"] .search-input {
-    background: #ffffff;
-    color: #111827;
-    border-color: rgba(0, 0, 0, 0.14);
-  }
-  body[data-theme="light"] .bottom-player {
-    background: rgba(255, 255, 255, 0.96);
-    border-color: rgba(0, 0, 0, 0.10);
-  }
-
-  /* Modo Libre (Sin Maomao — Solo Barras de Espectro) */
-  body[data-stage-mode="free"] canvas#maomaoCanvas {
+  /* Modo Libre (Sin Maomao — Escenario Completo de Barras de Espectro) */
+  body[data-stage-mode="free"] canvas#maomaoCanvas,
+  body[data-stage-mode="free"] canvas#fullMaomaoCanvas {
     display: none !important;
   }
   body[data-stage-mode="free"] canvas#visCanvas {
-    height: 180px !important;
+    height: 210px !important;
     margin-top: 0 !important;
+    border-radius: 14px !important;
+    background: radial-gradient(circle at 50% 65%, rgba(29, 185, 84, 0.14), rgba(10, 12, 16, 0.98)) !important;
+    border: 1px solid rgba(30, 215, 96, 0.22) !important;
   }
-  body[data-stage-mode="free"] #fullMmCanvas {
-    display: none !important;
+  body[data-stage-mode="free"] canvas#fullVisCanvas {
+    height: 280px !important;
+    margin-top: 0 !important;
+    border-radius: 16px !important;
   }
-  body[data-stage-mode="free"] #fullVCanvas {
-    height: 220px !important;
+  @media (orientation: landscape) and (max-height: 540px) {
+    body[data-stage-mode="free"] canvas#visCanvas {
+      flex: 1 !important;
+      height: calc(100vh - 140px) !important;
+      min-height: 115px !important;
+      max-height: 185px !important;
+    }
+    body[data-stage-mode="free"] canvas#fullVisCanvas {
+      height: 175px !important;
+    }
+  }
+  @media (min-width: 768px) and (orientation: landscape) and (min-height: 541px) {
+    body[data-stage-mode="free"] canvas#visCanvas {
+      flex: 1 !important;
+      height: calc(100vh - 210px) !important;
+      min-height: 240px !important;
+      max-height: 420px !important;
+    }
+    body[data-stage-mode="free"] canvas#fullVisCanvas {
+      height: 320px !important;
+    }
+  }
+
+  /* ========================================================================= */
+  /* SISTEMA DE DISEÑO DARK PILL PARA OPCIONES, MODALES Y BOTONES DE PLAYLISTS */
+  /* ========================================================================= */
+  .stage-mode-switcher {
+    display: inline-flex;
+    align-items: center;
+    background: #121217;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 9999px;
+    padding: 2px;
+    gap: 2px;
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.6);
+  }
+
+  .pl-dark-pill-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    background: transparent;
+    color: #a0a0b0;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    padding: 4px 10px;
+    font-size: 10.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+                background-color 0.16s ease,
+                color 0.16s ease,
+                border-color 0.16s ease,
+                box-shadow 0.16s ease;
+  }
+  .pl-dark-pill-sm:hover {
+    color: #ffffff;
+  }
+  .pl-dark-pill-sm:active {
+    transform: scale(0.94);
+  }
+  .pl-dark-pill-sm.active {
+    background: linear-gradient(135deg, rgba(30, 215, 96, 0.22) 0%, rgba(20, 140, 65, 0.16) 100%);
+    color: #1ed760;
+    border-color: rgba(30, 215, 96, 0.48);
+    box-shadow: 0 2px 10px rgba(30, 215, 96, 0.22);
+  }
+
+  /* Barra de acciones de Playlist (Detalle y Cabeceras) */
+  .pl-actions-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+
+  /* Botón Dark Pill Estándar para Opciones de Playlist */
+  .pl-dark-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: linear-gradient(180deg, #1d1d26 0%, #15151c 100%);
+    color: #e8e8f2;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 9999px;
+    padding: 7px 13px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+                background 0.16s ease,
+                border-color 0.16s ease,
+                color 0.16s ease,
+                box-shadow 0.16s ease;
+  }
+  .pl-dark-btn svg {
+    flex-shrink: 0;
+    transition: transform 0.16s ease;
+  }
+  .pl-dark-btn:hover {
+    background: linear-gradient(180deg, #252530 0%, #1b1b24 100%);
+    border-color: rgba(30, 215, 96, 0.45);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55), 0 0 10px rgba(30, 215, 96, 0.15);
+  }
+  .pl-dark-btn:active {
+    transform: scale(0.94);
+  }
+
+  /* Variante Primaria (Reproducir / Confirmar / Activo) */
+  .pl-dark-btn.primary,
+  .pl-dark-btn.active {
+    background: linear-gradient(135deg, #1ed760 0%, #17a34a 100%);
+    color: #04140a;
+    border-color: #25e86c;
+    font-weight: 800;
+    box-shadow: 0 4px 16px rgba(30, 215, 96, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+  .pl-dark-btn.primary:hover,
+  .pl-dark-btn.active:hover {
+    background: linear-gradient(135deg, #28e96c 0%, #1db954 100%);
+    color: #000000;
+    box-shadow: 0 6px 20px rgba(30, 215, 96, 0.52);
+  }
+
+  /* Variante Sub-Activa Oscura con Borde Neón (para Filtro ON, Portada, etc.) */
+  .pl-dark-btn.neon-outline {
+    background: rgba(30, 215, 96, 0.12);
+    color: #1ed760;
+    border-color: rgba(30, 215, 96, 0.48);
+    box-shadow: 0 2px 12px rgba(30, 215, 96, 0.18);
+  }
+
+  /* Variante Peligro (Eliminar Playlist / Quitar Carátula) */
+  .pl-dark-btn.danger {
+    background: linear-gradient(180deg, #23161b 0%, #181114 100%);
+    color: #ff6b81;
+    border-color: rgba(239, 68, 68, 0.28);
+  }
+  .pl-dark-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: #ef4444;
+    color: #ff8597;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
+  }
+
+  /* Botón Circular/Icono Dark para acciones compactas de Playlist (Config, Cerrar, Quitar) */
+  .pl-dark-icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, #1e1e27 0%, #15151c 100%);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: #d8d8e6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.16s ease,
+                color 0.16s ease,
+                background 0.16s ease;
+  }
+  .pl-dark-icon-btn:hover {
+    border-color: #1ed760;
+    color: #1ed760;
+    background: #23232e;
+  }
+  .pl-dark-icon-btn:active {
+    transform: scale(0.90);
+  }
+  .pl-dark-icon-btn.danger {
+    color: #ff6b81;
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+  .pl-dark-icon-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: #ef4444;
+    color: #ff4757;
+  }
+
+  /* Filas de selección de Playlist en modales (Añadir a Playlist / Filtrar por Playlist) */
+  .pl-dark-choice-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: linear-gradient(180deg, #1b1b23 0%, #14141a 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 10px 14px;
+    color: #ececf4;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+    transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.16s ease,
+                background 0.16s ease,
+                box-shadow 0.16s ease;
+  }
+  .pl-dark-choice-row:hover {
+    border-color: rgba(30, 215, 96, 0.45);
+    background: linear-gradient(180deg, #22222c 0%, #191922 100%);
+  }
+  .pl-dark-choice-row:active {
+    transform: scale(0.98);
+  }
+  .pl-dark-choice-row.active {
+    background: linear-gradient(90deg, rgba(29, 185, 84, 0.18) 0%, #16221b 100%);
+    border-color: rgba(30, 215, 96, 0.65);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(29, 185, 84, 0.18);
+  }
+  .pl-dark-choice-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+  .pl-dark-choice-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--green-bright);
+    flex-shrink: 0;
+  }
+  .pl-dark-choice-row.active .pl-dark-choice-icon {
+    background: rgba(30, 215, 96, 0.22);
+    border-color: rgba(30, 215, 96, 0.5);
+  }
+  .pl-dark-choice-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #a0a0b2;
+    flex-shrink: 0;
+  }
+  .pl-dark-choice-badge.remove {
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.32);
+    color: #ff6b81;
+  }
+
+  /* Interruptor (Switch) Dark Pill para Reglas de Filtro (reemplaza <input type="checkbox">) */
+  .pl-dark-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #14141b;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 10px 13px;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease;
+  }
+  .pl-dark-switch-row:hover {
+    border-color: rgba(30, 215, 96, 0.35);
+    background: #191922;
+  }
+  .pl-dark-switch-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e4e4f0;
+    line-height: 1.3;
+  }
+  .pl-dark-switch {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    background: #23232e;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9999px;
+    flex-shrink: 0;
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .pl-dark-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #9a9aa8;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease;
+  }
+  .pl-dark-switch.on {
+    background: rgba(30, 215, 96, 0.25);
+    border-color: #1ed760;
+    box-shadow: 0 0 10px rgba(30, 215, 96, 0.25);
+  }
+  .pl-dark-switch.on::after {
+    transform: translateX(18px);
+    background: #1ed760;
+  }
+
+  /* Transiciones Aceleradas por Hardware (GPU) */
+  @keyframes tabFadeSlideIn {
+    from { opacity: 0; transform: translate3d(0, 6px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+  .tab-pane { display: none; will-change: opacity, transform; }
+  .tab-pane.active {
+    display: block;
+    animation: tabFadeSlideIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  @keyframes modalCardPop {
+    from { opacity: 0; transform: scale(0.95) translate3d(0, 8px, 0); }
+    to   { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+  }
+  .modal-backdrop.open .modal-card,
+  .modal-backdrop.active .modal-card {
+    animation: modalCardPop 0.18s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
   html, body {
