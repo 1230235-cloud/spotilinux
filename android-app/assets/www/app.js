@@ -2162,6 +2162,11 @@ function trackMatchesPlaylistId(track, tid) {
       if (track.filePath.includes(tid)) return true;
       if (("saved_" + javaHashCode(track.filePath)) === tid) return true;
     }
+    // Cruce de fallback por título normalizado
+    if (track.title) {
+      const normT = normalizeFullTitle(cleanTrackTitle(track.title));
+      if (normT && (normalizeFullTitle(tid) === normT || tid.includes(normT))) return true;
+    }
   }
   return false;
 }

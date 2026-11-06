@@ -86,6 +86,7 @@ class LibraryStore:
         self.tracks: dict[str, TrackMetadata] = {}
         self.liked_ids: list[str] = []
         self.playlists: dict[str, Playlist] = {}
+        self.deleted_gdrive_ids: list[str] = []
         self.recent_ids: list[str] = []
         self.watched_folders: list[str] = []
         self.gdrive_config = GoogleDriveConfig()
@@ -235,6 +236,7 @@ class LibraryStore:
                 self.playlists[pid] = pl
 
             self.recent_ids = [tid for tid in raw.get("recent_ids", []) if tid in self.tracks][:30]
+            self.deleted_gdrive_ids = list(raw.get("deleted_gdrive_ids", []))
             self.watched_folders = list(raw.get("watched_folders", []))
             if str(self.music_library_dir.resolve()) not in self.watched_folders:
                 self.watched_folders.append(str(self.music_library_dir.resolve()))
@@ -274,6 +276,7 @@ class LibraryStore:
             "tracks": {tid: t.to_dict() for tid, t in self.tracks.items()},
             "liked_ids": self.liked_ids,
             "playlists": {pid: pl.to_dict() for pid, pl in self.playlists.items()},
+            "deleted_gdrive_ids": self.deleted_gdrive_ids,
             "recent_ids": self.recent_ids[:30],
             "watched_folders": self.watched_folders,
             "gdrive_config": self.gdrive_config.to_dict(),
@@ -613,9 +616,122 @@ class LibraryStore:
 
     def remove_track_from_playlist(self, playlist_id: str, track_id: str) -> None:
         pl = self.playlists.get(playlist_id)
-        if pl and track_id in pl.track_ids:
-            pl.track_ids.remove(track_id)
+        if not pl:
+            return
+        track = self.tracks.get(track_id)
+        target_ids = {track_id}
+        if track:
+            if track.id: target_ids.add(track.id)
+            if hasattr(track, "gdrive_id") and track.gdrive_id:
+                target_ids.add(track.gdrive_id)
+                target_ids.add(f"gd_{track.gdrive_id}")
+            fn = Path(track.filepath).name
+            gd_from_fn = extract_gd_id_from_filename(fn)
+            if gd_from_fn:
+                target_ids.add(gd_from_fn)
+        pl.track_ids = [tid for tid in pl.track_ids if tid not in target_ids]
+        self.save()
+
+    def get_track_playlists(self, track: TrackMetadata) -> list[str]:
+        """Devuelve los nombres de las playlists a las que pertenece una pista."""
+        if not track:
+            return []
+        norm_key = normalize_track_key(track.title) or normalize_track_key(Path(track.filepath).name)
+        target_ids = {track.id}
+        if hasattr(track, "gdrive_id") and track.gdrive_id:
+            target_ids.add(track.gdrive_id)
+            target_ids.add(f"gd_{track.gdrive_id}")
+        fn = Path(track.filepath).name
+        gd_from_fn = extract_gd_id_from_filename(fn)
+        if gd_from_fn:
+            target_ids.add(gd_from_fn)
+
+        result: list[str] = []
+        for pl in self.playlists.values():
+            matched = False
+            for tid in pl.track_ids:
+                if tid in target_ids:
+                    matched = True
+                    break
+                pl_track = self.tracks.get(tid)
+                if pl_track:
+                    pl_key = normalize_track_key(pl_track.title) or normalize_track_key(Path(pl_track.filepath).name)
+                    if norm_key and pl_key and norm_key == pl_key:
+                        matched = True
+                        break
+            if matched and pl.name not in result:
+                result.append(pl.name)
+        return result
+
+    def reconcile_playlist_track_ids(self, old_id: str, new_id: str) -> int:
+        """Actualiza referencias de old_id a new_id en playlists y favoritos sin duplicados."""
+        if not old_id or not new_id or old_id == new_id:
+            return 0
+        changed = 0
+        for pl in self.playlists.values():
+            new_list: list[str] = []
+            for tid in pl.track_ids:
+                mapped = new_id if tid == old_id else tid
+                if mapped not in new_list:
+                    new_list.append(mapped)
+            if new_list != pl.track_ids:
+                pl.track_ids = new_list
+                changed += 1
+
+        new_liked: list[str] = []
+        for lid in self.liked_ids:
+            mapped = new_id if lid == old_id else lid
+            if mapped not in new_liked:
+                new_liked.append(mapped)
+        self.liked_ids = new_liked
+        if changed > 0:
             self.save()
+        return changed
+
+    def delete_track_from_app(self, track_id: str, delete_local_file: bool = True) -> bool:
+        """
+        Elimina completamente una canción de la aplicación: catálogo tracks,
+        playlists, favoritos e historial, y opcionalmente borra el archivo físico.
+        Registra el ID en deleted_gdrive_ids para evitar re-descargas automáticas de Drive.
+        """
+        track = self.tracks.get(track_id)
+        if not track:
+            return False
+
+        # Guardar identificador para evitar re-sincronizaciones no deseadas
+        fn = Path(track.filepath).name
+        gd_id = extract_gd_id_from_filename(fn)
+        if not gd_id and track.filepath.startswith("gdrive://"):
+            gd_id = track.filepath.replace("gdrive://", "").split("?")[0]
+        if gd_id and gd_id not in self.deleted_gdrive_ids:
+            self.deleted_gdrive_ids.append(gd_id)
+        if track_id.startswith("gd_") and track_id not in self.deleted_gdrive_ids:
+            self.deleted_gdrive_ids.append(track_id)
+
+        # Borrar archivo físico si se solicitó y existe localmente
+        if delete_local_file and not track.filepath.startswith("gdrive://"):
+            try:
+                local_path = Path(track.filepath)
+                if local_path.exists():
+                    local_path.unlink(missing_ok=True)
+                # Borrar portada asociada si está en covers_cache
+                if track.cover_path and "covers_cache" in track.cover_path:
+                    cov_p = Path(track.cover_path)
+                    if cov_p.exists():
+                        cov_p.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        # Remover de catálogo, playlists, favoritos e historial
+        if track_id in self.tracks:
+            del self.tracks[track_id]
+        self.liked_ids = [lid for lid in self.liked_ids if lid != track_id]
+        self.recent_ids = [rid for rid in self.recent_ids if rid != track_id]
+        for pl in self.playlists.values():
+            pl.track_ids = [tid for tid in pl.track_ids if tid != track_id]
+
+        self.save()
+        return True
 
     def record_play(self, track_id: str) -> None:
         if track_id in self.recent_ids:

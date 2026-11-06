@@ -3193,10 +3193,12 @@ class SpotiLinuxWindow(QMainWindow):
             num_item.setData(Qt.ItemDataRole.UserRole, track.id)
             self.track_table.setItem(row, 0, num_item)
 
-            # Col 1: Tarjeta con Portada + Título + Artista / Álbum
+            # Col 1: Tarjeta con Portada + Título + Artista / Álbum + Badge de Playlist
             cloud_tag = "  ☁️" if is_cloud else ""
             album_str = f"  •  {track.album}" if track.album and track.album != "Desconocido" else ""
-            title_text = f"{track.title}{cloud_tag}\n{track.artist}{album_str}"
+            pl_names = self.store.get_track_playlists(track) if hasattr(self.store, "get_track_playlists") else []
+            pl_tag = f"  [{', '.join(pl_names)}]" if pl_names else ""
+            title_text = f"{track.title}{cloud_tag}\n{track.artist}{album_str}{pl_tag}"
             title_item = QTableWidgetItem(title_text)
             title_item.setIcon(QIcon(make_rounded_pixmap(track.cover_path, 42, radius=8)))
             title_item.setForeground(QColor("#1DB954") if is_active else QColor("#FFFFFF"))
@@ -3570,6 +3572,8 @@ class SpotiLinuxWindow(QMainWindow):
 
     def _on_cloud_download_saved(self, old_id: str, updated_track: TrackMetadata, was_duplicate: bool = False) -> None:
         self.store.tracks[old_id] = updated_track
+        if hasattr(self.store, "reconcile_playlist_track_ids"):
+            self.store.reconcile_playlist_track_ids(old_id, updated_track.id)
         self.store.deduplicate_library()
         self.store.save()
         self._refresh_track_table()
