@@ -27,6 +27,11 @@ export PATH="$JAVA_HOME/bin:$BUILD_TOOLS:$PATH"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR/gen" "$BUILD_DIR/obj" "$BUILD_DIR/dex" "$DIST_DIR"
 
+if command -v node >/dev/null 2>&1; then
+    echo "[0/6] Verificando sintaxis JavaScript en assets/www/app.js..."
+    node -c "$ANDROID_DIR/assets/www/app.js"
+fi
+
 echo "[1/6] Compilando recursos Android con aapt2..."
 "$BUILD_TOOLS/aapt2" compile --dir "$ANDROID_DIR/res" -o "$BUILD_DIR/resources.zip"
 

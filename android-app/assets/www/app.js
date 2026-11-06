@@ -2379,8 +2379,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 27;
-const CURRENT_APP_VERSION_NAME = "2.11.0";
+const CURRENT_APP_VERSION_CODE = 29;
+const CURRENT_APP_VERSION_NAME = "2.11.1";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -3511,7 +3511,6 @@ function renderTracks() {
     }
     requestAnimationFrame(renderNextBatch);
   }
-}
 }
 
 /* ---------------- GESTIÓN DE PLAYLISTS DISPONIBLES EN INICIO Y DETALLE ---------------- */
