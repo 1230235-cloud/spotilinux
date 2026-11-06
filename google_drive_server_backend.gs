@@ -85,6 +85,53 @@ function doGet(e) {
       return jsonResponse({ status: "ok", count: vList.length, files: vList });
     }
 
+    if (action === "list_images") {
+      var iFolder = null;
+      var ifolders = folder.getFoldersByName("imagenes");
+      if (!ifolders.hasNext()) ifolders = folder.getFoldersByName("imágenes");
+      if (!ifolders.hasNext()) ifolders = folder.getFoldersByName("images");
+      iFolder = ifolders.hasNext() ? ifolders.next() : folder;
+      var iFiles = iFolder.getFiles();
+      var iList = [];
+      while (iFiles.hasNext()) {
+        var ifObj = iFiles.next();
+        var iMime = ifObj.getMimeType();
+        var iName = ifObj.getName();
+        if (iMime.indexOf("image/") !== -1 || iName.match(/\.(png|jpg|jpeg|webp|gif)$/i)) {
+          iList.push({
+            id: ifObj.getId(),
+            name: iName,
+            size: ifObj.getSize(),
+            download_url: "https://drive.google.com/uc?export=download&id=" + ifObj.getId(),
+            view_url: "https://drive.usercontent.google.com/download?id=" + ifObj.getId() + "&export=download&confirm=t"
+          });
+        }
+      }
+      return jsonResponse({ status: "ok", count: iList.length, files: iList });
+    }
+
+    if (action === "get_temp_session") {
+      var emailParam = String(e && e.parameter && e.parameter.email || "").toLowerCase().trim();
+      var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
+      var sessionFiles = folder.getFilesByName(sessionFileName);
+      if (!sessionFiles.hasNext() && emailParam) {
+        sessionFiles = folder.getFilesByName("maomao_temp_session.json");
+      }
+      if (sessionFiles.hasNext()) {
+        var sFile = sessionFiles.next();
+        var sContent = sFile.getBlob().getDataAsString("UTF-8");
+        try {
+          var sData = JSON.parse(sContent);
+          if (sData.expiresAtMs && sData.expiresAtMs < new Date().getTime()) {
+            try { sFile.setTrashed(true); } catch(_delErr){}
+            return jsonResponse({ status: "expired" });
+          }
+          return ContentService.createTextOutput(sContent).setMimeType(ContentService.MimeType.JSON);
+        } catch(_parseErr) {}
+      }
+      return jsonResponse({ status: "not_found" });
+    }
+
     // Por defecto: descargar la base de datos de cuentas y playlists
     var files = folder.getFilesByName(DB_FILENAME);
     if (!files.hasNext()) {
@@ -200,6 +247,28 @@ function doPost(e) {
 
       file.setContent(JSON.stringify(currentDb, null, 2));
       return jsonResponse({ status: "ok", email: email });
+    }
+
+    // 4. Acción: Guardar archivo temporal de reproducción (Continuar en otro dispositivo)
+    if (data.action === "save_temp_session") {
+      var emailParam = String(data.email || "").toLowerCase().trim();
+      var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
+      var sessionFiles = folder.getFilesByName(sessionFileName);
+      var sFile = sessionFiles.hasNext() ? sessionFiles.next() : folder.createFile(sessionFileName, "{}", MimeType.PLAIN_TEXT);
+      sFile.setContent(JSON.stringify(data.session || data, null, 2));
+      return jsonResponse({ status: "ok", action: "saved", filename: sessionFileName });
+    }
+
+    // 5. Acción: Eliminar archivo temporal de reproducción
+    if (data.action === "delete_temp_session") {
+      var emailParam = String(data.email || "").toLowerCase().trim();
+      var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
+      var sessionFiles = folder.getFilesByName(sessionFileName);
+      while (sessionFiles.hasNext()) {
+        var sf = sessionFiles.next();
+        try { sf.setTrashed(true); } catch(_e){}
+      }
+      return jsonResponse({ status: "ok", action: "deleted" });
     }
 
     return jsonResponse({ error: "Acción no reconocida" });

@@ -2180,8 +2180,16 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_maomao_style = QPushButton("Paso de Baile")
         self.btn_maomao_style.setObjectName("GhostSmallButton")
         self.btn_maomao_style.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.btn_visual_mode = QPushButton("🌙 Oscuro")
+        self.btn_visual_mode.setObjectName("GhostSmallButton")
+        self.btn_visual_mode.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_visual_mode.setToolTip("Alternar modo: Oscuro, Claro y Libre")
+        self.btn_visual_mode.clicked.connect(self.cycle_visual_mode)
+
         maomao_header.addWidget(lbl_mm)
         maomao_header.addStretch()
+        maomao_header.addWidget(self.btn_visual_mode)
         maomao_header.addWidget(self.btn_maomao_style)
         right_lay.addLayout(maomao_header)
 
@@ -2515,6 +2523,41 @@ class SpotiLinuxWindow(QMainWindow):
     def _on_beat_info(self, bpm: float, beat_pos: float, conf: float, onset: float) -> None:
         self.maomao_widget.set_beat(bpm, beat_pos, conf, onset)
         self.visualizer.set_beat(bpm, beat_pos, conf, onset)
+
+    def cycle_visual_mode(self) -> None:
+        modes = ["dark", "light", "free"]
+        cur = getattr(self, "_visual_mode", "dark")
+        nxt_idx = (modes.index(cur) + 1) % len(modes) if cur in modes else 0
+        self.set_visual_mode(modes[nxt_idx])
+
+    def set_visual_mode(self, mode: str) -> None:
+        self._visual_mode = mode
+        from styles import get_stylesheet
+        from PyQt6.QtWidgets import QApplication
+
+        labels = {"dark": "🌙 Oscuro", "light": "☀️ Claro", "free": "📊 Libre"}
+        if hasattr(self, "btn_visual_mode"):
+            self.btn_visual_mode.setText(labels.get(mode, "🌙 Oscuro"))
+
+        app = QApplication.instance()
+        if mode == "free":
+            if app:
+                app.setStyleSheet(get_stylesheet("dark"))
+            self.maomao_widget.setVisible(False)
+            self.visualizer.setMinimumHeight(280)
+            self.visualizer.setMaximumHeight(350)
+        elif mode == "light":
+            if app:
+                app.setStyleSheet(get_stylesheet("light"))
+            self.maomao_widget.setVisible(True)
+            self.visualizer.setMinimumHeight(112)
+            self.visualizer.setMaximumHeight(125)
+        else: # dark
+            if app:
+                app.setStyleSheet(get_stylesheet("dark"))
+            self.maomao_widget.setVisible(True)
+            self.visualizer.setMinimumHeight(112)
+            self.visualizer.setMaximumHeight(125)
 
     def _on_spectrum_frame(self, bars, waveform) -> None:
         self.visualizer.update_audio_data(bars, waveform)

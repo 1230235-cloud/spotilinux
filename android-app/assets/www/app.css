@@ -11,6 +11,82 @@
     --crimson: #a22044;
     --jade: #2a7666;
   }
+
+  body[data-theme="light"] {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --card-elev: #e8eaed;
+    --card-border: rgba(0, 0, 0, 0.08);
+    --green: #16a34a;
+    --green-bright: #15803d;
+    --green-glow: rgba(22, 163, 74, 0.25);
+    --text: #111827;
+    --muted: #4b5563;
+    --crimson: #be123c;
+    --jade: #0f766e;
+  }
+  body[data-theme="light"] .top-header,
+  body[data-theme="light"] .bottom-nav {
+    background: rgba(245, 246, 248, 0.96);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+  body[data-theme="light"] .modal-card,
+  body[data-theme="light"] .side-menu-drawer {
+    background: #ffffff;
+    color: #111827;
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+  body[data-theme="light"] .btn-chip {
+    background: #e5e7eb;
+    color: #111827;
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
+  body[data-theme="light"] .btn-chip:hover {
+    background: #d1d5db;
+    border-color: #16a34a;
+    color: #111827;
+  }
+  body[data-theme="light"] .btn-chip.active {
+    background: #16a34a;
+    color: #ffffff;
+    border-color: #16a34a;
+  }
+  body[data-theme="light"] .track-item {
+    background: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.06);
+  }
+  body[data-theme="light"] .track-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+  body[data-theme="light"] .track-item.playing {
+    background: rgba(22, 163, 74, 0.12);
+    border-color: #16a34a;
+  }
+  body[data-theme="light"] .search-input {
+    background: #ffffff;
+    color: #111827;
+    border-color: rgba(0, 0, 0, 0.14);
+  }
+  body[data-theme="light"] .bottom-player {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: rgba(0, 0, 0, 0.10);
+  }
+
+  /* Modo Libre (Sin Maomao — Solo Barras de Espectro) */
+  body[data-stage-mode="free"] canvas#maomaoCanvas {
+    display: none !important;
+  }
+  body[data-stage-mode="free"] canvas#visCanvas {
+    height: 180px !important;
+    margin-top: 0 !important;
+  }
+  body[data-stage-mode="free"] #fullMmCanvas {
+    display: none !important;
+  }
+  body[data-stage-mode="free"] #fullVCanvas {
+    height: 220px !important;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
   html, body {
     background: var(--bg);

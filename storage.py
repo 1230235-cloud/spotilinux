@@ -37,6 +37,8 @@ class Playlist:
     description: str
     track_ids: list[str] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
+    cover_url: str = ""
+    cover_drive_id: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -49,6 +51,8 @@ class Playlist:
             description=data.get("description", ""),
             track_ids=list(data.get("track_ids", [])),
             created_at=float(data.get("created_at", time.time())),
+            cover_url=data.get("cover_url", data.get("coverUrl", "")),
+            cover_drive_id=data.get("cover_drive_id", data.get("coverDriveId", "")),
         )
 
 

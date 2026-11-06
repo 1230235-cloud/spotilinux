@@ -1,19 +1,21 @@
 {
-  "versionCode": 27,
-  "versionName": "2.10.2",
+  "versionCode": 28,
+  "versionName": "2.11.0",
   "releaseDate": "2026-11-06",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.10.2",
+    "version": "2.11.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Botón dinámico de playlist: muestra la playlist vinculada a la cuenta en lugar de +, con gestión instantánea",
-    "Gestión bidireccional en modal de playlists para añadir o quitar pistas con un toque",
-    "Sincronización continua de playlists con la cuenta de usuario y base de datos en Google Drive",
-    "Detector y limpiador de descargas corruptas para restaurar canciones en modo nube",
-    "Corrección de renderizado en botón de añadir a playlist (eliminado texto undefined)"
+    "Aleatorio avanzado con Pilas y Colas: sin repetición en el ciclo y retroceso/avance histórico fiel",
+    "Personalización de carátulas de playlist: selección de carpeta 'imagenes' de Drive o desde el dispositivo con estilo dark pill",
+    "Optimización al iniciar la app y en descargas: renderizado por lotes y actualización quirúrgica del DOM",
+    "Sincronización multi-dispositivo temporal: activación a los 30 segundos con TTL de 10 minutos para continuar canciones",
+    "Filtro inteligente de canciones dentro de playlists para canciones locales y en Google Drive",
+    "Nuevos modos visuales: Oscuro (OLED), Claro y Libre (solo analizador de barras FFT)",
+    "Optimización de Maomao bailando a 60 FPS sin tirones con reloj delta acotado"
   ]
 }

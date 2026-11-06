@@ -369,6 +369,55 @@ def resolve_videos_subfolder_id(config: GoogleDriveConfig) -> Optional[tuple[str
     return None
 
 
+def resolve_imagenes_subfolder_id(config: GoogleDriveConfig) -> Optional[tuple[str, str]]:
+    """
+    Busca la subcarpeta 'imagenes' (o 'imágenes' / 'images') dentro de la raíz de Drive.
+    Retorna (imagenes_folder_id, nombre_carpeta) o None.
+    """
+    root_id = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
+    if config.access_token or config.api_key:
+        headers = {"Authorization": f"Bearer {config.access_token}"} if config.access_token else {}
+        q = (
+            f"'{root_id}' in parents and trashed = false and "
+            "mimeType = 'application/vnd.google-apps.folder'"
+        )
+        params: dict[str, str] = {
+            "q": q,
+            "pageSize": "50",
+            "fields": "files(id, name)",
+            "supportsAllDrives": "true",
+            "includeItemsFromAllDrives": "true",
+        }
+        if config.api_key and not config.access_token:
+            params["key"] = config.api_key
+        try:
+            r = requests.get(
+                "https://www.googleapis.com/drive/v3/files",
+                headers=headers,
+                params=params,
+                timeout=10,
+            )
+            if r.status_code == 200:
+                folders = r.json().get("files", [])
+                for f in folders:
+                    fname = f.get("name", "").lower()
+                    if "imagen" in fname or "image" in fname or "caratula" in fname or "cover" in fname:
+                        return f["id"], f["name"]
+        except Exception:
+            pass
+
+    # Fallback mediante vista pública embebida
+    try:
+        entries = list_public_drive_folder_items(root_id)
+        for e in entries:
+            low = e.get("name", "").lower()
+            if e.get("is_folder") and ("imagen" in low or "image" in low or "caratula" in low or "cover" in low):
+                return e["id"], e["name"]
+    except Exception:
+        pass
+    return None
+
+
 def find_free_port(start: int = 8765, end: int = 8775) -> int:
     """Devuelve el primer puerto TCP libre en 127.0.0.1 dentro del rango; lanza OSError si no hay ninguno."""
     import socket

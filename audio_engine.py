@@ -150,6 +150,9 @@ class AudioEngine(QObject):
 
         self.shuffle: bool = False
         self.repeat_mode: str = "off"  # "off" | "all" | "one"
+        self._shuffle_history_stack: list[str] = []
+        self._shuffle_upcoming_queue: list[str] = []
+        self._shuffle_forward_stack: list[str] = []
 
         self.eq_enabled: bool = True
         self.eq_gains: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -206,6 +209,13 @@ class AudioEngine(QObject):
             if len(self.history) > 50:
                 self.history.pop(0)
 
+        if self.shuffle and track and record_history:
+            self._shuffle_forward_stack.clear()
+            if track.id in self._shuffle_upcoming_queue:
+                self._shuffle_upcoming_queue.remove(track.id)
+            if not self._shuffle_history_stack or self._shuffle_history_stack[-1] != track.id:
+                self._shuffle_history_stack.append(track.id)
+
         self.current_track = track
         self._pcm_samples = None
         self._rhythm = None
@@ -247,6 +257,14 @@ class AudioEngine(QObject):
         # Curva perceptual suave
         self.audio_output.setVolume((vol / 100.0) ** 1.5)
 
+    def _build_shuffle_upcoming_queue(self, exclude_id: Optional[str] = None) -> list[str]:
+        pool = [t.id for t in self.context_tracks if not exclude_id or t.id != exclude_id]
+        random.shuffle(pool)
+        if len(pool) > 1 and exclude_id and pool[0] == exclude_id:
+            swap_idx = random.randint(1, len(pool) - 1)
+            pool[0], pool[swap_idx] = pool[swap_idx], pool[0]
+        return pool
+
     def next_track(self, auto_triggered: bool = False) -> None:
         if auto_triggered and self.repeat_mode == "one" and self.current_track:
             self.player.setPosition(0)
@@ -265,10 +283,26 @@ class AudioEngine(QObject):
             return
 
         if self.shuffle and len(self.context_tracks) > 1:
-            candidates = [t for t in self.context_tracks if not self.current_track or t.id != self.current_track.id]
-            nxt = random.choice(candidates) if candidates else self.context_tracks[0]
-            self.play_track(nxt, None)
-            return
+            cur_id = self.current_track.id if self.current_track else None
+            next_id = None
+            if self._shuffle_forward_stack:
+                next_id = self._shuffle_forward_stack.pop()
+            else:
+                if not self._shuffle_upcoming_queue:
+                    if auto_triggered and self.repeat_mode == "off":
+                        self.player.stop()
+                        return
+                    self._shuffle_upcoming_queue = self._build_shuffle_upcoming_queue(cur_id)
+                if self._shuffle_upcoming_queue:
+                    next_id = self._shuffle_upcoming_queue.pop(0)
+
+            if next_id:
+                if not self._shuffle_history_stack or self._shuffle_history_stack[-1] != next_id:
+                    self._shuffle_history_stack.append(next_id)
+                target = next((t for t in self.context_tracks if t.id == next_id), None)
+                if target:
+                    self.play_track(target, None, record_history=False)
+                    return
 
         # Orden secuencial
         idx = -1
@@ -291,6 +325,16 @@ class AudioEngine(QObject):
         if self.player.position() > 3200:
             self.player.setPosition(0)
             return
+
+        if self.shuffle and len(self._shuffle_history_stack) > 1:
+            cur_id = self._shuffle_history_stack.pop()
+            if cur_id:
+                self._shuffle_forward_stack.append(cur_id)
+            prev_id = self._shuffle_history_stack[-1]
+            target = next((t for t in self.context_tracks if t.id == prev_id), None)
+            if target:
+                self.play_track(target, None, record_history=False)
+                return
 
         if self.history:
             ctx_ids = {t.id for t in self.context_tracks}

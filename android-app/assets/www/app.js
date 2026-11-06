@@ -57,8 +57,11 @@ let currentIndex = 0;
 let isPlaying = false;
 let shuffleMode = false;
 let repeatMode = "off"; // "off" | "all" | "one"
-let shufflePlayedStack = [];
-let shuffleUnplayedPool = [];
+let shuffleHistoryStack = [];
+let shuffleUpcomingQueue = [];
+let shuffleForwardStack = [];
+let shufflePlayedStack = shuffleHistoryStack;
+let shuffleUnplayedPool = shuffleUpcomingQueue;
 let sleepVinylEnabled = true;
 let sleepVinylVideoEnabled = true;
 let currentPlayingVideoSource = "";
@@ -86,6 +89,30 @@ let accountsDb = {}; // Mapa de cuentas sincronizado con spotilinux_database.jso
 let accountFormMode = "register"; // "register" | "login"
 let googleUserProfile = null;
 let cachedMusicaFolderId = "";
+
+// Personalización de portadas con carpeta «imagenes» de Drive
+let drivePlaylistImages = [];
+let pendingCoverTargetPlaylistId = null;
+
+// Filtro dentro de playlists
+let playlistFilterConfig = {
+  enabled: false,
+  hideNotDownloaded: false,
+  hideShortTracks: false,
+  excludeKeywords: [],
+  sourceMode: "all"
+};
+
+// Modos visuales: "dark" | "light" | "free"
+let appVisualMode = localStorage.getItem("app_visual_mode") || "dark";
+
+// Optimizaciones de renderizado y persistencia por lotes
+let currentRenderBatchToken = 0;
+let saveStateDebounceTimer = null;
+
+// Sincronización temporal 30s + 10min TTL
+let tempSessionUploadedTrackId = null;
+let tempSessionCleanupTimer = null;
 
 /* CONTROL DE REPRODUCCIÓN MULTI-DISPOSITIVO (CONTINUAR EN OTRO CEL O PC) */
 let crossDeviceSyncEnabled = true;
@@ -684,7 +711,329 @@ function resumeRemoteSessionTrack() {
   }
 }
 
+/* ========================================================================= */
+/* FASE 4: SINCRONIZACIÓN TEMPORAL (30s TRIGGER + 10min TTL)                 */
+/* ========================================================================= */
+async function checkRemoteTempPlaybackSession() {
+  if (!navigator.onLine) return;
+  const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "";
+  try {
+    const url = `${DEFAULT_DRIVE_SERVER_URL}?action=get_temp_session&email=${encodeURIComponent(email)}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return;
+    const session = await res.json();
+    if (!session || session.status === "not_found" || session.status === "expired") return;
+
+    const now = Date.now();
+    // Expiración estricta de 10 minutos
+    if (session.expiresAtMs && session.expiresAtMs < now) {
+      deleteTempPlaybackSession();
+      return;
+    }
+    // Si la sesión proviene de este mismo dispositivo o ya está reproduciendo, ignorar
+    if (session.deviceId === myDeviceId || isPlaying) return;
+
+    pendingRemoteSession = session;
+    lastCheckedSessionUpdatedAt = session.updatedAtMs || now;
+    showCrossDeviceBanner(session);
+  } catch (_e) {}
+}
+
+async function uploadTempPlaybackSession(track, currentSec) {
+  if (!navigator.onLine || !track) return;
+  const now = Date.now();
+  const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "";
+  const sessionObj = {
+    deviceId: myDeviceId,
+    deviceType: hasNativeAndroid ? "android" : "desktop",
+    trackId: track.id || "",
+    driveId: track.driveId || "",
+    title: track.title || "Canción",
+    artist: track.artist || "Artista",
+    album: track.album || "",
+    cover: (track.cover && !String(track.cover).startsWith("file://") && !String(track.cover).startsWith("content://")) ? track.cover : "",
+    src: (track.src && String(track.src).startsWith("http")) ? track.src : (track.driveId ? `https://drive.usercontent.google.com/download?id=${track.driveId}&export=download&confirm=t` : ""),
+    posSec: Math.max(0, currentSec),
+    duration: track.duration || 0,
+    isPlaying: true,
+    updatedAtMs: now,
+    expiresAtMs: now + (10 * 60 * 1000) // 10 minutos TTL
+  };
+
+  try {
+    fetch(DEFAULT_DRIVE_SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "save_temp_session",
+        email: email,
+        session: sessionObj
+      })
+    }).catch(() => {});
+  } catch (_e) {}
+
+  // Reiniciar temporizador de inactividad de 10 minutos
+  if (tempSessionCleanupTimer) clearTimeout(tempSessionCleanupTimer);
+  tempSessionCleanupTimer = setTimeout(() => {
+    deleteTempPlaybackSession();
+  }, 10 * 60 * 1000);
+}
+
+async function deleteTempPlaybackSession() {
+  if (!navigator.onLine) return;
+  const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "";
+  try {
+    fetch(DEFAULT_DRIVE_SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "delete_temp_session",
+        email: email
+      })
+    }).catch(() => {});
+  } catch (_e) {}
+}
+
+/* ========================================================================= */
+/* FASE 6: MODOS VISUALES ("dark" | "light" | "free")                        */
+/* ========================================================================= */
+function setAppVisualMode(mode) {
+  if (!["dark", "light", "free"].includes(mode)) mode = "dark";
+  appVisualMode = mode;
+  localStorage.setItem("app_visual_mode", mode);
+
+  if (mode === "light") {
+    document.body.setAttribute("data-theme", "light");
+    document.body.removeAttribute("data-stage-mode");
+  } else if (mode === "free") {
+    document.body.setAttribute("data-theme", "dark");
+    document.body.setAttribute("data-stage-mode", "free");
+  } else {
+    document.body.setAttribute("data-theme", "dark");
+    document.body.removeAttribute("data-stage-mode");
+  }
+
+  ["btnModeDark", "btnModeLight", "btnModeFree"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+  });
+  if (mode === "dark" && document.getElementById("btnModeDark")) document.getElementById("btnModeDark").classList.add("active");
+  if (mode === "light" && document.getElementById("btnModeLight")) document.getElementById("btnModeLight").classList.add("active");
+  if (mode === "free" && document.getElementById("btnModeFree")) document.getElementById("btnModeFree").classList.add("active");
+}
+
+/* ========================================================================= */
+/* FASE 2: CARÁTULAS DE PLAYLISTS Y CARPETA «IMAGENES» DE DRIVE              */
+/* ========================================================================= */
+window.onPublicDriveImagesFetched = function(imagesArr) {
+  if (!Array.isArray(imagesArr)) return;
+  drivePlaylistImages = imagesArr.map(f => {
+    const id = f.id;
+    return {
+      id: id,
+      name: f.name || "MaoMao Imagen",
+      url: `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`,
+      driveId: id
+    };
+  });
+  renderDriveImagesPickerGrid();
+};
+
+function renderDriveImagesPickerGrid() {
+  const grid = document.getElementById("driveImagesPickerGrid");
+  if (!grid) return;
+  if (!drivePlaylistImages || drivePlaylistImages.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:18px; font-size:11px; color:#888;">No se encontraron imágenes en la subcarpeta «imagenes» de Drive.</div>';
+    return;
+  }
+  grid.innerHTML = "";
+  drivePlaylistImages.forEach(img => {
+    const item = document.createElement("div");
+    item.style.cssText = "aspect-ratio:1/1; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.12); cursor:pointer; background:#18181f; position:relative;";
+    item.innerHTML = `<img src="${img.url}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.style.display='none'" />`;
+    item.onclick = () => selectDriveCover(pendingCoverTargetPlaylistId, img.url, img.id);
+    grid.appendChild(item);
+  });
+}
+
+function openPlaylistCoverPicker(plId) {
+  pendingCoverTargetPlaylistId = plId || currentDetailPlaylistId || selectedPlaylistId;
+  const modal = document.getElementById("playlistCoverPickerModal");
+  if (modal) modal.classList.add("open");
+  renderDriveImagesPickerGrid();
+}
+
+function closePlaylistCoverPicker() {
+  const modal = document.getElementById("playlistCoverPickerModal");
+  if (modal) modal.classList.remove("open");
+  pendingCoverTargetPlaylistId = null;
+}
+
+function selectDriveCover(plId, url, driveId) {
+  const targetId = plId || pendingCoverTargetPlaylistId;
+  const pl = playlists.find(p => p.id === targetId);
+  if (!pl) return;
+  pl.coverUrl = url;
+  pl.coverDriveId = driveId || "";
+  syncPlaylistsToAccountAndDrive(`✔ Portada actualizada para «${pl.name}»`);
+  updatePlaylistDetailCoverUI(pl);
+  closePlaylistCoverPicker();
+}
+
+function pickRandomDriveCover(plId) {
+  const targetId = plId || pendingCoverTargetPlaylistId;
+  const pl = playlists.find(p => p.id === targetId);
+  if (!pl) return;
+  if (!drivePlaylistImages || drivePlaylistImages.length === 0) {
+    showToast("Aún no se han cargado imágenes de la carpeta «imagenes» de Drive");
+    return;
+  }
+  const randomImg = drivePlaylistImages[Math.floor(Math.random() * drivePlaylistImages.length)];
+  selectDriveCover(targetId, randomImg.url, randomImg.id);
+}
+
+function removePlaylistCover(plId) {
+  const targetId = plId || pendingCoverTargetPlaylistId;
+  const pl = playlists.find(p => p.id === targetId);
+  if (!pl) return;
+  delete pl.coverUrl;
+  delete pl.coverDriveId;
+  syncPlaylistsToAccountAndDrive(`Carátula restablecida para «${pl.name}»`);
+  updatePlaylistDetailCoverUI(pl);
+  closePlaylistCoverPicker();
+}
+
+function handlePlaylistCoverFilePicked(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const rawData = e.target.result;
+    const img = new Image();
+    img.onload = () => {
+      const cvs = document.createElement("canvas");
+      cvs.width = 512;
+      cvs.height = 512;
+      const ctx = cvs.getContext("2d");
+      const minDim = Math.min(img.width, img.height);
+      const sx = (img.width - minDim) / 2;
+      const sy = (img.height - minDim) / 2;
+      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 512, 512);
+      const optimizedUrl = cvs.toDataURL("image/webp", 0.85);
+      selectDriveCover(pendingCoverTargetPlaylistId, optimizedUrl, "local_upload");
+    };
+    img.src = rawData;
+  };
+  reader.readAsDataURL(file);
+}
+
+function updatePlaylistDetailCoverUI(pl) {
+  const coverEl = document.getElementById("plDetailCover");
+  if (!coverEl) return;
+  if (pl && pl.coverUrl) {
+    coverEl.style.backgroundImage = `url("${pl.coverUrl}")`;
+    coverEl.style.backgroundSize = "cover";
+    coverEl.style.backgroundPosition = "center";
+    coverEl.innerHTML = "";
+  } else {
+    coverEl.style.backgroundImage = "none";
+    coverEl.style.background = "linear-gradient(135deg, #1db954, #121218)";
+    coverEl.innerHTML = `🎵`;
+  }
+}
+
+/* ========================================================================= */
+/* FASE 5: FILTRO DENTRO DE PLAYLISTS (LOCALES + DRIVE)                      */
+/* ========================================================================= */
+function toggleCurrentPlaylistFilter() {
+  playlistFilterConfig.enabled = !playlistFilterConfig.enabled;
+  updatePlaylistFilterButtonUI();
+  renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
+  showToast(playlistFilterConfig.enabled ? "⚡ Filtro de playlist: ACTIVADO" : "Filtro de playlist: Desactivado");
+}
+
+function updatePlaylistFilterButtonUI() {
+  const btn = document.getElementById("btnTogglePlFilter");
+  if (!btn) return;
+  if (playlistFilterConfig.enabled) {
+    btn.classList.add("active");
+    btn.textContent = "⚡ Filtro: ON";
+  } else {
+    btn.classList.remove("active");
+    btn.textContent = "⚡ Filtro: OFF";
+  }
+}
+
+function openPlaylistFilterRulesModal() {
+  const modal = document.getElementById("playlistFilterRulesModal");
+  if (!modal) return;
+  const chkDl = document.getElementById("chkPlFilterDownloaded");
+  const chkSh = document.getElementById("chkPlFilterShort");
+  const txtEx = document.getElementById("txtPlFilterExclude");
+  if (chkDl) chkDl.checked = !!playlistFilterConfig.hideNotDownloaded;
+  if (chkSh) chkSh.checked = !!playlistFilterConfig.hideShortTracks;
+  if (txtEx) txtEx.value = (playlistFilterConfig.excludeKeywords || []).join(", ");
+  modal.classList.add("open");
+}
+
+function closePlaylistFilterRulesModal() {
+  const modal = document.getElementById("playlistFilterRulesModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function savePlaylistFilterRules() {
+  const chkDl = document.getElementById("chkPlFilterDownloaded");
+  const chkSh = document.getElementById("chkPlFilterShort");
+  const txtEx = document.getElementById("txtPlFilterExclude");
+  playlistFilterConfig.hideNotDownloaded = chkDl ? chkDl.checked : false;
+  playlistFilterConfig.hideShortTracks = chkSh ? chkSh.checked : false;
+  if (txtEx) {
+    playlistFilterConfig.excludeKeywords = txtEx.value
+      .split(",")
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  closePlaylistFilterRulesModal();
+  savePersistentStateDebounced();
+  if (playlistFilterConfig.enabled) {
+    renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
+  }
+  showToast("✔ Reglas de filtro guardadas");
+}
+
+function applyPlaylistFilterRules(tracksList) {
+  if (!playlistFilterConfig || !playlistFilterConfig.enabled || !Array.isArray(tracksList)) {
+    return tracksList;
+  }
+  return tracksList.filter(t => {
+    if (!t) return false;
+    // 1. Ocultar temas no descargados de Drive
+    if (playlistFilterConfig.hideNotDownloaded && t.cloud && !t.downloaded) {
+      return false;
+    }
+    // 2. Ocultar audios menores a 60 segundos
+    if (playlistFilterConfig.hideShortTracks && t.duration && t.duration > 0 && t.duration < 60) {
+      return false;
+    }
+    // 3. Excluir palabras clave
+    if (playlistFilterConfig.excludeKeywords && playlistFilterConfig.excludeKeywords.length > 0) {
+      const fullText = `${t.title || ''} ${t.artist || ''} ${t.album || ''}`.toLowerCase();
+      for (const kw of playlistFilterConfig.excludeKeywords) {
+        if (kw && fullText.includes(kw)) return false;
+      }
+    }
+    return true;
+  });
+}
+
 /* ---------------- PERSISTENCIA DE ESTADO Y PLAYLISTS ---------------- */
+function savePersistentStateDebounced(delayMs = 350) {
+  if (saveStateDebounceTimer) clearTimeout(saveStateDebounceTimer);
+  saveStateDebounceTimer = setTimeout(() => {
+    savePersistentState();
+  }, delayMs);
+}
+
 function savePersistentState() {
   const cloudTracksOnly = tracks.filter(t => t.cloud || t.driveId || String(t.id).startsWith("gd_"));
   const likedIds = tracks.filter(t => t.liked).map(t => t.id);
@@ -700,6 +1049,8 @@ function savePersistentState() {
     sleepVinylVideoEnabled,
     crossDeviceSyncEnabled,
     deviceFilterConfig,
+    playlistFilterConfig,
+    appVisualMode,
     rawDeviceTracksList,
     gdToken: document.getElementById("gdToken").value.trim(),
     gdClientId: document.getElementById("gdClientId").value.trim(),
@@ -842,10 +1193,21 @@ function loadPersistentState() {
       }
       updateFilterUIState();
 
+      if (st.playlistFilterConfig && typeof st.playlistFilterConfig === "object") {
+        playlistFilterConfig = Object.assign(playlistFilterConfig, st.playlistFilterConfig);
+      }
+      if (st.appVisualMode) {
+        setAppVisualMode(st.appVisualMode);
+      } else {
+        setAppVisualMode(appVisualMode);
+      }
+
       const chkDedup = document.getElementById("chkVerifyDuplicates");
       if (chkDedup && typeof st.verifyDuplicates === "boolean") chkDedup.checked = st.verifyDuplicates;
       if (st.welcomeDone) localStorage.setItem("welcome_done", "1");
     } catch (_e) {}
+  } else {
+    setAppVisualMode(appVisualMode);
   }
 
   // Cargar canciones ya guardadas en la carpeta SpotiLinuxMusic del celular
@@ -856,13 +1218,15 @@ function loadPersistentState() {
     } catch (_e) {}
   }
 
-  // Verificar sesión en otro dispositivo al iniciar
+  // Verificar sesión en otro dispositivo al iniciar (archivo temporal 30s + 10min TTL)
   setTimeout(() => {
     checkRemotePlaybackSession(true);
+    checkRemoteTempPlaybackSession();
   }, 1800);
   if (!crossDevicePollTimer) {
     crossDevicePollTimer = setInterval(() => {
       checkRemotePlaybackSession(false);
+      checkRemoteTempPlaybackSession();
     }, 22000);
   }
 }
@@ -1009,6 +1373,7 @@ function playTrackIndex(idx) {
 }
 
 function executePlayTrack(t) {
+  tempSessionUploadedTrackId = null;
   const token = document.getElementById("gdToken").value.trim();
   onTrackChangedForRhythm(t);
   isPlaying = true;
@@ -1060,27 +1425,50 @@ function togglePlay() {
   setTimeout(() => { syncVinylVideoWithPlayback(); }, 50);
 }
 
+function buildFisherYatesQueue(tracksList, excludeId, lastPlayedId) {
+  if (!Array.isArray(tracksList)) return [];
+  const pool = tracksList
+    .filter(t => t && t.id && t.id !== excludeId)
+    .map(t => t.id);
+
+  // Fisher-Yates shuffle O(n)
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = pool[i];
+    pool[i] = pool[j];
+    pool[j] = temp;
+  }
+
+  // Evitar repetir inmediatamente la última pista en la frontera de reabastecimiento
+  if (pool.length > 1 && lastPlayedId && pool[0] === lastPlayedId) {
+    const swapIdx = Math.floor(Math.random() * (pool.length - 1)) + 1;
+    const tmp = pool[0];
+    pool[0] = pool[swapIdx];
+    pool[swapIdx] = tmp;
+  }
+  return pool;
+}
+
 function initOrSyncShufflePool(forcedCurrentIdx = activeQueueIndex) {
   if (!activePlaybackQueue || !activePlaybackQueue.length) {
-    shufflePlayedStack = [];
-    shuffleUnplayedPool = [];
+    shuffleHistoryStack = [];
+    shuffleUpcomingQueue = [];
+    shuffleForwardStack = [];
+    shufflePlayedStack = shuffleHistoryStack;
+    shuffleUnplayedPool = shuffleUpcomingQueue;
     return;
   }
-  
+
   const curTrack = (forcedCurrentIdx >= 0 && forcedCurrentIdx < activePlaybackQueue.length)
     ? activePlaybackQueue[forcedCurrentIdx]
     : activePlaybackQueue[0];
   const curId = curTrack ? curTrack.id : null;
 
-  if (curId) {
-    shufflePlayedStack = [curId];
-    shuffleUnplayedPool = activePlaybackQueue
-      .filter(t => t && t.id !== curId)
-      .map(t => t.id);
-  } else {
-    shufflePlayedStack = [];
-    shuffleUnplayedPool = activePlaybackQueue.filter(t => t).map(t => t.id);
-  }
+  shuffleHistoryStack = curId ? [curId] : [];
+  shuffleForwardStack = [];
+  shuffleUpcomingQueue = buildFisherYatesQueue(activePlaybackQueue, curId, curId);
+  shufflePlayedStack = shuffleHistoryStack;
+  shuffleUnplayedPool = shuffleUpcomingQueue;
 }
 
 function nextTrack(isAutoEnd = false) {
@@ -1090,40 +1478,46 @@ function nextTrack(isAutoEnd = false) {
   if (!activePlaybackQueue.length) return;
 
   if (shuffleMode && activePlaybackQueue.length > 1) {
-    // Si la pila de pendientes se vació:
-    if (!Array.isArray(shuffleUnplayedPool) || shuffleUnplayedPool.length === 0) {
-      if (isAutoEnd && repeatMode === "off") {
-        isPlaying = false;
-        if (hasNativeAndroid && window.AndroidMedia.pause) {
-          try { window.AndroidMedia.pause(); } catch(e){}
-        } else {
-          audio.pause();
+    const curT = activePlaybackQueue[activeQueueIndex];
+    const curId = curT ? curT.id : null;
+
+    let nextId = null;
+    // 1. Si el usuario había retrocedido con prev, avanzar por la pila de re-avance LIFO
+    if (shuffleForwardStack && shuffleForwardStack.length > 0) {
+      nextId = shuffleForwardStack.pop();
+    } else {
+      // 2. Si la cola de próximas FIFO está vacía, reabastecer con Fisher-Yates
+      if (!Array.isArray(shuffleUpcomingQueue) || shuffleUpcomingQueue.length === 0) {
+        if (isAutoEnd && repeatMode === "off") {
+          isPlaying = false;
+          if (hasNativeAndroid && window.AndroidMedia.pause) {
+            try { window.AndroidMedia.pause(); } catch(e){}
+          } else {
+            audio.pause();
+          }
+          updatePlayerUI();
+          syncVinylVideoWithPlayback();
+          showToast("Ciclo aleatorio completado ✔");
+          return;
         }
-        updatePlayerUI();
-        syncVinylVideoWithPlayback();
-        showToast("Todas las canciones del aleatorio fueron reproducidas ✔");
-        return;
+        shuffleUpcomingQueue = buildFisherYatesQueue(activePlaybackQueue, curId, curId);
+        showToast("Ciclo aleatorio completado. Continuando lista 🔀");
       }
-      // Reabastecer el pool excluyendo la canción actualmente en curso
-      const curT = activePlaybackQueue[activeQueueIndex];
-      const curId = curT ? curT.id : null;
-      shuffleUnplayedPool = activePlaybackQueue
-        .filter(t => t && t.id !== curId)
-        .map(t => t.id);
-      showToast("Ciclo aleatorio completado. Continuando lista 🔀");
+      nextId = shuffleUpcomingQueue.shift(); // FIFO Dequeue
     }
 
-    const randomPoolPos = Math.floor(Math.random() * shuffleUnplayedPool.length);
-    const chosenId = shuffleUnplayedPool.splice(randomPoolPos, 1)[0];
-    shufflePlayedStack.push(chosenId);
-
-    const foundIdx = activePlaybackQueue.findIndex(t => t.id === chosenId);
-    activeQueueIndex = foundIdx >= 0 ? foundIdx : 0;
+    if (nextId) {
+      if (!shuffleHistoryStack.length || shuffleHistoryStack[shuffleHistoryStack.length - 1] !== nextId) {
+        shuffleHistoryStack.push(nextId);
+      }
+      const foundIdx = activePlaybackQueue.findIndex(t => t.id === nextId);
+      activeQueueIndex = foundIdx >= 0 ? foundIdx : 0;
+    }
   } else {
     activeQueueIndex = (activeQueueIndex + 1) % activePlaybackQueue.length;
     const curT = activePlaybackQueue[activeQueueIndex];
-    if (curT && shufflePlayedStack[shufflePlayedStack.length - 1] !== curT.id) {
-      shufflePlayedStack.push(curT.id);
+    if (curT && (!shuffleHistoryStack.length || shuffleHistoryStack[shuffleHistoryStack.length - 1] !== curT.id)) {
+      shuffleHistoryStack.push(curT.id);
     }
   }
 
@@ -1146,14 +1540,14 @@ function prevTrack() {
     return;
   }
 
-  if (shuffleMode && Array.isArray(shufflePlayedStack) && shufflePlayedStack.length > 1) {
-    // Sacar pista actual de la cima de la pila y regresarla a pendientes
-    const currentId = shufflePlayedStack.pop();
-    if (!shuffleUnplayedPool.includes(currentId)) {
-      shuffleUnplayedPool.unshift(currentId);
+  if (shuffleMode && Array.isArray(shuffleHistoryStack) && shuffleHistoryStack.length > 1) {
+    // La cima actual es la canción sonando: guardarla en shuffleForwardStack para re-avance
+    const currentId = shuffleHistoryStack.pop();
+    if (currentId) {
+      shuffleForwardStack.push(currentId);
     }
-    // La anterior es ahora la cima de la pila
-    const prevId = shufflePlayedStack[shufflePlayedStack.length - 1];
+    // La anterior es ahora la cima de la pila de historial
+    const prevId = shuffleHistoryStack[shuffleHistoryStack.length - 1];
     const foundIdx = activePlaybackQueue.findIndex(t => t.id === prevId);
     activeQueueIndex = foundIdx >= 0 ? foundIdx : 0;
   } else if (shuffleMode) {
@@ -1986,7 +2380,7 @@ window.onNativeMediaCommand = function(cmd) {
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
 const CURRENT_APP_VERSION_CODE = 27;
-const CURRENT_APP_VERSION_NAME = "2.10.2";
+const CURRENT_APP_VERSION_NAME = "2.11.0";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -2323,8 +2717,12 @@ function playPlaylistShuffle(plId) {
     plName = pl.name;
   }
 
+  if (playlistFilterConfig && playlistFilterConfig.enabled) {
+    plTracks = applyPlaylistFilterRules(plTracks);
+  }
+
   if (!plTracks.length) {
-    showToast(`La playlist «${plName}» no contiene canciones aún`);
+    showToast(`La playlist «${plName}» no contiene canciones válidas con el filtro activo`);
     return;
   }
 
@@ -2941,6 +3339,128 @@ function openAddSelectedToPlaylistModal() {
   openAddToPlaylistModal(Array.from(selectedTrackIds));
 }
 
+function createTrackRowElement(t, filtered) {
+  const isSelected = selectedTrackIds.has(t.id);
+  const isThisPlaying = isPlaying && ((activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id) || (tracks[currentIndex]?.id === t.id));
+  const div = document.createElement("div");
+  div.className = "track-item" + (isThisPlaying ? " playing" : "") + (isSelected ? " selected" : "");
+  div.setAttribute("data-track-id", t.id);
+  div.onclick = (ev) => {
+    if (isMultiSelectMode) {
+      toggleTrackSelection(t.id, ev);
+    } else {
+      const idxInFiltered = filtered.indexOf(t);
+      playTrackFromQueue(filtered, idxInFiltered >= 0 ? idxInFiltered : 0, activeFilter === "all" ? "Biblioteca" : "Canciones");
+    }
+  };
+
+  // Checkbox de selección múltiple
+  const cb = document.createElement("div");
+  cb.className = "track-checkbox" + (isSelected ? " checked" : "") + (isMultiSelectMode ? " visible" : "");
+  cb.textContent = isSelected ? "✓" : "";
+  cb.onclick = (ev) => toggleTrackSelection(t.id, ev);
+  div.appendChild(cb);
+
+  const thumb = document.createElement("div");
+  const covUrl = getTrackCoverUrl(t);
+  if (covUrl) {
+    thumb.className = "track-thumb";
+    thumb.style.background = "#14141c";
+    thumb.innerHTML = `<img src="${covUrl}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" onerror="window.handleTrackCoverError(this, '${t.id}')" />`;
+  } else {
+    thumb.className = "track-thumb track-thumb-empty";
+    thumb.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
+  }
+
+  const memberPlaylists = getTrackPlaylists(t);
+  const modeBadge = t.cloud ? (t.downloaded ? " • Guardada Offline ✔" : " • En línea ☁️") : "";
+  const meta = document.createElement("div");
+  meta.className = "track-meta";
+  meta.innerHTML = `<div class="track-title">${escapeHtml(t.title || 'Canción')}</div>
+                    <div class="track-sub">${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.album || 'Música')}${modeBadge}</div>`;
+
+  div.appendChild(thumb);
+  div.appendChild(meta);
+
+  if (!isMultiSelectMode) {
+    // Si es una pista de Google Drive en línea aún no descargada, mostrar botón circular de descarga
+    if (t.cloud && !t.downloaded && t.driveId) {
+      const dlBtn = document.createElement("button");
+      dlBtn.className = "btn-circular-download";
+      dlBtn.dataset.state = "idle";
+      dlBtn.title = "Descargar a la carpeta de la aplicación";
+      dlBtn.innerHTML = `
+        <svg class="download-ring" viewBox="0 0 32 32">
+          <circle class="ring-bg" cx="16" cy="16" r="14"></circle>
+          <circle class="ring-fill" cx="16" cy="16" r="14"></circle>
+        </svg>
+        <span class="download-icon">${ICONS.download || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`}</span>
+      `;
+      dlBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        downloadSingleDriveTrack(t, dlBtn);
+      };
+      div.appendChild(dlBtn);
+    }
+
+    // Botón de Playlist: Si ya pertenece a una playlist, se muestra el badge interactivo con el nombre; si no, muestra el botón ＋
+    const plBtn = document.createElement("button");
+    if (memberPlaylists.length > 0) {
+      plBtn.className = "btn-track-playlist-badge";
+      const primaryPl = memberPlaylists[0];
+      const plName = (primaryPl && primaryPl.name) ? primaryPl.name : "Playlist";
+      const extraCount = memberPlaylists.length > 1 ? ` (+${memberPlaylists.length - 1})` : "";
+      const maxLen = 12;
+      const displayName = plName.length > maxLen ? plName.slice(0, 10) + "…" : plName;
+      plBtn.innerHTML = `
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="flex-shrink:0;">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+        <span class="pl-badge-text">${escapeHtml(displayName)}${extraCount}</span>
+      `;
+      plBtn.title = `En playlist: ${escapeHtml(plName)}. Toca para cambiar o gestionar playlists.`;
+    } else {
+      plBtn.className = "icon-action-btn";
+      plBtn.innerHTML = ICONS.plus || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+      plBtn.title = "Añadir a Playlist";
+    }
+    plBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      openAddToPlaylistModal(t.id);
+    };
+    div.appendChild(plBtn);
+
+    // Botón Favorito
+    const likeBtn = document.createElement("button");
+    likeBtn.className = "like-btn" + (t.liked ? " liked" : "");
+    likeBtn.innerHTML = t.liked ? ICONS.likeFilled : ICONS.likeOutline;
+    likeBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      t.liked = !t.liked;
+      savePersistentState();
+      renderTracks();
+      renderHomePlaylists();
+      uploadPlaylistsToDrive();
+    };
+    div.appendChild(likeBtn);
+
+    // Botón 🗑️ Eliminar de la aplicación
+    const delBtn = document.createElement("button");
+    delBtn.className = "icon-action-btn";
+    delBtn.style.color = "#ef4444";
+    delBtn.style.padding = "5px 8px";
+    delBtn.innerHTML = ICONS.trash;
+    delBtn.title = "Eliminar de la aplicación";
+    delBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      deleteTrackFromApp(t);
+    };
+    div.appendChild(delBtn);
+  }
+
+  return div;
+}
+
 function renderTracks() {
   const listEl = document.getElementById("trackList");
   if (!listEl) return;
@@ -2963,129 +3483,35 @@ function renderTracks() {
     return;
   }
 
-  const curTrack = tracks[currentIndex];
-
-  filtered.forEach((t) => {
-    const isSelected = selectedTrackIds.has(t.id);
-    const isThisPlaying = isPlaying && ((activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id) || (tracks[currentIndex]?.id === t.id));
-    const div = document.createElement("div");
-    div.className = "track-item" + (isThisPlaying ? " playing" : "") + (isSelected ? " selected" : "");
-    div.setAttribute("data-track-id", t.id);
-    div.onclick = (ev) => {
-      if (isMultiSelectMode) {
-        toggleTrackSelection(t.id, ev);
-      } else {
-        const idxInFiltered = filtered.indexOf(t);
-        playTrackFromQueue(filtered, idxInFiltered >= 0 ? idxInFiltered : 0, activeFilter === "all" ? "Biblioteca" : "Canciones");
-      }
-    };
-
-    // Checkbox de selección múltiple
-    const cb = document.createElement("div");
-    cb.className = "track-checkbox" + (isSelected ? " checked" : "") + (isMultiSelectMode ? " visible" : "");
-    cb.textContent = isSelected ? "✓" : "";
-    cb.onclick = (ev) => toggleTrackSelection(t.id, ev);
-    div.appendChild(cb);
-
-    const thumb = document.createElement("div");
-    const covUrl = getTrackCoverUrl(t);
-    if (covUrl) {
-      thumb.className = "track-thumb";
-      thumb.style.background = "#14141c";
-      thumb.innerHTML = `<img src="${covUrl}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" onerror="window.handleTrackCoverError(this, '${t.id}')" />`;
-    } else {
-      thumb.className = "track-thumb track-thumb-empty";
-      thumb.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="10"/></svg>`;
-    }
-
-    const memberPlaylists = getTrackPlaylists(t);
-    const modeBadge = t.cloud ? (t.downloaded ? " • Guardada Offline ✔" : " • En línea ☁️") : "";
-    const meta = document.createElement("div");
-    meta.className = "track-meta";
-    meta.innerHTML = `<div class="track-title">${escapeHtml(t.title || 'Canción')}</div>
-                      <div class="track-sub">${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.album || 'Música')}${modeBadge}</div>`;
-
-    div.appendChild(thumb);
-    div.appendChild(meta);
-
-    if (!isMultiSelectMode) {
-      // Si es una pista de Google Drive en línea aún no descargada, mostrar botón circular de descarga
-      if (t.cloud && !t.downloaded && t.driveId) {
-        const dlBtn = document.createElement("button");
-        dlBtn.className = "btn-circular-download";
-        dlBtn.dataset.state = "idle";
-        dlBtn.title = "Descargar a la carpeta de la aplicación";
-        dlBtn.innerHTML = `
-          <svg class="download-ring" viewBox="0 0 32 32">
-            <circle class="ring-bg" cx="16" cy="16" r="14"></circle>
-            <circle class="ring-fill" cx="16" cy="16" r="14"></circle>
-          </svg>
-          <span class="download-icon">${ICONS.download || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`}</span>
-        `;
-        dlBtn.onclick = (ev) => {
-          ev.stopPropagation();
-          downloadSingleDriveTrack(t, dlBtn);
-        };
-        div.appendChild(dlBtn);
-      }
-
-      // Botón de Playlist: Si ya pertenece a una playlist, se muestra el badge interactivo con el nombre; si no, muestra el botón ＋
-      const plBtn = document.createElement("button");
-      if (memberPlaylists.length > 0) {
-        plBtn.className = "btn-track-playlist-badge";
-        const primaryPl = memberPlaylists[0];
-        const plName = (primaryPl && primaryPl.name) ? primaryPl.name : "Playlist";
-        const extraCount = memberPlaylists.length > 1 ? ` (+${memberPlaylists.length - 1})` : "";
-        const maxLen = 12;
-        const displayName = plName.length > maxLen ? plName.slice(0, 10) + "…" : plName;
-        plBtn.innerHTML = `
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="flex-shrink:0;">
-            <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-          </svg>
-          <span class="pl-badge-text">${escapeHtml(displayName)}${extraCount}</span>
-        `;
-        plBtn.title = `En playlist: ${escapeHtml(plName)}. Toca para cambiar o gestionar playlists.`;
-      } else {
-        plBtn.className = "icon-action-btn";
-        plBtn.innerHTML = ICONS.plus || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
-        plBtn.title = "Añadir a Playlist";
-      }
-      plBtn.onclick = (ev) => {
-        ev.stopPropagation();
-        openAddToPlaylistModal(t.id);
-      };
-      div.appendChild(plBtn);
-
-      // Botón Favorito
-      const likeBtn = document.createElement("button");
-      likeBtn.className = "like-btn" + (t.liked ? " liked" : "");
-      likeBtn.innerHTML = t.liked ? ICONS.likeFilled : ICONS.likeOutline;
-      likeBtn.onclick = (ev) => {
-        ev.stopPropagation();
-        t.liked = !t.liked;
-        savePersistentState();
-        renderTracks();
-        renderHomePlaylists();
-        uploadPlaylistsToDrive();
-      };
-      div.appendChild(likeBtn);
-
-      // Botón 🗑️ Eliminar de la aplicación
-      const delBtn = document.createElement("button");
-      delBtn.className = "icon-action-btn";
-      delBtn.style.color = "#ef4444";
-      delBtn.style.padding = "5px 8px";
-      delBtn.innerHTML = ICONS.trash;
-      delBtn.title = "Eliminar de la aplicación";
-      delBtn.onclick = (ev) => {
-        ev.stopPropagation();
-        deleteTrackFromApp(t);
-      };
-      div.appendChild(delBtn);
-    }
-
-    listEl.appendChild(div);
+  // Renderizado optimizado por lotes (DocumentFragment + requestAnimationFrame)
+  const batchToken = ++currentRenderBatchToken;
+  const initialBatchCount = 30;
+  const frag = document.createDocumentFragment();
+  const firstSlice = filtered.slice(0, initialBatchCount);
+  firstSlice.forEach(t => {
+    frag.appendChild(createTrackRowElement(t, filtered));
   });
+  listEl.appendChild(frag);
+
+  if (filtered.length > initialBatchCount) {
+    let nextIndex = initialBatchCount;
+    function renderNextBatch() {
+      if (batchToken !== currentRenderBatchToken) return;
+      const nextSlice = filtered.slice(nextIndex, nextIndex + 40);
+      if (!nextSlice.length) return;
+      const nextFrag = document.createDocumentFragment();
+      nextSlice.forEach(t => {
+        nextFrag.appendChild(createTrackRowElement(t, filtered));
+      });
+      listEl.appendChild(nextFrag);
+      nextIndex += 40;
+      if (nextIndex < filtered.length) {
+        requestAnimationFrame(renderNextBatch);
+      }
+    }
+    requestAnimationFrame(renderNextBatch);
+  }
+}
 }
 
 /* ---------------- GESTIÓN DE PLAYLISTS DISPONIBLES EN INICIO Y DETALLE ---------------- */
@@ -3142,10 +3568,13 @@ function renderHomePlaylists() {
     card.className = "playlist-card";
     const plTracks = getPlaylistTracks(pl);
     card.onclick = () => openPlaylistDetailModal(pl.id);
+    const coverHtml = pl.coverUrl
+      ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${pl.coverUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'" /></div>`
+      : `<div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>`;
     card.innerHTML = `
-      <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-      </div>
+      ${coverHtml}
       <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
       <div class="playlist-card-sub">${plTracks.length} canciones</div>
       <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
@@ -3172,8 +3601,11 @@ function playPlaylistDirect(plId) {
     plTracks = getPlaylistTracks(pl);
     plName = pl.name;
   }
+  if (playlistFilterConfig && playlistFilterConfig.enabled) {
+    plTracks = applyPlaylistFilterRules(plTracks);
+  }
   if (!plTracks.length) {
-    showToast(`La playlist «${plName}» no contiene canciones aún`);
+    showToast(`La playlist «${plName}» no contiene canciones válidas con el filtro activo`);
     return;
   }
   activePlaybackQueue = [...plTracks];
@@ -3200,35 +3632,39 @@ function openPlaylistDetailModal(plId) {
   const coverEl = document.getElementById("plDetailCover");
   const btnDel = document.getElementById("btnDeletePlDetail");
   const btnAdd = document.getElementById("btnAddTracksPlDetail");
+  const btnCov = document.getElementById("btnChangeCoverPlDetail");
   const searchInput = document.getElementById("plDetailSearchInput");
 
   if (searchInput) searchInput.value = "";
+  updatePlaylistFilterButtonUI();
 
   if (plId === "pl_liked") {
     if (titleEl) titleEl.textContent = "Canciones Favoritas ♥";
     if (coverEl) {
+      coverEl.style.backgroundImage = "none";
       coverEl.style.background = "linear-gradient(135deg, #4b1764, #1b0a2a)";
       coverEl.innerHTML = ICONS.likeFilled;
     }
     if (btnDel) btnDel.style.display = "none";
     if (btnAdd) btnAdd.style.display = "none";
+    if (btnCov) btnCov.style.display = "none";
   } else if (plId === "pl_cloud") {
     if (titleEl) titleEl.textContent = "Google Drive ☁️";
     if (coverEl) {
+      coverEl.style.backgroundImage = "none";
       coverEl.style.background = "linear-gradient(135deg, #0f4b36, #091a13)";
       coverEl.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1ed760" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
     }
     if (btnDel) btnDel.style.display = "none";
     if (btnAdd) btnAdd.style.display = "none";
+    if (btnCov) btnCov.style.display = "none";
   } else {
     const pl = playlists.find(p => p.id === plId);
     if (titleEl) titleEl.textContent = pl ? pl.name : "Playlist";
-    if (coverEl) {
-      coverEl.style.background = "linear-gradient(135deg, #1db954, #121218)";
-      coverEl.innerHTML = `🎵`;
-    }
+    updatePlaylistDetailCoverUI(pl);
     if (btnDel) btnDel.style.display = "inline-block";
     if (btnAdd) btnAdd.style.display = "inline-block";
+    if (btnCov) btnCov.style.display = "inline-block";
   }
 
   renderDetailPlaylistTracks("");
@@ -3268,20 +3704,22 @@ function renderDetailPlaylistTracks(query = "") {
     }
   }
 
+  const filteredByRules = applyPlaylistFilterRules(allPlTracks);
   const q = String(query || "").toLowerCase().trim();
   const filtered = q
-    ? allPlTracks.filter(t => {
+    ? filteredByRules.filter(t => {
         const title = (t.title || "").toLowerCase();
         const artist = (t.artist || "").toLowerCase();
         const album = (t.album || "").toLowerCase();
         return title.includes(q) || artist.includes(q) || album.includes(q);
       })
-    : allPlTracks;
+    : filteredByRules;
 
   if (statsEl) {
+    const filterNotice = playlistFilterConfig.enabled ? " (Filtro ON)" : "";
     statsEl.textContent = q
-      ? `${filtered.length} de ${allPlTracks.length} canciones encontradas`
-      : `${allPlTracks.length} canciones`;
+      ? `${filtered.length} de ${allPlTracks.length} canciones encontradas${filterNotice}`
+      : `${filtered.length} de ${allPlTracks.length} canciones${filterNotice}`;
   }
 
   if (filtered.length === 0) {
@@ -3289,7 +3727,9 @@ function renderDetailPlaylistTracks(query = "") {
     emptyRow.style.cssText = "padding: 24px 12px; text-align: center; color: var(--muted); font-size: 12px;";
     emptyRow.innerHTML = q
       ? `No se encontraron canciones en esta playlist para «<b>${escapeHtml(q)}</b>»`
-      : `Esta playlist aún no tiene canciones guardadas.`;
+      : (playlistFilterConfig.enabled && allPlTracks.length > 0)
+        ? `Ninguna canción pasa el filtro activo de la playlist.`
+        : `Esta playlist aún no tiene canciones guardadas.`;
     listEl.appendChild(emptyRow);
     return;
   }
@@ -3301,7 +3741,7 @@ function renderDetailPlaylistTracks(query = "") {
     row.setAttribute("data-track-id", t.id);
     row.onclick = () => {
       closePlaylistDetailModal();
-      playTrackFromQueue(allPlTracks, allPlTracks.indexOf(t) >= 0 ? allPlTracks.indexOf(t) : 0, plName);
+      playTrackFromQueue(filtered, filtered.indexOf(t) >= 0 ? filtered.indexOf(t) : 0, plName);
     };
 
     const numSpan = document.createElement("div");
@@ -3851,6 +4291,12 @@ function confirmCreatePlaylist() {
     desc,
     trackIds: initialIds
   };
+  // Asignar carátula aleatoria de la subcarpeta «imagenes» de Drive si está disponible
+  if (Array.isArray(drivePlaylistImages) && drivePlaylistImages.length > 0) {
+    const randomImg = drivePlaylistImages[Math.floor(Math.random() * drivePlaylistImages.length)];
+    newPl.coverUrl = randomImg.url;
+    newPl.coverDriveId = randomImg.id;
+  }
   pendingTrackIdForPlaylist = null;
   playlists.unshift(newPl);
   selectedPlaylistId = newPl.id;
@@ -5349,8 +5795,19 @@ window.onDriveTrackDownloaded = function(fileId, savedPath, ok, duplicateSkipped
       showToast(`⬇️ Descargada: «${t.title}»`);
     }
   }
-  savePersistentState();
-  renderTracks();
+  savePersistentStateDebounced();
+  const trackIdToFind = t ? t.id : ("gd_" + fileId);
+  const row = document.querySelector(`[data-track-id="${trackIdToFind}"]`);
+  if (row) {
+    const metaSub = row.querySelector(".track-sub");
+    if (metaSub && t) {
+      metaSub.innerHTML = `${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.album || 'Música')} • Guardada Offline ✔`;
+    }
+    const dlBtn = row.querySelector(".btn-circular-download");
+    if (dlBtn) dlBtn.style.display = "none";
+  } else {
+    renderTracks();
+  }
   updateFullPlayerUI();
   updateVinylStandbyUI();
 };
@@ -5747,11 +6204,21 @@ function animateLoop(nowMs) {
   requestAnimationFrame(animateLoop);
   try {
     if (typeof nowMs !== "number" || isNaN(nowMs)) nowMs = performance.now();
-    const dt = Math.min(0.08, Math.max(0.004, (nowMs - lastFrameTimeMs) / 1000));
+    const dt = Math.min(0.05, Math.max(0.004, (nowMs - lastFrameTimeMs) / 1000));
     lastFrameTimeMs = nowMs;
     idleTimeSec += dt;
 
     const posSec = getSmoothPlaybackSec();
+
+    // Sincronización temporal entre dispositivos a los 30 segundos continuos
+    if (isPlaying && navigator.onLine) {
+      const curT = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
+      if (curT && curT.id && posSec >= 30.0 && tempSessionUploadedTrackId !== curT.id) {
+        tempSessionUploadedTrackId = curT.id;
+        uploadTempPlaybackSession(curT, posSec);
+      }
+    }
+
     const safeBpm = (isFinite(currentBpm) && currentBpm >= 40) ? currentBpm : 116;
     const beatPos = posSec * (safeBpm / 60);
 
@@ -5870,6 +6337,7 @@ function animateLoop(nowMs) {
 }
 
 function drawMaomaoStage(pose, beatPos, bass, mid, high, targetCanvas, targetCtx) {
+  if (appVisualMode === "free" || document.hidden) return;
   const mmCanvas = targetCanvas || document.getElementById("maomaoCanvas");
   const mmCtx = targetCtx || (mmCanvas ? mmCanvas.getContext("2d") : null);
   if (!mmCanvas || !mmCtx) return;

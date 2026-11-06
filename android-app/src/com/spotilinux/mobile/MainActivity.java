@@ -154,7 +154,12 @@ public class MainActivity extends Activity {
         });
 
         setContentView(webView);
-        cleanupCorruptedMediaCache();
+        webView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                cleanupCorruptedMediaCache();
+            }
+        }, 1500);
         webView.loadUrl("file:///android_asset/www/index.html");
     }
 
@@ -940,6 +945,10 @@ public class MainActivity extends Activity {
         }
 
         private void parseEmbeddedFolderHtml(String html, JSONArray outFiles, List<String> musicaSubfolders, List<String> videoSubfolders) {
+            parseEmbeddedFolderHtml(html, outFiles, musicaSubfolders, videoSubfolders, null);
+        }
+
+        private void parseEmbeddedFolderHtml(String html, JSONArray outFiles, List<String> musicaSubfolders, List<String> videoSubfolders, List<String> imageSubfolders) {
             if (html == null || html.isEmpty()) return;
             try {
                 // 1. Extraer elementos por contenedor id="entry-<id>"
@@ -962,6 +971,8 @@ public class MainActivity extends Activity {
                             if (!videoSubfolders.contains(id)) videoSubfolders.add(id);
                         } else if ((low.contains("musica") || low.contains("música") || low.contains("music")) && musicaSubfolders != null) {
                             if (!musicaSubfolders.contains(id)) musicaSubfolders.add(id);
+                        } else if ((low.contains("imagen") || low.contains("imágenes") || low.contains("image") || low.contains("caratula") || low.contains("cover")) && imageSubfolders != null) {
+                            if (!imageSubfolders.contains(id)) imageSubfolders.add(id);
                         }
                     } else if (outFiles != null) {
                         boolean exists = false;
@@ -994,6 +1005,8 @@ public class MainActivity extends Activity {
                             if (!videoSubfolders.contains(fid)) videoSubfolders.add(fid);
                         } else if ((low.contains("musica") || low.contains("música") || low.contains("music")) && musicaSubfolders != null) {
                             if (!musicaSubfolders.contains(fid)) musicaSubfolders.add(fid);
+                        } else if ((low.contains("imagen") || low.contains("imágenes") || low.contains("image") || low.contains("caratula") || low.contains("cover")) && imageSubfolders != null) {
+                            if (!imageSubfolders.contains(fid)) imageSubfolders.add(fid);
                         }
                     }
 
@@ -1032,9 +1045,10 @@ public class MainActivity extends Activity {
                 public void run() {
                     JSONArray filesArr = new JSONArray();
                     JSONArray videoFilesArr = new JSONArray();
+                    JSONArray imagesArr = new JSONArray();
                     String fid = (folderId != null && !folderId.trim().isEmpty()) ? folderId.trim() : "1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT";
 
-                    // 1. Intentar consultar música y videos vía API del Apps Script Web App
+                    // 1. Intentar consultar música, videos e imágenes vía API del Apps Script Web App
                     boolean musicApiSuccess = false;
                     try {
                         String apiUrl = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec?action=list_music";
@@ -1065,7 +1079,20 @@ public class MainActivity extends Activity {
                     } catch (Exception ignored) {
                     }
 
-                    // 2. Escanear mediante embeddedfolderview la carpeta raíz compartida y subcarpetas Musica y Videos
+                    try {
+                        String imgApiUrl = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec?action=list_images";
+                        String imgRes = fetchUrlText(imgApiUrl);
+                        if (imgRes != null && !imgRes.trim().isEmpty() && imgRes.trim().startsWith("{")) {
+                            JSONObject imgObj = new JSONObject(imgRes);
+                            if (imgObj.has("files") && imgObj.getJSONArray("files").length() > 0) {
+                                imagesArr = imgObj.getJSONArray("files");
+                                dispatchJs("if(window.onPublicDriveImagesFetched) window.onPublicDriveImagesFetched(" + imagesArr.toString() + ");");
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    // 2. Escanear mediante embeddedfolderview la carpeta raíz compartida y subcarpetas Musica, Videos e Imagenes
                     List<String> musicaFolders = new ArrayList<>();
                     if (!musicaFolders.contains("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T")) {
                         musicaFolders.add("1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T");
@@ -1075,16 +1102,17 @@ public class MainActivity extends Activity {
                     if (!videoFolders.contains("1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa")) {
                         videoFolders.add("1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa");
                     }
+                    List<String> imageFolders = new ArrayList<>();
 
                     String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + fid + "#list");
                     JSONArray pendingAudio = musicApiSuccess ? new JSONArray() : filesArr;
-                    parseEmbeddedFolderHtml(htmlRoot, pendingAudio, musicaFolders, videoFolders);
+                    parseEmbeddedFolderHtml(htmlRoot, pendingAudio, musicaFolders, videoFolders, imageFolders);
 
                     // Si no teníamos música de la API, escanear subcarpetas de música
                     if (!musicApiSuccess) {
                         for (String subId : musicaFolders) {
                             String htmlSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + subId + "#list");
-                            parseEmbeddedFolderHtml(htmlSub, filesArr, null, null);
+                            parseEmbeddedFolderHtml(htmlSub, filesArr, null, null, null);
                         }
                         if (filesArr.length() > 0) {
                             dispatchJs("if(window.onPublicDriveFolderFetched) window.onPublicDriveFolderFetched(" + filesArr.toString() + ");");
@@ -1094,7 +1122,18 @@ public class MainActivity extends Activity {
                     // Escanear todas las subcarpetas de videos encontradas
                     for (String vSubId : videoFolders) {
                         String htmlVSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + vSubId + "#list");
-                        parseEmbeddedFolderHtml(htmlVSub, videoFilesArr, null, null);
+                        parseEmbeddedFolderHtml(htmlVSub, videoFilesArr, null, null, null);
+                    }
+
+                    // Escanear subcarpetas de imágenes encontradas si no vinieron por la API
+                    if (imagesArr.length() == 0) {
+                        for (String imgSubId : imageFolders) {
+                            String htmlImgSub = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + imgSubId + "#list");
+                            parseEmbeddedFolderHtml(htmlImgSub, imagesArr, null, null, null);
+                        }
+                        if (imagesArr.length() > 0) {
+                            dispatchJs("if(window.onPublicDriveImagesFetched) window.onPublicDriveImagesFetched(" + imagesArr.toString() + ");");
+                        }
                     }
 
                     if (videoFilesArr.length() > 0) {

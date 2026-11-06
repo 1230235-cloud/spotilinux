@@ -487,3 +487,109 @@ QLabel#VinylBadge {
     padding: 3px 10px;
 }
 """
+
+LIGHT_QSS = """
+QMainWindow, QWidget#RootContainer {
+    background-color: #f5f6f8;
+    color: #111827;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Noto Sans", sans-serif;
+}
+
+QFrame#SidebarCard, QFrame#MainCard, QFrame#RightCard {
+    background-color: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+}
+
+QFrame#BottomPlayerBar {
+    background-color: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.10);
+    border-radius: 16px;
+}
+
+QFrame#EqualizerCard {
+    background-color: #f0f2f5;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 14px;
+}
+
+QFrame#NowPlayingMiniCard {
+    background-color: #f0f2f5;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 14px;
+}
+
+QPushButton {
+    outline: none;
+    background-color: #e5e7eb;
+    color: #111827;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 9999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #d1d5db;
+    color: #111827;
+    border-color: #16a34a;
+}
+
+QPushButton:pressed {
+    background-color: #9ca3af;
+}
+
+QPushButton#PrimaryButton {
+    background-color: #16a34a;
+    color: #ffffff;
+    border: 1px solid #16a34a;
+    font-weight: 700;
+}
+
+QPushButton#PrimaryButton:hover {
+    background-color: #15803d;
+}
+
+QLineEdit {
+    background-color: #ffffff;
+    color: #111827;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 9999px;
+    padding: 6px 14px;
+    font-size: 12px;
+}
+
+QLineEdit:focus {
+    border-color: #16a34a;
+}
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 6px;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(0, 0, 0, 0.20);
+    border-radius: 3px;
+    min-height: 24px;
+}
+
+QFrame#TrackRow, QFrame#CompactTrackRow {
+    background-color: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+}
+
+QFrame#TrackRow:hover, QFrame#CompactTrackRow:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+QFrame#TrackRow[playing="true"], QFrame#CompactTrackRow[playing="true"] {
+    background-color: rgba(22, 163, 74, 0.12);
+    border-color: #16a34a;
+}
+"""
+
+def get_stylesheet(theme: str = "dark") -> str:
+    return LIGHT_QSS if theme == "light" else SPOTIFY_QSS
