@@ -2966,12 +2966,19 @@ function renderTracks() {
     div.appendChild(meta);
 
     if (!isMultiSelectMode) {
-      // Si es una pista de Google Drive en línea aún no descargada, mostrar botón ⬇️ Descargar
+      // Si es una pista de Google Drive en línea aún no descargada, mostrar botón circular de descarga
       if (t.cloud && !t.downloaded && t.driveId) {
         const dlBtn = document.createElement("button");
-        dlBtn.className = "icon-action-btn";
-        dlBtn.textContent = "⬇️";
+        dlBtn.className = "btn-circular-download";
+        dlBtn.dataset.state = "idle";
         dlBtn.title = "Descargar a la carpeta de la aplicación";
+        dlBtn.innerHTML = `
+          <svg class="download-ring" viewBox="0 0 32 32">
+            <circle class="ring-bg" cx="16" cy="16" r="14"></circle>
+            <circle class="ring-fill" cx="16" cy="16" r="14"></circle>
+          </svg>
+          <span class="download-icon">${ICONS.download || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`}</span>
+        `;
         dlBtn.onclick = (ev) => {
           ev.stopPropagation();
           downloadSingleDriveTrack(t, dlBtn);
@@ -5031,7 +5038,12 @@ function downloadSingleDriveTrack(trackObj, btnEl) {
     }
   }
 
-  if (btnEl) btnEl.textContent = "⏳";
+  if (btnEl) {
+    btnEl.dataset.state = "downloading";
+    btnEl.style.setProperty("--progress", "45");
+    const iconSpan = btnEl.querySelector(".download-icon");
+    if (iconSpan) iconSpan.textContent = "⏳";
+  }
   const token = document.getElementById("gdToken").value.trim();
   const apiKey = document.getElementById("gdApiKey").value.trim();
 

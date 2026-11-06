@@ -142,6 +142,73 @@
   .like-btn:active { transform: scale(1.2); }
   .like-btn.liked { color: var(--green-bright); text-shadow: 0 0 8px rgba(30, 215, 96, 0.45); }
 
+  /* Botón circular de descarga OLED Dark con animación SVG */
+  .btn-circular-download {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #18181f;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: all 0.16s ease;
+  }
+  .btn-circular-download:hover {
+    border-color: #1ed760;
+    background: #22222b;
+    transform: scale(1.05);
+  }
+  .btn-circular-download:active {
+    transform: scale(0.92);
+  }
+  .btn-circular-download svg.download-ring {
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: 32px;
+    height: 32px;
+    pointer-events: none;
+  }
+  .btn-circular-download .ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.10);
+    stroke-width: 2.4;
+  }
+  .btn-circular-download .ring-fill {
+    fill: none;
+    stroke: #1ed760;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-dasharray: 88;
+    stroke-dashoffset: calc(88 - (88 * var(--progress, 0)) / 100);
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke-dashoffset 0.2s ease-out;
+  }
+  .btn-circular-download .download-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e4e4ec;
+  }
+  .btn-circular-download[data-state="downloading"] .download-icon {
+    font-size: 9px;
+    font-weight: 800;
+    color: #1ed760;
+  }
+  .btn-circular-download[data-state="completed"] {
+    border-color: rgba(30, 215, 96, 0.4);
+    background: rgba(30, 215, 96, 0.12);
+  }
+  .btn-circular-download[data-state="completed"] .download-icon {
+    color: #1ed760;
+  }
+
   /* Tarjetas de Playlists */
   .playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 9px; margin-bottom: 12px; }
   .playlist-card {

@@ -172,6 +172,111 @@ def make_liked_cover_pixmap(size: int, radius: int = 8, symbol: str = "♥", col
     return pix
 
 
+class CircularDownloadButton(QPushButton):
+    """
+    Botón circular OLED Dark (#18181f) con animación de progreso circular.
+    Muestra un anillo que se cierra en sentido horario conforme avanza la descarga.
+    """
+    def __init__(self, size: int = 34, parent=None) -> None:
+        super().__init__(parent)
+        self.btn_size = size
+        self.setFixedSize(size, size)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._state = "idle"  # "idle" | "downloading" | "completed" | "error"
+        self._progress = 0.0  # 0.0 a 1.0
+        self._display_progress = 0.0
+        self._hovered = False
+
+    def enterEvent(self, event) -> None:
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def set_state(self, state: str) -> None:
+        self._state = state
+        self.update()
+
+    def set_progress(self, current: int, total: int = 100) -> None:
+        if total > 0:
+            self._progress = max(0.0, min(1.0, current / float(total)))
+        else:
+            self._progress = 0.0
+        self._display_progress = self._progress
+        if self._progress >= 1.0:
+            self._state = "completed"
+        elif self._progress > 0.0:
+            self._state = "downloading"
+        self.update()
+
+    def reset(self) -> None:
+        self._state = "idle"
+        self._progress = 0.0
+        self._display_progress = 0.0
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = self.rect()
+        w = rect.width()
+        h = rect.height()
+
+        # 1. Fondo circular
+        bg_color = QColor("#22222b") if self._hovered else QColor("#18181f")
+        painter.setBrush(bg_color)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(1, 1, w - 2, h - 2)
+
+        # 2. Borde o Anillo de progreso
+        inset = 3
+        arc_rect = QRectF(inset, inset, w - inset * 2, h - inset * 2)
+
+        if self._state == "downloading":
+            # Guía de fondo gris tenue
+            guide_pen = QPen(QColor(255, 255, 255, 30), 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            painter.setPen(guide_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(arc_rect)
+
+            # Arco activo verde neón cerrándose de 0 a 360 grados
+            span_angle = -int(self._display_progress * 360 * 16)
+            arc_pen = QPen(QColor("#1ed760"), 2.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            painter.setPen(arc_pen)
+            painter.drawArc(arc_rect, 90 * 16, span_angle)
+
+            # Icono central o texto de porcentaje
+            pct_text = f"{int(self._display_progress * 100)}%"
+            painter.setPen(QColor("#1ed760"))
+            font = QFont("Sans Serif", max(7, int(w * 0.25)), QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, pct_text)
+        elif self._state == "completed":
+            border_pen = QPen(QColor(30, 215, 96, 120), 2.0)
+            painter.setPen(border_pen)
+            painter.drawEllipse(arc_rect)
+            icon_pix = icons.get_pixmap("check", "#1ed760", int(w * 0.48))
+            px = int((w - icon_pix.width()) / 2)
+            py = int((h - icon_pix.height()) / 2)
+            painter.drawPixmap(px, py, icon_pix)
+        else:
+            border_col = QColor("#1ed760") if self._hovered else QColor(255, 255, 255, 25)
+            border_pen = QPen(border_col, 1.2)
+            painter.setPen(border_pen)
+            painter.drawEllipse(arc_rect)
+            icon_color = "#1ed760" if self._hovered else "#e4e4ec"
+            icon_pix = icons.get_pixmap("download", icon_color, int(w * 0.46))
+            px = int((w - icon_pix.width()) / 2)
+            py = int((h - icon_pix.height()) / 2)
+            painter.drawPixmap(px, py, icon_pix)
+
+        painter.end()
+
+
 class HeroBannerWidget(QFrame):
     """Encabezado dinámico con degradado adaptativo al color dominante de la carátula actual."""
 
@@ -222,12 +327,9 @@ class HeroBannerWidget(QFrame):
         self.btn_shuffle_banner.setIconSize(QSize(16, 16))
         self.btn_shuffle_banner.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.btn_download_playlist = QPushButton(" Descargar Playlist")
-        self.btn_download_playlist.setObjectName("ActionChipButton")
-        self.btn_download_playlist.setIcon(icons.get_icon("download", "#e4e4ec", 16))
-        self.btn_download_playlist.setIconSize(QSize(16, 16))
-        self.btn_download_playlist.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_download_playlist.setToolTip("Descarga las canciones de Google Drive de esta playlist")
+        self.btn_download_playlist = CircularDownloadButton(size=38)
+        self.btn_download_playlist.setObjectName("CircularDownloadPlaylist")
+        self.btn_download_playlist.setToolTip("Descargar canciones de esta playlist")
         self.btn_download_playlist.setVisible(False)
 
         self.btn_add_tracks = QPushButton(" Agregar canciones")
@@ -3566,6 +3668,8 @@ class SpotiLinuxWindow(QMainWindow):
 
     def _on_playlist_download_progress(self, current: int, total: int, title: str) -> None:
         self.hero_banner.lbl_subtitle.setText(f"⬇️ Descargando ({current}/{total}): «{title}»...")
+        if hasattr(self.hero_banner, "btn_download_playlist") and hasattr(self.hero_banner.btn_download_playlist, "set_progress"):
+            self.hero_banner.btn_download_playlist.set_progress(current, total)
 
     def _on_playlist_batch_track_saved(self, old_id: str, updated_track: TrackMetadata, was_duplicate: bool) -> None:
         self.store.tracks[old_id] = updated_track
@@ -3574,6 +3678,8 @@ class SpotiLinuxWindow(QMainWindow):
         self._refresh_track_table()
 
     def _on_playlist_batch_finished(self, downloaded: int, duplicates: int, errors: int) -> None:
+        if hasattr(self.hero_banner, "btn_download_playlist") and hasattr(self.hero_banner.btn_download_playlist, "set_state"):
+            self.hero_banner.btn_download_playlist.set_state("completed")
         parts = []
         if downloaded > 0:
             parts.append(f"{downloaded} canciones descargadas")
