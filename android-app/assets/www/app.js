@@ -1219,7 +1219,9 @@ const ICONS = {
   repeat: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
   repeatOne: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><path d="M11 10.5L12.5 9V15M11 15H14" stroke-width="2"/></svg>`,
   likeOutline: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
-  likeFilled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" stroke="#1ed760" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`
+  likeFilled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" stroke="#1ed760" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  trash: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+  playlistRemove: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="11" y2="18"/><line x1="16" y1="16" x2="22" y2="16"/></svg>`
 };
 
 function updateShuffleUI() {
@@ -3001,6 +3003,19 @@ function renderTracks() {
         uploadPlaylistsToDrive();
       };
       div.appendChild(likeBtn);
+
+      // Botón 🗑️ Eliminar de la aplicación
+      const delBtn = document.createElement("button");
+      delBtn.className = "icon-action-btn";
+      delBtn.style.color = "#ef4444";
+      delBtn.style.padding = "5px 8px";
+      delBtn.innerHTML = ICONS.trash;
+      delBtn.title = "Eliminar de la aplicación";
+      delBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        deleteTrackFromApp(t);
+      };
+      div.appendChild(delBtn);
     }
 
     listEl.appendChild(div);
@@ -3249,13 +3264,13 @@ function renderDetailPlaylistTracks(query = "") {
     if (currentDetailPlaylistId !== "pl_liked" && currentDetailPlaylistId !== "pl_cloud") {
       const rmBtn = document.createElement("button");
       rmBtn.className = "icon-action-btn";
-      rmBtn.textContent = "✕";
+      rmBtn.innerHTML = ICONS.playlistRemove;
       rmBtn.title = "Quitar de esta playlist";
       rmBtn.onclick = (ev) => {
         ev.stopPropagation();
         const pl = playlists.find(p => p.id === currentDetailPlaylistId);
         if (pl && pl.trackIds) {
-          pl.trackIds = pl.trackIds.filter(tid => tid !== t.id);
+          pl.trackIds = pl.trackIds.filter(tid => !trackMatchesPlaylistId(t, tid));
           savePersistentState();
           renderHomePlaylists();
           renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
@@ -3268,6 +3283,49 @@ function renderDetailPlaylistTracks(query = "") {
 
     listEl.appendChild(row);
   });
+}
+
+function deleteTrackFromApp(track) {
+  if (!track) return;
+  const name = track.title || "esta canción";
+  if (!confirm(`¿Eliminar «${name}» de la aplicación?\nSe quitará de la biblioteca, favoritos, todas las playlists y se borrará el archivo offline si existe.`)) {
+    return;
+  }
+  // Detener si es la canción actual
+  if (currentTrack && (currentTrack.id === track.id || currentTrack.driveId === track.driveId)) {
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }
+
+  // Borrar archivo físico local si existe a través del bridge nativo
+  if (track.filePath && hasNativeAndroid && window.AndroidMedia.deleteLocalTrackFile) {
+    try {
+      window.AndroidMedia.deleteLocalTrackFile(track.filePath);
+    } catch (_e) {}
+  }
+
+  // Quitar de tracks y masterTracksPool
+  const matchFn = (t) => t.id === track.id || (track.driveId && t.driveId === track.driveId) || (track.filePath && t.filePath === track.filePath);
+  tracks = tracks.filter(t => !matchFn(t));
+  masterTracksPool = masterTracksPool.filter(t => !matchFn(t));
+
+  // Quitar de todas las playlists
+  if (Array.isArray(playlists)) {
+    playlists.forEach(pl => {
+      if (pl && Array.isArray(pl.trackIds)) {
+        pl.trackIds = pl.trackIds.filter(tid => !trackMatchesPlaylistId(track, tid));
+      }
+    });
+  }
+
+  savePersistentState();
+  renderTracks();
+  renderHomePlaylists();
+  uploadPlaylistsToDrive();
+  updatePlayerUI();
+  showToast(`🗑️ Eliminada de la aplicación: «${name}»`);
 }
 
 function playCurrentDetailPlaylist() {

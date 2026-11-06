@@ -568,6 +568,18 @@ public class MainActivity extends Activity {
 
     public class AndroidMediaBridge {
         @JavascriptInterface
+        public boolean deleteLocalTrackFile(String filePath) {
+            try {
+                if (filePath == null || filePath.trim().isEmpty()) return false;
+                File f = new File(filePath);
+                if (f.exists() && f.isFile()) {
+                    return f.delete();
+                }
+            } catch (Throwable ignored) {}
+            return false;
+        }
+
+        @JavascriptInterface
         public void playSource(String src, String title, String artist, String album, String authToken, String coverUrl) {
             Intent serviceIntent = new Intent(MainActivity.this, MediaPlaybackService.class);
             serviceIntent.setAction(MediaPlaybackService.ACTION_PLAY_SOURCE);

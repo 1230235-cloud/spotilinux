@@ -3287,7 +3287,10 @@ class SpotiLinuxWindow(QMainWindow):
             act_remove_from_pl = None
             if self.current_view.startswith("playlist:"):
                 menu.addSeparator()
-                act_remove_from_pl = menu.addAction("✕  Quitar de esta Playlist")
+                act_remove_from_pl = menu.addAction(icons.get_icon("playlist_remove", "#e4e4ec", 16), "✕  Quitar de esta Playlist")
+
+            menu.addSeparator()
+            act_delete_app = menu.addAction(icons.get_icon("trash", "#ef4444", 16), "🗑  Eliminar de la aplicación")
         else:
             act_play = menu.addAction(f"▶  Reproducir selección ({n_tracks} canciones)")
             act_download_cloud = None
@@ -3305,7 +3308,10 @@ class SpotiLinuxWindow(QMainWindow):
             act_remove_from_pl = None
             if self.current_view.startswith("playlist:"):
                 menu.addSeparator()
-                act_remove_from_pl = menu.addAction(f"✕  Quitar las {n_tracks} canciones seleccionadas de esta Playlist")
+                act_remove_from_pl = menu.addAction(icons.get_icon("playlist_remove", "#e4e4ec", 16), f"✕  Quitar las {n_tracks} canciones seleccionadas de esta Playlist")
+
+            menu.addSeparator()
+            act_delete_app = menu.addAction(icons.get_icon("trash", "#ef4444", 16), f"🗑  Eliminar las {n_tracks} canciones de la aplicación")
 
         chosen = menu.exec(self.track_table.viewport().mapToGlobal(pos))
         if not chosen:
@@ -3358,6 +3364,23 @@ class SpotiLinuxWindow(QMainWindow):
                 self.store.remove_track_from_playlist(pid, tid)
             self._sync_playlists_to_cloud()
             self.switch_view(self.current_view)
+        elif chosen == act_delete_app:
+            msg = f"¿Seguro que deseas eliminar «{primary_track.title}» de la aplicación?" if n_tracks == 1 else f"¿Seguro que deseas eliminar las {n_tracks} canciones seleccionadas de la aplicación?"
+            confirm = QMessageBox.question(
+                self,
+                "Eliminar de la aplicación",
+                msg + "\n\nSe eliminarán de la biblioteca, de todas las playlists y el archivo local si existe.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if confirm == QMessageBox.StandardButton.Yes:
+                for t in selected_tracks:
+                    if self.engine.current_track and self.engine.current_track.id == t.id:
+                        self.engine.stop()
+                    self.store.delete_track_from_app(t.id, delete_local_file=True)
+                self._sync_playlists_to_cloud()
+                self._refresh_track_table()
+                self._refresh_playlist_sidebar()
 
     def _open_multi_track_picker_for_current_playlist(self) -> None:
         """Abre un diálogo interactivo para seleccionar varias canciones con checkboxes y agregarlas juntas."""
