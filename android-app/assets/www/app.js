@@ -1985,8 +1985,8 @@ window.onNativeMediaCommand = function(cmd) {
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 26;
-const CURRENT_APP_VERSION_NAME = "2.10.1";
+const CURRENT_APP_VERSION_CODE = 27;
+const CURRENT_APP_VERSION_NAME = "2.10.2";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -2187,6 +2187,20 @@ function trackMatchesPlaylistId(track, tid) {
       if (normT && (normalizeFullTitle(tid) === normT || tid.includes(normT))) return true;
     }
   }
+
+  // Comprobar coincidencia con el catálogo de canciones de la cuenta en Drive
+  if (userAccount && userAccount.email && accountsDb && accountsDb[userAccount.email]) {
+    const acc = accountsDb[userAccount.email];
+    if (acc && Array.isArray(acc.drive_tracks)) {
+      const dt = acc.drive_tracks.find(d => d.id === tid || d.file_id === tid || ("gd_" + d.file_id) === tid);
+      if (dt && dt.title && track.title) {
+        if (normalizeFullTitle(cleanTrackTitle(dt.title)) === normalizeFullTitle(cleanTrackTitle(track.title))) {
+          return true;
+        }
+      }
+    }
+  }
+
   return false;
 }
 
@@ -2232,9 +2246,24 @@ function getPlaylistTracks(pl) {
 }
 
 function getTrackPlaylists(track) {
-  if (!track || !Array.isArray(playlists)) return [];
+  if (!track) return [];
+  // Asegurar que si hay cuenta activa en sesión, tomamos las playlists de la cuenta
+  let sourcePlaylists = playlists;
+  if (userAccount && userAccount.email && accountsDb && accountsDb[userAccount.email] && Array.isArray(accountsDb[userAccount.email].playlists)) {
+    sourcePlaylists = accountsDb[userAccount.email].playlists;
+    if (playlists !== sourcePlaylists && sourcePlaylists.length > 0) {
+      playlists = sourcePlaylists;
+    }
+  } else if (userAccount && Array.isArray(userAccount.playlists)) {
+    sourcePlaylists = userAccount.playlists;
+    if (playlists !== sourcePlaylists && sourcePlaylists.length > 0) {
+      playlists = sourcePlaylists;
+    }
+  }
+  if (!Array.isArray(sourcePlaylists)) return [];
+
   const res = [];
-  for (const pl of playlists) {
+  for (const pl of sourcePlaylists) {
     if (!pl || !Array.isArray(pl.trackIds)) continue;
     const isMember = pl.trackIds.some(tid => trackMatchesPlaylistId(track, tid));
     if (isMember) {
@@ -2970,14 +2999,11 @@ function renderTracks() {
     }
 
     const memberPlaylists = getTrackPlaylists(t);
-    const plBadgeHtml = memberPlaylists.length > 0
-      ? memberPlaylists.map(pl => `<span class="track-badge-pl" title="En playlist: ${escapeHtml(pl && pl.name ? pl.name : 'Playlist')}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl && pl.name ? pl.name : 'Playlist')}</span>`).join("")
-      : `<span class="track-badge-unassigned" title="Aún no añadida a ninguna playlist"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Sin playlist</span>`;
     const modeBadge = t.cloud ? (t.downloaded ? " • Guardada Offline ✔" : " • En línea ☁️") : "";
     const meta = document.createElement("div");
     meta.className = "track-meta";
     meta.innerHTML = `<div class="track-title">${escapeHtml(t.title || 'Canción')}</div>
-                      <div class="track-sub">${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.album || 'Música')}${modeBadge}${plBadgeHtml}</div>`;
+                      <div class="track-sub">${escapeHtml(t.artist || 'Artista')} • ${escapeHtml(t.album || 'Música')}${modeBadge}</div>`;
 
     div.appendChild(thumb);
     div.appendChild(meta);
@@ -3003,11 +3029,27 @@ function renderTracks() {
         div.appendChild(dlBtn);
       }
 
-      // Botón ＋ para agregar a Playlist individual
+      // Botón de Playlist: Si ya pertenece a una playlist, se muestra el badge interactivo con el nombre; si no, muestra el botón ＋
       const plBtn = document.createElement("button");
-      plBtn.className = "icon-action-btn";
-      plBtn.innerHTML = ICONS.plus || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
-      plBtn.title = "Añadir a Playlist";
+      if (memberPlaylists.length > 0) {
+        plBtn.className = "btn-track-playlist-badge";
+        const primaryPl = memberPlaylists[0];
+        const plName = (primaryPl && primaryPl.name) ? primaryPl.name : "Playlist";
+        const extraCount = memberPlaylists.length > 1 ? ` (+${memberPlaylists.length - 1})` : "";
+        const maxLen = 12;
+        const displayName = plName.length > maxLen ? plName.slice(0, 10) + "…" : plName;
+        plBtn.innerHTML = `
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="flex-shrink:0;">
+            <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+          </svg>
+          <span class="pl-badge-text">${escapeHtml(displayName)}${extraCount}</span>
+        `;
+        plBtn.title = `En playlist: ${escapeHtml(plName)}. Toca para cambiar o gestionar playlists.`;
+      } else {
+        plBtn.className = "icon-action-btn";
+        plBtn.innerHTML = ICONS.plus || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+        plBtn.title = "Añadir a Playlist";
+      }
       plBtn.onclick = (ev) => {
         ev.stopPropagation();
         openAddToPlaylistModal(t.id);
@@ -3295,8 +3337,17 @@ function renderDetailPlaylistTracks(query = "") {
         const pl = playlists.find(p => p.id === currentDetailPlaylistId);
         if (pl && pl.trackIds) {
           pl.trackIds = pl.trackIds.filter(tid => !trackMatchesPlaylistId(t, tid));
+          if (userAccount && userAccount.email) {
+            userAccount.playlists = playlists;
+            if (accountsDb[userAccount.email]) {
+              accountsDb[userAccount.email].playlists = playlists;
+              accountsDb[userAccount.email].updatedAt = Date.now();
+              accountsDb[userAccount.email].updated_at = Date.now();
+            }
+          }
           savePersistentState();
           renderHomePlaylists();
+          renderTracks();
           renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
           uploadPlaylistsToDrive();
           showToast(`Canción retirada de «${pl.name}»`);
@@ -3350,6 +3401,15 @@ function deleteTrackFromApp(track) {
         pl.trackIds = pl.trackIds.filter(tid => !trackMatchesPlaylistId(track, tid));
       }
     });
+  }
+
+  if (userAccount && userAccount.email) {
+    userAccount.playlists = playlists;
+    if (accountsDb[userAccount.email]) {
+      accountsDb[userAccount.email].playlists = playlists;
+      accountsDb[userAccount.email].updatedAt = Date.now();
+      accountsDb[userAccount.email].updated_at = Date.now();
+    }
   }
 
   savePersistentState();
@@ -3426,8 +3486,17 @@ function deleteCurrentDetailPlaylist() {
   const pl = playlists.find(p => p.id === currentDetailPlaylistId);
   const name = pl ? pl.name : "Playlist";
   playlists = playlists.filter(p => p.id !== currentDetailPlaylistId);
+  if (userAccount && userAccount.email) {
+    userAccount.playlists = playlists;
+    if (accountsDb[userAccount.email]) {
+      accountsDb[userAccount.email].playlists = playlists;
+      accountsDb[userAccount.email].updatedAt = Date.now();
+      accountsDb[userAccount.email].updated_at = Date.now();
+    }
+  }
   savePersistentState();
   renderHomePlaylists();
+  renderTracks();
   closePlaylistDetailModal();
   uploadPlaylistsToDrive();
   showToast(`🗑 Playlist «${name}» eliminada`);
@@ -3742,9 +3811,18 @@ function confirmMultiPickerAdd() {
   const curPl = playlists.find(p => p.id === selectedPlaylistId);
   if (!curPl) return;
   curPl.trackIds = Array.from(multiPickerSelectedIds);
+  if (userAccount && userAccount.email) {
+    userAccount.playlists = playlists;
+    if (accountsDb[userAccount.email]) {
+      accountsDb[userAccount.email].playlists = playlists;
+      accountsDb[userAccount.email].updatedAt = Date.now();
+      accountsDb[userAccount.email].updated_at = Date.now();
+    }
+  }
   savePersistentState();
   closeMultiTrackPickerModal();
   renderHomePlaylists();
+  renderTracks();
   uploadPlaylistsToDrive();
   showToast(`✔ Playlist «${curPl.name}» actualizada con ${curPl.trackIds.length} canciones`);
 }
@@ -3776,43 +3854,117 @@ function confirmCreatePlaylist() {
   pendingTrackIdForPlaylist = null;
   playlists.unshift(newPl);
   selectedPlaylistId = newPl.id;
+  if (userAccount && userAccount.email) {
+    userAccount.playlists = playlists;
+    if (accountsDb[userAccount.email]) {
+      accountsDb[userAccount.email].playlists = playlists;
+      accountsDb[userAccount.email].updatedAt = Date.now();
+      accountsDb[userAccount.email].updated_at = Date.now();
+    }
+  }
   savePersistentState();
   closeCreatePlaylistModal();
   renderHomePlaylists();
+  renderTracks();
   uploadPlaylistsToDrive();
   showToast(`✔ Playlist «${newPl.name}» creada`);
+}
+
+function syncPlaylistsToAccountAndDrive(toastMsg) {
+  pendingTrackIdForPlaylist = null;
+  if (userAccount && userAccount.email) {
+    userAccount.playlists = playlists;
+    if (accountsDb[userAccount.email]) {
+      accountsDb[userAccount.email].playlists = playlists;
+      accountsDb[userAccount.email].updatedAt = Date.now();
+      accountsDb[userAccount.email].updated_at = Date.now();
+    }
+  }
+  savePersistentState();
+  renderHomePlaylists();
+  renderTracks();
+  uploadPlaylistsToDrive();
+  closeAddToPlaylistModal();
+  exitMultiSelectMode();
+  if (toastMsg) showToast(toastMsg);
 }
 
 function openAddToPlaylistModal(trackIdsOrId) {
   const targetIds = Array.isArray(trackIdsOrId) ? trackIdsOrId : [trackIdsOrId];
   pendingTrackIdForPlaylist = targetIds;
   const count = targetIds.length;
-  document.getElementById("addTrackToPlSubtitle").textContent = count > 1 ? `Añadir las ${count} canciones seleccionadas a:` : "Selecciona la playlist:";
+  document.getElementById("addTrackToPlSubtitle").textContent = count > 1 ? `Gestionar playlists para ${count} canciones:` : "Añadir o quitar de playlist:";
   const container = document.getElementById("modalPlaylistChoices");
   container.innerHTML = "";
 
+  // Asegurar que tomamos las playlists vinculadas a la cuenta activa
+  if (userAccount && userAccount.email && accountsDb[userAccount.email] && Array.isArray(accountsDb[userAccount.email].playlists)) {
+    if (accountsDb[userAccount.email].playlists.length > 0) {
+      playlists = accountsDb[userAccount.email].playlists;
+    }
+  } else if (userAccount && Array.isArray(userAccount.playlists)) {
+    if (userAccount.playlists.length > 0) {
+      playlists = userAccount.playlists;
+    }
+  }
+
+  const targetTrack = count === 1 ? tracks.find(t => t.id === targetIds[0] || t.driveId === targetIds[0]) : null;
+
   playlists.forEach(pl => {
+    const isMember = targetTrack
+      ? pl.trackIds.some(tid => trackMatchesPlaylistId(targetTrack, tid))
+      : targetIds.every(id => pl.trackIds.includes(id));
+
     const btn = document.createElement("button");
-    btn.className = "btn-chip";
+    btn.className = "btn-chip" + (isMember ? " active" : "");
     btn.style.textAlign = "left";
-    btn.style.padding = "9px 12px";
-    btn.textContent = `🎵 ${pl.name} (${pl.trackIds.length})`;
-    btn.onclick = () => {
-      let addedCnt = 0;
-      targetIds.forEach(id => {
-        if (!pl.trackIds.includes(id)) {
-          pl.trackIds.push(id);
-          addedCnt++;
-        }
-      });
-      pendingTrackIdForPlaylist = null;
-      savePersistentState();
-      renderHomePlaylists();
-      uploadPlaylistsToDrive();
-      closeAddToPlaylistModal();
-      exitMultiSelectMode();
-      showToast(`✔ ${addedCnt} canciones añadidas a «${pl.name}»`);
-    };
+    btn.style.padding = "10px 14px";
+    btn.style.display = "flex";
+    btn.style.justifyContent = "space-between";
+    btn.style.alignItems = "center";
+    btn.style.width = "100%";
+    btn.style.marginBottom = "6px";
+
+    if (isMember) {
+      btn.innerHTML = `
+        <span style="display:flex; align-items:center; gap:8px;">
+          <span style="color:var(--green-bright); font-weight:800; font-size:14px;">✔</span>
+          <span style="font-weight:700;">${escapeHtml(pl.name)}</span>
+          <span style="font-size:10px; opacity:0.85; color:var(--green-bright);">(En esta playlist)</span>
+        </span>
+        <span style="font-size:11px; font-weight:600; color:#ef4444; padding:3px 7px; border-radius:6px; background:rgba(239, 68, 68, 0.12);">Quitar ✕</span>
+      `;
+      btn.onclick = () => {
+        pl.trackIds = pl.trackIds.filter(tid => {
+          if (targetTrack) return !trackMatchesPlaylistId(targetTrack, tid);
+          return !targetIds.includes(tid);
+        });
+        syncPlaylistsToAccountAndDrive(`Quitada de «${pl.name}»`);
+      };
+    } else {
+      btn.innerHTML = `
+        <span style="display:flex; align-items:center; gap:8px;">
+          <span style="color:var(--muted); font-weight:800; font-size:14px;">＋</span>
+          <span>${escapeHtml(pl.name)}</span>
+        </span>
+        <span style="font-size:11px; opacity:0.6;">${pl.trackIds.length} canciones</span>
+      `;
+      btn.onclick = () => {
+        let addedCnt = 0;
+        targetIds.forEach(id => {
+          const trk = tracks.find(x => x.id === id || (x.driveId && x.driveId === id) || (x.altId && x.altId === id));
+          const canonicalId = (trk && trk.driveId) ? trk.driveId : id;
+          if (!pl.trackIds.includes(canonicalId)) {
+            pl.trackIds.push(canonicalId);
+            addedCnt++;
+          }
+          if (trk && trk.id && !pl.trackIds.includes(trk.id)) {
+            pl.trackIds.push(trk.id);
+          }
+        });
+        syncPlaylistsToAccountAndDrive(`✔ Añadida a «${pl.name}»`);
+      };
+    }
     container.appendChild(btn);
   });
   document.getElementById("addToPlaylistModal").classList.add("open");
@@ -4064,6 +4216,9 @@ function applyAccountRecordToState(acc) {
       });
     }
   });
+  if (userAccount) {
+    userAccount.playlists = playlists;
+  }
   const likedArr = acc.likedIds || acc.liked_ids || [];
   if (Array.isArray(likedArr)) {
     tracks.forEach(t => { if (likedArr.includes(t.id)) t.liked = true; });

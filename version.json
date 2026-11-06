@@ -1,19 +1,19 @@
 {
-  "versionCode": 26,
-  "versionName": "2.10.1",
+  "versionCode": 27,
+  "versionName": "2.10.2",
   "releaseDate": "2026-11-06",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.10.1",
+    "version": "2.10.2",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Corrección de renderizado en botón de añadir a playlist (eliminado texto undefined)",
+    "Botón dinámico de playlist: muestra la playlist vinculada a la cuenta en lugar de +, con gestión instantánea",
+    "Gestión bidireccional en modal de playlists para añadir o quitar pistas con un toque",
+    "Sincronización continua de playlists con la cuenta de usuario y base de datos en Google Drive",
     "Detector y limpiador de descargas corruptas para restaurar canciones en modo nube",
-    "Recuperación automática de streaming si un archivo local descargado está dañado",
-    "Descarga atómica en móvil con validación de magic bytes y prevención de archivos corruptos desde Drive",
-    "Persistencia y reconciliación de badges de Playlist tras completar descargas locales"
+    "Corrección de renderizado en botón de añadir a playlist (eliminado texto undefined)"
   ]
 }
