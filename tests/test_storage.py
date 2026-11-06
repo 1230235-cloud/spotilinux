@@ -65,6 +65,85 @@ class TestLibraryStoreSqlite(unittest.TestCase):
             self.assertEqual(p_row[1], "Mi Lista")
             self.assertIn("test_t1", p_row[2])
 
+    def test_get_track_playlists_and_reconcile(self):
+        track = TrackMetadata(
+            id="gd_file123",
+            filepath="gdrive://file123/track.mp3",
+            title="Drive Track",
+            artist="Artist",
+            album="Album",
+            genre="Pop",
+            year="2026",
+            duration=200.0,
+            cover_path="",
+            dominant_color=(30, 215, 96),
+        )
+        self.store.tracks["gd_file123"] = track
+        pl = self.store.create_playlist("Favoritas Verano")
+        self.store.add_track_to_playlist(pl.id, "gd_file123")
+
+        # 1. Comprobar que get_track_playlists devuelva la playlist
+        pl_names = self.store.get_track_playlists(track)
+        self.assertIn("Favoritas Verano", pl_names)
+
+        # 2. Reconciliar a nuevo ID tras descarga local
+        new_track = TrackMetadata(
+            id="local_hash_456",
+            filepath=str(self.test_dir / "music_library" / "gd_file123__Drive Track.mp3"),
+            title="Drive Track",
+            artist="Artist",
+            album="Album",
+            genre="Pop",
+            year="2026",
+            duration=200.0,
+            cover_path="",
+            dominant_color=(30, 215, 96),
+        )
+        self.store.tracks["local_hash_456"] = new_track
+        del self.store.tracks["gd_file123"]
+        self.store.reconcile_playlist_track_ids("gd_file123", "local_hash_456")
+
+        self.assertIn("local_hash_456", pl.track_ids)
+        self.assertNotIn("gd_file123", pl.track_ids)
+        pl_names_after = self.store.get_track_playlists(new_track)
+        self.assertIn("Favoritas Verano", pl_names_after)
+
+    def test_delete_track_from_app_and_remove_from_playlist(self):
+        dummy_file = self.test_dir / "music_library" / "to_delete.mp3"
+        dummy_file.parent.mkdir(parents=True, exist_ok=True)
+        dummy_file.write_bytes(b"dummy audio data")
+
+        track = TrackMetadata(
+            id="del_123",
+            filepath=str(dummy_file),
+            title="To Delete",
+            artist="Artist",
+            album="Album",
+            genre="Pop",
+            year="2026",
+            duration=120.0,
+            cover_path="",
+            dominant_color=(30, 215, 96),
+        )
+        self.store.tracks["del_123"] = track
+        self.store.liked_ids.append("del_123")
+        pl = self.store.create_playlist("Lista Test")
+        self.store.add_track_to_playlist(pl.id, "del_123")
+
+        # Quitar de playlist
+        self.store.remove_track_from_playlist(pl.id, "del_123")
+        self.assertNotIn("del_123", pl.track_ids)
+
+        # Re-agregar y probar eliminación global de la app
+        self.store.add_track_to_playlist(pl.id, "del_123")
+        self.assertTrue(dummy_file.exists())
+        ok = self.store.delete_track_from_app("del_123", delete_local_file=True)
+        self.assertTrue(ok)
+        self.assertNotIn("del_123", self.store.tracks)
+        self.assertNotIn("del_123", self.store.liked_ids)
+        self.assertNotIn("del_123", pl.track_ids)
+        self.assertFalse(dummy_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
