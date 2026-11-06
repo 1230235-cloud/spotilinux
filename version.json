@@ -1,19 +1,19 @@
 {
-  "versionCode": 25,
-  "versionName": "2.10.0",
+  "versionCode": 26,
+  "versionName": "2.10.1",
   "releaseDate": "2026-11-06",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.10.0",
+    "version": "2.10.1",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
+    "Corrección de renderizado en botón de añadir a playlist (eliminado texto undefined)",
+    "Detector y limpiador de descargas corruptas para restaurar canciones en modo nube",
+    "Recuperación automática de streaming si un archivo local descargado está dañado",
     "Descarga atómica en móvil con validación de magic bytes y prevención de archivos corruptos desde Drive",
-    "Persistencia y reconciliación de badges de Playlist tras completar descargas locales",
-    "Opción para eliminar canciones de playlists específicas o de la aplicación completa",
-    "Nuevo botón de descarga circular estilo OLED Dark con animación de anillo de progreso",
-    "Iconos vectoriales SVG sin emojis y compatibilidad Xing/MJPEG en streams de audio"
+    "Persistencia y reconciliación de badges de Playlist tras completar descargas locales"
   ]
 }

@@ -319,7 +319,13 @@ public class MainActivity extends Activity {
         File[] files = folder.listFiles();
         if (files != null) {
             for (File f : files) {
-                if (f.isFile() && f.length() > 1024) {
+                if (f.isFile()) {
+                    if (f.length() < 1024 || !isValidAudioFile(f)) {
+                        if (f.getName().startsWith("gd_")) {
+                            try { f.delete(); } catch (Throwable ignored) {}
+                        }
+                        continue;
+                    }
                     String fname = f.getName();
                     String lower = fname.toLowerCase();
                     if (lower.endsWith(".mp3") || lower.endsWith(".flac") || lower.endsWith(".wav")
@@ -571,12 +577,76 @@ public class MainActivity extends Activity {
         public boolean deleteLocalTrackFile(String filePath) {
             try {
                 if (filePath == null || filePath.trim().isEmpty()) return false;
-                File f = new File(filePath);
+                String clean = filePath.trim();
+                if (clean.startsWith("file://")) {
+                    clean = clean.substring("file://".length());
+                }
+                File f = new File(clean);
                 if (f.exists() && f.isFile()) {
                     return f.delete();
                 }
             } catch (Throwable ignored) {}
             return false;
+        }
+
+        @JavascriptInterface
+        public boolean deleteDriveTrackFile(String driveId) {
+            if (driveId == null || driveId.trim().isEmpty()) return false;
+            try {
+                File folder = getAppMusicFolder();
+                File[] files = folder.listFiles();
+                if (files == null) return false;
+                boolean deleted = false;
+                String raw = driveId.trim();
+                for (File f : files) {
+                    if (f.isFile() && (f.getName().startsWith("gd_" + raw + "__") || f.getName().startsWith("gd_" + raw + "."))) {
+                        if (f.delete()) deleted = true;
+                    }
+                }
+                return deleted;
+            } catch (Throwable ignored) {}
+            return false;
+        }
+
+        @JavascriptInterface
+        public boolean isLocalAudioValid(String filePathOrDriveId) {
+            if (filePathOrDriveId == null || filePathOrDriveId.trim().isEmpty()) return false;
+            try {
+                String p = filePathOrDriveId.trim();
+                if (p.startsWith("file://")) p = p.substring("file://".length());
+                File f = new File(p);
+                if (f.exists() && f.isFile()) {
+                    return isValidAudioFile(f);
+                }
+                File folder = getAppMusicFolder();
+                File[] files = folder.listFiles();
+                if (files != null) {
+                    for (File file : files) {
+                        if (file.isFile() && (file.getName().startsWith("gd_" + p + "__") || file.getName().startsWith("gd_" + p + "."))) {
+                            return isValidAudioFile(file);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+            return false;
+        }
+
+        @JavascriptInterface
+        public int purgeCorruptedMediaFiles() {
+            int count = 0;
+            try {
+                File folder = getAppMusicFolder();
+                File[] files = folder.listFiles();
+                if (files == null) return 0;
+                for (File f : files) {
+                    if (f.isFile() && f.getName().startsWith("gd_")) {
+                        if (f.length() < 1024 || !isValidAudioFile(f)) {
+                            if (f.delete()) count++;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+            return count;
         }
 
         @JavascriptInterface
@@ -796,11 +866,15 @@ public class MainActivity extends Activity {
                         File[] existingFiles = folder.listFiles();
                         if (existingFiles != null) {
                             for (File ef : existingFiles) {
-                                if (ef.isFile() && ef.length() > 1024) {
+                                if (ef.isFile()) {
                                     String fn = ef.getName();
                                     boolean sameId = fn.startsWith("gd_" + fileId + "__") || fn.startsWith("gd_" + fileId + "_");
                                     boolean sameTitle = !targetNorm.isEmpty() && normalizeTrackKey(fn).equals(targetNorm);
                                     if (sameId || sameTitle) {
+                                        if (!isValidAudioFile(ef)) {
+                                            try { ef.delete(); } catch (Throwable ignored) {}
+                                            break;
+                                        }
                                         String escPath = ef.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
                                         String escId = fileId.replace("'", "\\'");
                                         String coverUrl = extractAndSaveCover(ef);

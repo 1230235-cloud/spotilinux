@@ -1221,7 +1221,9 @@ const ICONS = {
   likeOutline: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
   likeFilled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" stroke="#1ed760" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
   trash: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
-  playlistRemove: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="11" y2="18"/><line x1="16" y1="16" x2="22" y2="16"/></svg>`
+  playlistRemove: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="11" y2="18"/><line x1="16" y1="16" x2="22" y2="16"/></svg>`,
+  plus: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  download: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
 };
 
 function updateShuffleUI() {
@@ -1962,14 +1964,29 @@ window.onNativeMediaCommand = function(cmd) {
     playTrackIndex(currentIndex);
   } else if (cmd === "toggle") {
     togglePlay();
+  } else if (cmd === "playback_error") {
+    if (currentTrack && currentTrack.cloud && currentTrack.downloaded) {
+      showToast("⚠️ Descarga dañada. Restaurando a modo en línea...");
+      currentTrack.downloaded = false;
+      currentTrack.filePath = null;
+      if (currentTrack.driveId) {
+        currentTrack.src = `https://drive.usercontent.google.com/download?id=${currentTrack.driveId}&export=download&confirm=t`;
+      }
+      savePersistentState();
+      renderTracks();
+      updatePlayerUI();
+      setTimeout(() => {
+        executePlayTrack(currentTrack);
+      }, 300);
+    }
   }
 };
 
 /* ========================================================================= */
 /* CONTROL DE VERSIONES Y ACTUALIZACIONES AUTOMÁTICAS (OTA GITHUB)           */
 /* ========================================================================= */
-const CURRENT_APP_VERSION_CODE = 24;
-const CURRENT_APP_VERSION_NAME = "2.9.0";
+const CURRENT_APP_VERSION_CODE = 26;
+const CURRENT_APP_VERSION_NAME = "2.10.1";
 const GITHUB_VERSION_URL = "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/version.json";
 let pendingRemoteUpdate = null;
 
@@ -2724,7 +2741,7 @@ function renderFullPlayerPlaylist() {
 
     const memberPlaylists = getTrackPlaylists(t);
     const plBadgeHtml = memberPlaylists.length > 0
-      ? memberPlaylists.map(pl => `<span class="track-badge-pl"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl.name)}</span>`).join("")
+      ? memberPlaylists.map(pl => `<span class="track-badge-pl"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl && pl.name ? pl.name : 'Playlist')}</span>`).join("")
       : "";
 
     row.innerHTML = `
@@ -2954,7 +2971,7 @@ function renderTracks() {
 
     const memberPlaylists = getTrackPlaylists(t);
     const plBadgeHtml = memberPlaylists.length > 0
-      ? memberPlaylists.map(pl => `<span class="track-badge-pl" title="En playlist: ${escapeHtml(pl.name)}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl.name)}</span>`).join("")
+      ? memberPlaylists.map(pl => `<span class="track-badge-pl" title="En playlist: ${escapeHtml(pl && pl.name ? pl.name : 'Playlist')}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${escapeHtml(pl && pl.name ? pl.name : 'Playlist')}</span>`).join("")
       : `<span class="track-badge-unassigned" title="Aún no añadida a ninguna playlist"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Sin playlist</span>`;
     const modeBadge = t.cloud ? (t.downloaded ? " • Guardada Offline ✔" : " • En línea ☁️") : "";
     const meta = document.createElement("div");
@@ -2989,7 +3006,7 @@ function renderTracks() {
       // Botón ＋ para agregar a Playlist individual
       const plBtn = document.createElement("button");
       plBtn.className = "icon-action-btn";
-      plBtn.innerHTML = ICONS.plus;
+      plBtn.innerHTML = ICONS.plus || `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
       plBtn.title = "Añadir a Playlist";
       plBtn.onclick = (ev) => {
         ev.stopPropagation();
@@ -3307,10 +3324,18 @@ function deleteTrackFromApp(track) {
   }
 
   // Borrar archivo físico local si existe a través del bridge nativo
-  if (track.filePath && hasNativeAndroid && window.AndroidMedia.deleteLocalTrackFile) {
-    try {
-      window.AndroidMedia.deleteLocalTrackFile(track.filePath);
-    } catch (_e) {}
+  if (hasNativeAndroid && window.AndroidMedia) {
+    if (window.AndroidMedia.deleteLocalTrackFile) {
+      if (track.filePath) {
+        try { window.AndroidMedia.deleteLocalTrackFile(track.filePath); } catch (_e) {}
+      }
+      if (track.src && String(track.src).includes("/storage/")) {
+        try { window.AndroidMedia.deleteLocalTrackFile(track.src); } catch (_e) {}
+      }
+    }
+    if (track.driveId && window.AndroidMedia.deleteDriveTrackFile) {
+      try { window.AndroidMedia.deleteDriveTrackFile(track.driveId); } catch (_e) {}
+    }
   }
 
   // Quitar de tracks y masterTracksPool
@@ -3334,6 +3359,55 @@ function deleteTrackFromApp(track) {
   updatePlayerUI();
   showToast(`🗑️ Eliminada de la aplicación: «${name}»`);
 }
+
+function verifyAndHealDownloadedTracks(showFeedback = false) {
+  let healedCount = 0;
+  if (!Array.isArray(tracks)) return;
+
+  if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.purgeCorruptedMediaFiles) {
+    try {
+      window.AndroidMedia.purgeCorruptedMediaFiles();
+    } catch (_e) {}
+  }
+
+  tracks.forEach(t => {
+    if (t.cloud && t.downloaded) {
+      let isHealthy = true;
+      if (hasNativeAndroid && window.AndroidMedia && window.AndroidMedia.isLocalAudioValid) {
+        try {
+          const testPath = t.filePath || t.src || t.driveId;
+          isHealthy = window.AndroidMedia.isLocalAudioValid(testPath);
+        } catch (_e) {
+          isHealthy = true;
+        }
+      }
+      if (!isHealthy) {
+        t.downloaded = false;
+        t.filePath = null;
+        if (t.driveId) {
+          t.src = `https://drive.usercontent.google.com/download?id=${t.driveId}&export=download&confirm=t`;
+        }
+        healedCount++;
+      }
+    }
+  });
+
+  if (healedCount > 0) {
+    savePersistentState();
+    renderTracks();
+    renderHomePlaylists();
+    updatePlayerUI();
+  }
+
+  if (showFeedback) {
+    if (healedCount > 0) {
+      showToast(`✨ Se repararon ${healedCount} canciones corruptas. Ahora están listas en línea.`);
+    } else {
+      showToast("✅ Todas tus canciones descargadas están en perfecto estado.");
+    }
+  }
+}
+window.verifyAndHealDownloadedTracks = verifyAndHealDownloadedTracks;
 
 function playCurrentDetailPlaylist() {
   if (!currentDetailPlaylistId) return;
@@ -6037,6 +6111,7 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   try { loadPersistentState(); } catch(e){ console.error("Init loadPersistentState error:", e); }
+  try { verifyAndHealDownloadedTracks(false); } catch(e){ console.error("Init verifyAndHealDownloadedTracks error:", e); }
   try { initFullPlayer(); } catch(e){ console.error("Init initFullPlayer error:", e); }
   try { renderTracks(); } catch(e){ console.error("Init renderTracks error:", e); }
   try { renderHomePlaylists(); } catch(e){ console.error("Init renderHomePlaylists error:", e); }

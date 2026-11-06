@@ -204,6 +204,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
                 isPrepared = false;
                 isPlaying = false;
                 syncEverything();
+                MainActivity.dispatchMediaCommandToWeb("playback_error");
                 return true;
             }
         });
@@ -588,6 +589,7 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         } catch (Exception e) {
             isPlaying = false;
             syncEverything();
+            MainActivity.dispatchMediaCommandToWeb("playback_error");
         }
     }
 
