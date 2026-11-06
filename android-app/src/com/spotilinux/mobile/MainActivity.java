@@ -154,7 +154,54 @@ public class MainActivity extends Activity {
         });
 
         setContentView(webView);
+        cleanupCorruptedMediaCache();
         webView.loadUrl("file:///android_asset/www/index.html");
+    }
+
+    private void cleanupCorruptedMediaCache() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File folder = getAppMusicFolder();
+                    File[] files = folder.listFiles();
+                    if (files == null) return;
+                    for (File f : files) {
+                        if (f.isFile() && f.getName().startsWith("gd_")) {
+                            if (f.length() < 1024 || !isValidAudioFile(f)) {
+                                f.delete();
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }).start();
+    }
+
+    private static boolean isValidAudioFile(File file) {
+        if (file == null || !file.exists() || file.length() < 128) return false;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] header = new byte[16];
+            int read = fis.read(header);
+            if (read < 4) return false;
+            // Descartar respuestas HTML o JSON de Google Drive
+            if (header[0] == '<' || header[0] == '{') return false;
+            // ID3 tag
+            if (header[0] == 0x49 && header[1] == 0x44 && header[2] == 0x33) return true;
+            // MP3 sync frame (0xFF + high 3 bits set)
+            if ((header[0] & 0xFF) == 0xFF && (header[1] & 0xE0) == 0xE0) return true;
+            // Ogg (OggS)
+            if (header[0] == 0x4F && header[1] == 0x67 && header[2] == 0x67 && header[3] == 0x53) return true;
+            // FLAC (fLaC)
+            if (header[0] == 0x66 && header[1] == 0x4C && header[2] == 0x61 && header[3] == 0x43) return true;
+            // MP4/M4A (ftyp en offset 4)
+            if (read >= 8 && header[4] == 0x66 && header[5] == 0x74 && header[6] == 0x79 && header[7] == 0x70) return true;
+            // RIFF WAV
+            if (read >= 4 && header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46) return true;
+            return true;
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     private void requestNecessaryPermissions() {
@@ -1030,6 +1077,42 @@ public class MainActivity extends Activity {
         }
 
         private boolean downloadDriveMediaFile(String fileId, File outFile, String authToken, String apiKey) {
+            // 1. Priorizar descarga directa por API oficial v3 de Google Drive si tenemos authToken
+            if (authToken != null && !authToken.isEmpty()) {
+                try {
+                    String apiMediaUrl = "https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media&acknowledgeAbuse=true";
+                    HttpURLConnection conn = (HttpURLConnection) new URL(apiMediaUrl).openConnection();
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(45000);
+                    conn.setRequestProperty("Authorization", "Bearer " + authToken);
+                    int code = conn.getResponseCode();
+                    if (code == 200) {
+                        String cType = conn.getContentType();
+                        if (cType == null || !cType.toLowerCase().contains("text/html")) {
+                            File tmpFile = new File(outFile.getAbsolutePath() + ".part");
+                            try (InputStream in = conn.getInputStream();
+                                 FileOutputStream fos = new FileOutputStream(tmpFile)) {
+                                byte[] buffer = new byte[65536];
+                                int len;
+                                while ((len = in.read(buffer)) > 0) {
+                                    fos.write(buffer, 0, len);
+                                }
+                            }
+                            if (tmpFile.exists() && tmpFile.length() > 1024 && isValidAudioFile(tmpFile)) {
+                                if (outFile.exists()) outFile.delete();
+                                tmpFile.renameTo(outFile);
+                                conn.disconnect();
+                                return true;
+                            } else {
+                                tmpFile.delete();
+                            }
+                        }
+                    }
+                    conn.disconnect();
+                } catch (Exception ignored) {}
+            }
+
+            // 2. Fallback a URL pública / confirmación de antivirus con validación estricta de Magic Bytes
             String curUrl = "https://drive.usercontent.google.com/download?id=" + fileId + "&export=download&confirm=t";
             String cookieHeader = "";
 
@@ -1146,7 +1229,7 @@ public class MainActivity extends Activity {
                             }
                         }
 
-                        File tmpFile = new File(outFile.getAbsolutePath() + ".tmp");
+                        File tmpFile = new File(outFile.getAbsolutePath() + ".part");
                         try (InputStream in = conn.getInputStream();
                              FileOutputStream fos = new FileOutputStream(tmpFile)) {
                             byte[] buffer = new byte[65536];
@@ -1155,9 +1238,10 @@ public class MainActivity extends Activity {
                                 fos.write(buffer, 0, len);
                             }
                         }
-                        if (tmpFile.exists() && tmpFile.length() > 1024) {
+                        if (tmpFile.exists() && tmpFile.length() > 1024 && isValidAudioFile(tmpFile)) {
                             if (outFile.exists()) outFile.delete();
                             tmpFile.renameTo(outFile);
+                            conn.disconnect();
                             return true;
                         } else {
                             tmpFile.delete();
@@ -1167,34 +1251,6 @@ public class MainActivity extends Activity {
                 } catch (Exception ex) {
                     break;
                 }
-            }
-
-            if (authToken != null && !authToken.isEmpty()) {
-                try {
-                    String apiMediaUrl = "https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media";
-                    HttpURLConnection conn = (HttpURLConnection) new URL(apiMediaUrl).openConnection();
-                    conn.setConnectTimeout(15000);
-                    conn.setReadTimeout(45000);
-                    conn.setRequestProperty("Authorization", "Bearer " + authToken);
-                    if (conn.getResponseCode() == 200) {
-                        File tmpFile = new File(outFile.getAbsolutePath() + ".tmp");
-                        try (InputStream in = conn.getInputStream();
-                             FileOutputStream fos = new FileOutputStream(tmpFile)) {
-                            byte[] buffer = new byte[65536];
-                            int len;
-                            while ((len = in.read(buffer)) > 0) {
-                                fos.write(buffer, 0, len);
-                            }
-                        }
-                        if (tmpFile.exists() && tmpFile.length() > 1024) {
-                            if (outFile.exists()) outFile.delete();
-                            tmpFile.renameTo(outFile);
-                            return true;
-                        } else {
-                            tmpFile.delete();
-                        }
-                    }
-                } catch (Exception ignored) {}
             }
             return false;
         }
