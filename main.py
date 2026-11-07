@@ -49,6 +49,7 @@ from PyQt6.QtGui import (
     QLinearGradient,
     QPainter,
     QPainterPath,
+    QPen,
     QDesktopServices,
     QPixmap,
     QShortcut,
@@ -221,60 +222,61 @@ class CircularDownloadButton(QPushButton):
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        rect = self.rect()
-        w = rect.width()
-        h = rect.height()
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            rect = self.rect()
+            w = rect.width()
+            h = rect.height()
 
-        # 1. Fondo circular
-        bg_color = QColor("#22222b") if self._hovered else QColor("#18181f")
-        painter.setBrush(bg_color)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(1, 1, w - 2, h - 2)
+            # 1. Fondo circular
+            bg_color = QColor("#22222b") if self._hovered else QColor("#18181f")
+            painter.setBrush(bg_color)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(1, 1, w - 2, h - 2)
 
-        # 2. Borde o Anillo de progreso
-        inset = 3
-        arc_rect = QRectF(inset, inset, w - inset * 2, h - inset * 2)
+            # 2. Borde o Anillo de progreso
+            inset = 3
+            arc_rect = QRectF(inset, inset, w - inset * 2, h - inset * 2)
 
-        if self._state == "downloading":
-            # Guía de fondo gris tenue
-            guide_pen = QPen(QColor(255, 255, 255, 30), 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-            painter.setPen(guide_pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(arc_rect)
+            if self._state == "downloading":
+                # Guía de fondo gris tenue
+                guide_pen = QPen(QColor(255, 255, 255, 30), 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                painter.setPen(guide_pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawEllipse(arc_rect)
 
-            # Arco activo verde neón cerrándose de 0 a 360 grados
-            span_angle = -int(self._display_progress * 360 * 16)
-            arc_pen = QPen(QColor("#1ed760"), 2.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-            painter.setPen(arc_pen)
-            painter.drawArc(arc_rect, 90 * 16, span_angle)
+                # Arco activo verde neón cerrándose de 0 a 360 grados
+                span_angle = -int(self._display_progress * 360 * 16)
+                arc_pen = QPen(QColor("#1ed760"), 2.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                painter.setPen(arc_pen)
+                painter.drawArc(arc_rect, 90 * 16, span_angle)
 
-            # Icono central o texto de porcentaje
-            pct_text = f"{int(self._display_progress * 100)}%"
-            painter.setPen(QColor("#1ed760"))
-            font = QFont("Sans Serif", max(7, int(w * 0.25)), QFont.Weight.Bold)
-            painter.setFont(font)
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, pct_text)
-        elif self._state == "completed":
-            border_pen = QPen(QColor(30, 215, 96, 120), 2.0)
-            painter.setPen(border_pen)
-            painter.drawEllipse(arc_rect)
-            icon_pix = icons.get_pixmap("check", "#1ed760", int(w * 0.48))
-            px = int((w - icon_pix.width()) / 2)
-            py = int((h - icon_pix.height()) / 2)
-            painter.drawPixmap(px, py, icon_pix)
-        else:
-            border_col = QColor("#1ed760") if self._hovered else QColor(255, 255, 255, 25)
-            border_pen = QPen(border_col, 1.2)
-            painter.setPen(border_pen)
-            painter.drawEllipse(arc_rect)
-            icon_color = "#1ed760" if self._hovered else "#e4e4ec"
-            icon_pix = icons.get_pixmap("download", icon_color, int(w * 0.46))
-            px = int((w - icon_pix.width()) / 2)
-            py = int((h - icon_pix.height()) / 2)
-            painter.drawPixmap(px, py, icon_pix)
-
-        painter.end()
+                # Icono central o texto de porcentaje
+                pct_text = f"{int(self._display_progress * 100)}%"
+                painter.setPen(QColor("#1ed760"))
+                font = QFont("Sans Serif", max(7, int(w * 0.25)), QFont.Weight.Bold)
+                painter.setFont(font)
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, pct_text)
+            elif self._state == "completed":
+                border_pen = QPen(QColor(30, 215, 96, 120), 2.0)
+                painter.setPen(border_pen)
+                painter.drawEllipse(arc_rect)
+                icon_pix = icons.get_pixmap("check", "#1ed760", int(w * 0.48))
+                px = int((w - icon_pix.width()) / 2)
+                py = int((h - icon_pix.height()) / 2)
+                painter.drawPixmap(px, py, icon_pix)
+            else:
+                border_col = QColor("#1ed760") if self._hovered else QColor(255, 255, 255, 25)
+                border_pen = QPen(border_col, 1.2)
+                painter.setPen(border_pen)
+                painter.drawEllipse(arc_rect)
+                icon_color = "#1ed760" if self._hovered else "#e4e4ec"
+                icon_pix = icons.get_pixmap("download", icon_color, int(w * 0.46))
+                px = int((w - icon_pix.width()) / 2)
+                py = int((h - icon_pix.height()) / 2)
+                painter.drawPixmap(px, py, icon_pix)
+        finally:
+            painter.end()
 
 
 class HeroBannerWidget(QFrame):

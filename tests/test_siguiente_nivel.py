@@ -102,6 +102,23 @@ class TestSiguienteNivel(unittest.TestCase):
         vis.set_free_stage_mode(True)
         self.assertTrue(vis.free_stage_mode)
 
+    def test_circular_download_button_paint_does_not_crash(self):
+        """Verifica que CircularDownloadButton pinte correctamente sin excepciones ni dependencias no definidas (p. ej. QPen)."""
+        import os, sys
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtGui import QPixmap
+        from main import CircularDownloadButton
+
+        _ = QApplication.instance() or QApplication(sys.argv)
+        btn = CircularDownloadButton(size=34)
+        for state in ("idle", "downloading", "completed"):
+            btn.set_state(state)
+            btn.set_progress(45, 100)
+            pix = QPixmap(34, 34)
+            btn.render(pix)
+            self.assertFalse(pix.isNull())
+
     def test_resolve_imagenes_subfolder(self):
         """Verifica que resolve_imagenes_subfolder_id detecte carpetas de imágenes."""
         cfg = gdrive_sync.GoogleDriveConfig(folder_id="root_123")
