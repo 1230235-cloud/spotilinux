@@ -614,31 +614,8 @@ async function broadcastPlaybackSession(force = false) {
 }
 
 async function checkRemotePlaybackSession(isStartup = false) {
-  if (!crossDeviceSyncEnabled) return;
-  try {
-    const res = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
-    if (!res.ok) return;
-    const body = await res.json();
-    const data = body.data || body;
-    const remote = data.playback_session;
-    if (!remote || !remote.title || !remote.updatedAt) return;
-
-    // Si la sesión la emitió este mismo dispositivo, ignorar
-    if (remote.deviceId === myDeviceId) return;
-
-    // Verificar que sea reciente (últimas 12 horas) y más reciente que la última procesada
-    const now = Date.now();
-    if (now - remote.updatedAt > 12 * 3600 * 1000) return;
-    if (remote.updatedAt <= lastCheckedSessionUpdatedAt) return;
-    
-    // Si este dispositivo ya está reproduciendo música localmente, no interrumpir con el banner
-    if (isPlaying) return;
-
-    pendingRemoteSession = remote;
-    lastCheckedSessionUpdatedAt = remote.updatedAt;
-
-    showCrossDeviceBanner(remote);
-  } catch (_e) {}
+  // Unificado con sincronización temporal (30s trigger + 10min TTL en Drive)
+  return checkRemoteTempPlaybackSession();
 }
 
 function showCrossDeviceBanner(remote) {
@@ -715,28 +692,50 @@ function resumeRemoteSessionTrack() {
 /* FASE 4: SINCRONIZACIÓN TEMPORAL (30s TRIGGER + 10min TTL)                 */
 /* ========================================================================= */
 async function checkRemoteTempPlaybackSession() {
-  if (!navigator.onLine) return;
+  if (!navigator.onLine) {
+    dismissRemoteSessionBanner();
+    return;
+  }
   const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "";
   try {
     const url = `${DEFAULT_DRIVE_SERVER_URL}?action=get_temp_session&email=${encodeURIComponent(email)}`;
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return;
-    const session = await res.json();
-    if (!session || session.status === "not_found" || session.status === "expired") return;
-
-    const now = Date.now();
-    // Expiración estricta de 10 minutos
-    if (session.expiresAtMs && session.expiresAtMs < now) {
-      deleteTempPlaybackSession();
+    if (!res.ok) {
+      dismissRemoteSessionBanner();
+      pendingRemoteSession = null;
       return;
     }
-    // Si la sesión proviene de este mismo dispositivo o ya está reproduciendo, ignorar
-    if (session.deviceId === myDeviceId || isPlaying) return;
+    const session = await res.json();
+    // Si no hay canción guardada o el estado es not_found/expired, no mostrar ningún mensaje y ocultar el banner
+    if (!session || session.status === "not_found" || session.status === "expired" || !session.title) {
+      dismissRemoteSessionBanner();
+      pendingRemoteSession = null;
+      return;
+    }
+
+    const now = Date.now();
+    // Expiración estricta de 10 minutos (TTL 10min)
+    const isExpired = (session.expiresAtMs && session.expiresAtMs < now) ||
+                      (session.updatedAtMs && (now - session.updatedAtMs > 10 * 60 * 1000));
+    if (isExpired) {
+      deleteTempPlaybackSession();
+      dismissRemoteSessionBanner();
+      pendingRemoteSession = null;
+      return;
+    }
+    // Si la sesión proviene de este mismo dispositivo o ya está reproduciendo, ocultar banner silenciosamente
+    if (session.deviceId === myDeviceId || isPlaying) {
+      dismissRemoteSessionBanner();
+      return;
+    }
 
     pendingRemoteSession = session;
     lastCheckedSessionUpdatedAt = session.updatedAtMs || now;
     showCrossDeviceBanner(session);
-  } catch (_e) {}
+  } catch (_e) {
+    dismissRemoteSessionBanner();
+    pendingRemoteSession = null;
+  }
 }
 
 async function uploadTempPlaybackSession(track, currentSec) {
@@ -1240,14 +1239,12 @@ function loadPersistentState() {
 
   // Verificar sesión en otro dispositivo al iniciar (archivo temporal 30s + 10min TTL)
   setTimeout(() => {
-    checkRemotePlaybackSession(true);
     checkRemoteTempPlaybackSession();
   }, 1800);
   if (!crossDevicePollTimer) {
     crossDevicePollTimer = setInterval(() => {
-      checkRemotePlaybackSession(false);
       checkRemoteTempPlaybackSession();
-    }, 22000);
+    }, 20000);
   }
 }
 
