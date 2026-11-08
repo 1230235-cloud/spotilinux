@@ -3430,7 +3430,7 @@ function toggleMultiSelectMode() {
   const bar = document.getElementById("multiSelectBar");
   if (bar) bar.classList.toggle("show", isMultiSelectMode);
   updateMultiSelectBar();
-  renderTracks();
+  renderTracks(true);
 }
 
 function exitMultiSelectMode() {
@@ -3443,18 +3443,38 @@ function exitMultiSelectMode() {
   }
   const bar = document.getElementById("multiSelectBar");
   if (bar) bar.classList.remove("show");
-  renderTracks();
+  renderTracks(true);
 }
 
 function toggleTrackSelection(id, ev) {
-  if (ev) ev.stopPropagation();
+  if (ev) {
+    try { ev.stopPropagation(); } catch(e){}
+  }
   if (selectedTrackIds.has(id)) {
     selectedTrackIds.delete(id);
   } else {
     selectedTrackIds.add(id);
   }
   updateMultiSelectBar();
-  renderTracks();
+
+  // Actualización directa del DOM inmediata (sin latencia de re-renderizado completo)
+  const isSelected = selectedTrackIds.has(id);
+  const allRows = document.getElementsByClassName("track-item");
+  let updatedCount = 0;
+  for (let i = 0; i < allRows.length; i++) {
+    if (allRows[i].getAttribute("data-track-id") === id) {
+      allRows[i].classList.toggle("selected", isSelected);
+      const cb = allRows[i].querySelector(".track-checkbox");
+      if (cb) {
+        cb.classList.toggle("checked", isSelected);
+        cb.textContent = isSelected ? "✓" : "";
+      }
+      updatedCount++;
+    }
+  }
+  if (updatedCount === 0) {
+    renderTracks(true);
+  }
 }
 
 function selectAllVisibleTracks() {
@@ -3465,7 +3485,7 @@ function selectAllVisibleTracks() {
     filtered.forEach(t => selectedTrackIds.add(t.id));
   }
   updateMultiSelectBar();
-  renderTracks();
+  renderTracks(true);
 }
 
 function updateMultiSelectBar() {
@@ -3493,7 +3513,7 @@ function startMultiSelectWithTrack(trackId) {
   const bar = document.getElementById("multiSelectBar");
   if (bar) bar.classList.add("show");
   updateMultiSelectBar();
-  renderTracks();
+  renderTracks(true);
 }
 
 /* ---------------- GESTIÓN DE CANCIONES OCULTAS EN LA CUENTA ---------------- */
@@ -4093,7 +4113,8 @@ function renderTracks(forceRebuild = false) {
   }
 
   const filtered = getFilteredTracks();
-  const currentKey = `${playlistCacheVersion}_${filtered.length}_${activeFilter}_${searchQ}_${isMultiSelectMode}`;
+  const selectionFingerprint = isMultiSelectMode ? `${selectedTrackIds.size}_${Array.from(selectedTrackIds).slice(0, 8).join(",")}` : "0";
+  const currentKey = `${playlistCacheVersion}_${filtered.length}_${activeFilter}_${searchQ}_${isMultiSelectMode}_${selectionFingerprint}`;
 
   if (!forceRebuild && lastRenderedTracksCacheKey === currentKey && listEl.children.length > 0) {
     // La lista ya está en pantalla con los datos exactos: no tocar el DOM para transiciones instantáneas a 60 FPS
