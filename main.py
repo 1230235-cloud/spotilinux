@@ -3366,12 +3366,24 @@ class SpotiLinuxWindow(QMainWindow):
             )
         )
         for pid, pl in self.store.playlists.items():
-            first_tid = pl.track_ids[0] if pl.track_ids else None
-            cov = (
-                make_rounded_pixmap(self.store.tracks[first_tid].cover_path, 56, 6)
-                if first_tid and first_tid in self.store.tracks
-                else make_liked_cover_pixmap(56, 6)
-            )
+            pl_cov_path = getattr(pl, "cover_path", "")
+            if not pl_cov_path or not Path(pl_cov_path).exists():
+                from gdrive_sync import get_random_drive_cover_path
+                rnd = get_random_drive_cover_path(self.store.covers_dir)
+                if rnd:
+                    pl.cover_path = rnd
+                    pl_cov_path = rnd
+                    self.store.save()
+
+            if pl_cov_path and Path(pl_cov_path).exists():
+                cov = make_rounded_pixmap(pl_cov_path, 56, 6)
+            else:
+                first_tid = pl.track_ids[0] if pl.track_ids else None
+                cov = (
+                    make_rounded_pixmap(self.store.tracks[first_tid].cover_path, 56, 6)
+                    if first_tid and first_tid in self.store.tracks and Path(self.store.tracks[first_tid].cover_path).exists()
+                    else make_liked_cover_pixmap(56, 6, symbol="🎵")
+                )
             cards_data.append((pl.name, f"Playlist • {len(pl.track_ids)} pistas", cov, f"playlist:{pid}"))
 
         idx = 0
@@ -3725,6 +3737,27 @@ class SpotiLinuxWindow(QMainWindow):
         elif self.current_view == "gdrive":
             banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="☁️", colors=((15, 95, 195), (29, 185, 84), (110, 245, 210)))
             banner_rgb = (22, 105, 148)
+        elif self.current_view.startswith("playlist:"):
+            pid = self.current_view.split(":", 1)[1]
+            pl = self.store.playlists.get(pid)
+            pl_cov = getattr(pl, "cover_path", "") if pl else ""
+            if pl and (not pl_cov or not Path(pl_cov).exists()):
+                from gdrive_sync import get_random_drive_cover_path
+                rnd = get_random_drive_cover_path(self.store.covers_dir)
+                if rnd:
+                    pl.cover_path = rnd
+                    pl_cov = rnd
+                    self.store.save()
+
+            if pl_cov and Path(pl_cov).exists():
+                banner_pix = make_rounded_pixmap(pl_cov, 138, radius=10)
+                banner_rgb = (30, 215, 96)
+            elif tracks and Path(tracks[0].cover_path).exists():
+                banner_pix = make_rounded_pixmap(tracks[0].cover_path, 138, radius=10)
+                banner_rgb = tracks[0].dominant_color
+            else:
+                banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="🎵")
+                banner_rgb = (30, 215, 96)
         elif tracks:
             banner_pix = make_rounded_pixmap(tracks[0].cover_path, 138, radius=10)
             banner_rgb = tracks[0].dominant_color
@@ -3776,7 +3809,8 @@ class SpotiLinuxWindow(QMainWindow):
                     pname = parts[2] if len(parts) > 2 else ""
                     pcount = parts[3] if len(parts) > 3 else ""
 
-                    h_item0 = QTableWidgetItem("📁")
+                    h_item0 = QTableWidgetItem()
+                    h_item0.setIcon(icons.get_icon("music", "#1ED760", 14))
                     h_item0.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                     h_item0.setBackground(QColor("#181822"))
                     h_item0.setForeground(QColor("#1ED760"))
@@ -3784,7 +3818,7 @@ class SpotiLinuxWindow(QMainWindow):
                     h_item0.setData(Qt.ItemDataRole.UserRole, f"header:{pid}")
                     self.track_table.setItem(row, 0, h_item0)
 
-                    h_item1 = QTableWidgetItem(f"PLAYLIST: {pname.upper()}  •  {pcount} canciones")
+                    h_item1 = QTableWidgetItem(f"{pname.upper()}  •  {pcount} canciones")
                     f_h = h_item1.font()
                     f_h.setBold(True)
                     f_h.setPointSize(11)

@@ -115,10 +115,29 @@ const DEFAULT_DRIVE_MAOMAO_IMAGES = [
 let drivePlaylistImages = DEFAULT_DRIVE_MAOMAO_IMAGES.map(f => ({
   id: f.id,
   name: f.name,
-  url: `https://drive.usercontent.google.com/download?id=${f.id}&export=download&confirm=t`,
+  url: `assets/covers/maomao/${f.id}.jpg`,
+  fallbackUrl: `https://lh3.googleusercontent.com/d/${f.id}=w600`,
   driveId: f.id
 }));
 let pendingCoverTargetPlaylistId = null;
+
+function getPlaylistCoverUrl(pl) {
+  if (!pl) return "assets/covers/default.png";
+  if (pl.coverDriveId) {
+    return `assets/covers/maomao/${pl.coverDriveId}.jpg`;
+  }
+  if (pl.coverUrl) {
+    if (pl.coverUrl.includes("id=")) {
+      const m = pl.coverUrl.match(/id=([a-zA-Z0-9_-]+)/);
+      if (m && m[1]) return `assets/covers/maomao/${m[1]}.jpg`;
+    }
+    return pl.coverUrl;
+  }
+  const rnd = DEFAULT_DRIVE_MAOMAO_IMAGES[Math.floor(Math.random() * DEFAULT_DRIVE_MAOMAO_IMAGES.length)];
+  pl.coverDriveId = rnd.id;
+  pl.coverUrl = `assets/covers/maomao/${rnd.id}.jpg`;
+  return pl.coverUrl;
+}
 
 // Filtro dentro de playlists
 let playlistFilterConfig = {
@@ -954,15 +973,16 @@ function handlePlaylistCoverFilePicked(event) {
 function updatePlaylistDetailCoverUI(pl) {
   const coverEl = document.getElementById("plDetailCover");
   if (!coverEl) return;
-  if (pl && pl.coverUrl) {
-    coverEl.style.backgroundImage = `url("${pl.coverUrl}")`;
+  const covUrl = getPlaylistCoverUrl(pl);
+  if (covUrl) {
+    coverEl.style.backgroundImage = `url("${covUrl}")`;
     coverEl.style.backgroundSize = "cover";
     coverEl.style.backgroundPosition = "center";
     coverEl.innerHTML = "";
   } else {
     coverEl.style.backgroundImage = "none";
     coverEl.style.background = "linear-gradient(135deg, #1db954, #121218)";
-    coverEl.innerHTML = `🎵`;
+    coverEl.innerHTML = `<span style="color:#fff; font-size:20px;">🎵</span>`;
   }
 }
 
@@ -3596,7 +3616,9 @@ function renderTracks(forceRebuild = false) {
       const downloadedCount = plTracks.filter(t => t.downloaded).length;
       grpHeader.innerHTML = `
         <div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
-          <div style="font-size:20px;">📁</div>
+          <div style="color:var(--green-bright); display:flex; align-items:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          </div>
           <div style="min-width:0;">
             <div class="pl-section-group-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(pl.name)}</div>
             <div class="pl-section-group-sub">${downloadedCount} descargadas • ${plTracks.length} canciones</div>
@@ -3734,38 +3756,32 @@ function renderHomePlaylists() {
   `;
   grid.appendChild(cloudCard);
 
-  // 3. Playlists del usuario separadas por Locales vs Nube
+  // 3. Playlists del usuario
   const localPls = playlists.filter(p => !p.isCloud);
   const cloudPls = playlists.filter(p => p.isCloud);
 
-  if (localPls.length > 0) {
-    const localSecHeader = document.createElement("div");
-    localSecHeader.style.cssText = "grid-column: 1 / -1; margin-top: 10px; margin-bottom: 2px; font-size: 13px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px;";
-    localSecHeader.innerHTML = `<span>🎵</span> <span>Mis Playlists Locales</span>`;
-    grid.appendChild(localSecHeader);
-
-    localPls.forEach(pl => {
-      const card = document.createElement("div");
-      card.className = "playlist-card";
-      const plTracks = getPlaylistTracks(pl);
-      card.onclick = () => openPlaylistDetailModal(pl.id);
-      const coverHtml = pl.coverUrl
-        ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${pl.coverUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'" /></div>`
-        : `<div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          </div>`;
-      card.innerHTML = `
-        ${coverHtml}
-        <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
-        <div class="playlist-card-sub">${plTracks.length} canciones</div>
-        <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
-          ${ICONS.shuffle}
-        </button>
-        <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</div>
-      `;
-      grid.appendChild(card);
-    });
-  }
+  localPls.forEach(pl => {
+    const card = document.createElement("div");
+    card.className = "playlist-card";
+    const plTracks = getPlaylistTracks(pl);
+    card.onclick = () => openPlaylistDetailModal(pl.id);
+    const cov = getPlaylistCoverUrl(pl);
+    const coverHtml = cov
+      ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${cov}" style="width:100%; height:100%; object-fit:cover;" /></div>`
+      : `<div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>`;
+    card.innerHTML = `
+      ${coverHtml}
+      <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
+      <div class="playlist-card-sub">${plTracks.length} canciones</div>
+      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
+        ${ICONS.shuffle}
+      </button>
+      <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</div>
+    `;
+    grid.appendChild(card);
+  });
 
   if (cloudPls.length > 0) {
     const cloudSecHeader = document.createElement("div");
@@ -3779,8 +3795,9 @@ function renderHomePlaylists() {
       card.style.border = "1px solid rgba(30, 215, 96, 0.28)";
       const plTracks = getPlaylistTracks(pl);
       card.onclick = () => openPlaylistDetailModal(pl.id);
-      const coverHtml = pl.coverUrl
-        ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${pl.coverUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'" /></div>`
+      const cov = getPlaylistCoverUrl(pl);
+      const coverHtml = cov
+        ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${cov}" style="width:100%; height:100%; object-fit:cover;" /></div>`
         : `<div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
           </div>`;
@@ -6121,10 +6138,10 @@ function renderSongsPlaylistsMenuBar() {
   if (!row) return;
   row.innerHTML = "";
 
-  // 1. Píldora "Todas Separadas"
+  // 1. Píldora "Todas las Playlists"
   const allBtn = document.createElement("button");
   allBtn.className = "pl-dark-pill-sm" + (activeFilter === "playlists_section" ? " active" : "");
-  allBtn.textContent = "🗂 Todas Separadas";
+  allBtn.textContent = "Todas las Playlists";
   allBtn.onclick = () => setFilter("playlists_section");
   row.appendChild(allBtn);
 
@@ -6134,7 +6151,7 @@ function renderSongsPlaylistsMenuBar() {
     const dlCount = plTracks.filter(t => t.downloaded).length;
     const btn = document.createElement("button");
     btn.className = "pl-dark-pill-sm" + (activeFilter === `pl:${pl.id}` ? " active" : "");
-    btn.textContent = `🎵 ${pl.name} (${dlCount}/${plTracks.length})`;
+    btn.textContent = `${pl.isCloud ? "☁️ " : "🎵 "}${pl.name} (${dlCount}/${plTracks.length})`;
     btn.onclick = () => setFilter(`pl:${pl.id}`);
     row.appendChild(btn);
   });
