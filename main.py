@@ -32,7 +32,7 @@ if "QT_AUDIO_BACKEND" not in os.environ:
 
 import doctor
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME
-from download_queue import DownloadQueue, QueueRunner
+from download_queue import DownloadQueue, QueueRunner, parse_playlist_txt
 from download_queue_ui import DownloadQueuePanel, QueueSignals
 from vinyl_view import VinylStandbyOverlay
 import icons
@@ -1639,6 +1639,36 @@ class YouTubeBatchDownloadDialog(QDialog):
         header.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
         layout.addWidget(header)
 
+        # Destino de Playlist opcional o auto-nombrada desde .txt
+        pl_row = QHBoxLayout()
+        lbl_pl = QLabel("Playlist:")
+        lbl_pl.setStyleSheet("color: #E4E4E7; font-size: 12px; font-weight: 700;")
+        self.txt_playlist_name = QLineEdit()
+        self.txt_playlist_name.setPlaceholderText("Nombre de Playlist a crear (opcional o auto de .txt)")
+        self.txt_playlist_name.setStyleSheet("""
+            QLineEdit {
+                background-color: #18181B;
+                color: #FAFAFA;
+                border: 1px solid #3F3F46;
+                border-radius: 9999px;
+                padding: 6px 14px;
+                font-size: 12px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #10B981;
+            }
+        """)
+
+        self.btn_load_txt = QPushButton("📂 Cargar .txt")
+        self.btn_load_txt.setObjectName("BtnCancel")
+        self.btn_load_txt.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_load_txt.clicked.connect(self._load_txt_file)
+
+        pl_row.addWidget(lbl_pl)
+        pl_row.addWidget(self.txt_playlist_name, stretch=1)
+        pl_row.addWidget(self.btn_load_txt)
+        layout.addLayout(pl_row)
+
         hint = QLabel("Escribe o pega una o varias canciones (una por línea o enlace directo de YouTube):")
         hint.setStyleSheet("color: #A1A1AA; font-size: 12px;")
         layout.addWidget(hint)
@@ -1676,9 +1706,30 @@ class YouTubeBatchDownloadDialog(QDialog):
 
         layout.addLayout(btns_row)
 
+    def _load_txt_file(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar lista de canciones (.txt)",
+            "",
+            "Archivos de texto (*.txt);;Todos los archivos (*)",
+        )
+        if not file_path:
+            return
+        try:
+            content = Path(file_path).read_text(encoding="utf-8")
+            stem = Path(file_path).stem.replace("_", " ").strip()
+            if not self.txt_playlist_name.text().strip() and stem:
+                self.txt_playlist_name.setText(stem.title())
+            self.txt_list.setPlainText(content)
+        except Exception as exc:
+            QMessageBox.warning(self, "Error al leer archivo", f"No se pudo cargar el archivo:\n{exc}")
+
     def get_queries(self) -> list[str]:
         raw = self.txt_list.toPlainText()
         return [line.strip() for line in raw.splitlines() if line.strip() and not line.strip().startswith("#")]
+
+    def get_target_playlist(self) -> str:
+        return self.txt_playlist_name.text().strip()
 
     def should_keep_local(self) -> bool:
         return self.chk_local.isChecked()
@@ -1760,12 +1811,14 @@ class SpotiLinuxWindow(QMainWindow):
         self._library_rescan_timer.setInterval(2000)
         self._library_rescan_timer.timeout.connect(self.rescan_local_library)
         self.queue_signals.summary_changed.connect(self._update_download_badge)
+        self.queue_signals.item_completed_for_playlist.connect(self._on_queue_item_completed)
         self.queue_runner.start()
 
         # Estado de navegación actual
         self.current_view: str = "home"  # "home" | "library" | "gdrive" | "liked" | "recent" | "playlist:<id>"
         self.active_genre_filter: str = "Todo"
         self.displayed_tracks: list[TrackMetadata] = []
+        self.table_row_tracks: list[Optional[TrackMetadata]] = []
         self._seeking_slider: bool = False
         self._muted: bool = False
         self._pre_mute_volume: int = self.store.volume
@@ -1960,6 +2013,12 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_nav_library.setIconSize(QSize(18, 18))
         self.btn_nav_library.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        self.btn_nav_playlists = QPushButton("  Playlists")
+        self.btn_nav_playlists.setObjectName("NavButton")
+        self.btn_nav_playlists.setIcon(icons.get_icon("playlist", "#a0a0ab", 18))
+        self.btn_nav_playlists.setIconSize(QSize(18, 18))
+        self.btn_nav_playlists.setCursor(Qt.CursorShape.PointingHandCursor)
+
         self.btn_nav_gdrive = QPushButton("  Mi Google Drive")
         self.btn_nav_gdrive.setObjectName("NavButton")
         self.btn_nav_gdrive.setIcon(icons.get_icon("cloud", "#a0a0ab", 18))
@@ -1978,7 +2037,7 @@ class SpotiLinuxWindow(QMainWindow):
         self.btn_nav_recent.setIconSize(QSize(18, 18))
         self.btn_nav_recent.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        for b in (self.btn_nav_home, self.btn_nav_library, self.btn_nav_gdrive, self.btn_nav_liked, self.btn_nav_recent):
+        for b in (self.btn_nav_home, self.btn_nav_library, self.btn_nav_playlists, self.btn_nav_gdrive, self.btn_nav_liked, self.btn_nav_recent):
             nav_lay.addWidget(b)
 
         left_col.addWidget(nav_card)
@@ -2077,6 +2136,12 @@ class SpotiLinuxWindow(QMainWindow):
         self.search_input.setMinimumWidth(200)
         top_bar.addWidget(self.search_input, stretch=1)
 
+        self.btn_view_playlists_tab = QPushButton("🎵 Playlists")
+        self.btn_view_playlists_tab.setObjectName("ActionChipButton")
+        self.btn_view_playlists_tab.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_view_playlists_tab.clicked.connect(lambda: self.switch_view("playlists_hub"))
+        top_bar.addWidget(self.btn_view_playlists_tab)
+
         self.genre_buttons: dict[str, QPushButton] = {}
         for g_label in ("Todo", "Cloud", "Synthwave", "Lo-Fi", "House", "Electro"):
             btn = QPushButton(g_label)
@@ -2095,6 +2160,49 @@ class SpotiLinuxWindow(QMainWindow):
 
         self.hero_banner = HeroBannerWidget()
         center_lay.addWidget(self.hero_banner)
+
+        # Sub-barra interactiva de Playlists (visible en playlists_hub y playlist:*)
+        self.playlists_menu_bar = QFrame()
+        self.playlists_menu_bar.setObjectName("PlaylistsMenuBar")
+        self.playlists_menu_bar.setStyleSheet("""
+            QFrame#PlaylistsMenuBar {
+                background: #121218;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 14px;
+            }
+        """)
+        pl_menu_lay = QHBoxLayout(self.playlists_menu_bar)
+        pl_menu_lay.setContentsMargins(10, 6, 10, 6)
+        pl_menu_lay.setSpacing(8)
+
+        lbl_menu_title = QLabel("🎵 MENÚ DE PLAYLISTS:")
+        lbl_menu_title.setStyleSheet("color: #1ED760; font-size: 11px; font-weight: 800; letter-spacing: 0.8px;")
+        pl_menu_lay.addWidget(lbl_menu_title)
+
+        self.playlists_scroll_area = QScrollArea()
+        self.playlists_scroll_area.setFixedHeight(36)
+        self.playlists_scroll_area.setWidgetResizable(True)
+        self.playlists_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.playlists_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.playlists_scroll_area.setStyleSheet("background: transparent; border: none;")
+
+        self.playlists_pills_container = QWidget()
+        self.playlists_pills_container.setStyleSheet("background: transparent;")
+        self.playlists_pills_layout = QHBoxLayout(self.playlists_pills_container)
+        self.playlists_pills_layout.setContentsMargins(0, 0, 0, 0)
+        self.playlists_pills_layout.setSpacing(6)
+        self.playlists_scroll_area.setWidget(self.playlists_pills_container)
+        pl_menu_lay.addWidget(self.playlists_scroll_area, stretch=1)
+
+        self.btn_import_txt_to_pl = QPushButton("📥 Subir .txt → Crear Playlist")
+        self.btn_import_txt_to_pl.setObjectName("ActionChipButton")
+        self.btn_import_txt_to_pl.setProperty("active", "true")
+        self.btn_import_txt_to_pl.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_import_txt_to_pl.clicked.connect(self._import_txt_to_playlist_dialog)
+        pl_menu_lay.addWidget(self.btn_import_txt_to_pl)
+
+        self.playlists_menu_bar.setVisible(False)
+        center_lay.addWidget(self.playlists_menu_bar)
 
         self.quick_scroll = QScrollArea()
         self.quick_scroll.setObjectName("HomeScroll")
@@ -2445,9 +2553,12 @@ class SpotiLinuxWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self.btn_nav_home.clicked.connect(lambda: self.switch_view("home"))
         self.btn_nav_library.clicked.connect(lambda: self.switch_view("library"))
+        self.btn_nav_playlists.clicked.connect(lambda: self.switch_view("playlists_hub"))
         self.btn_nav_gdrive.clicked.connect(lambda: self.switch_view("gdrive"))
         self.btn_nav_liked.clicked.connect(lambda: self.switch_view("liked"))
         self.btn_nav_recent.clicked.connect(lambda: self.switch_view("recent"))
+        if hasattr(self, "btn_view_playlists_tab") and self.btn_view_playlists_tab:
+            self.btn_view_playlists_tab.clicked.connect(lambda: self.switch_view("playlists_hub"))
 
         self.btn_new_playlist.clicked.connect(self.create_playlist_dialog)
         self.playlist_list.itemClicked.connect(self._on_playlist_item_clicked)
@@ -2706,10 +2817,141 @@ class SpotiLinuxWindow(QMainWindow):
     def _on_queue_runner_event(self, event: dict) -> None:
         ev_type = event.get("type")
         if ev_type == "item_done":
+            self.queue_signals.item_completed_for_playlist.emit(
+                int(event.get("item_id", 0)),
+                str(event.get("query", "")),
+                str(event.get("target_playlist", "")),
+                dict(event.get("result") or {}),
+            )
             self.queue_signals.summary_changed.emit()
             self._library_rescan_timer.start()
         elif ev_type in ("item_started", "item_error", "item_cancelled", "summary_changed", "state_changed"):
             self.queue_signals.summary_changed.emit()
+
+    def _on_queue_item_completed(self, item_id: int, query: str, target_playlist: str, result: dict) -> None:
+        """Asocia la canción descargada a su playlist destino en el hilo principal de Qt."""
+        if not target_playlist:
+            return
+        audio_file = result.get("audio_file")
+        title = result.get("title", "")
+        track = None
+        if audio_file:
+            full_path = self.store.music_library_dir / audio_file
+            if full_path.exists():
+                track = self.store.import_file(full_path, save_immediately=False)
+        if not track:
+            track = self.store.find_track_by_query_or_filename(
+                audio_filename=audio_file or "",
+                title=title,
+                query=query,
+            )
+        if track:
+            pl = self.store.get_or_create_playlist_by_name(
+                target_playlist,
+                description="Playlist generada desde cola de descargas",
+            )
+            self.store.add_track_to_playlist(pl.id, track.id)
+            self.store.save()
+            if hasattr(self, "_sync_playlists_to_cloud"):
+                try:
+                    self._sync_playlists_to_cloud(notify=False)
+                except Exception:
+                    pass
+            self._refresh_playlist_sidebar()
+            self._rebuild_playlists_menu_bar()
+            if self.current_view in ("playlists_hub", f"playlist:{pl.id}"):
+                self._refresh_track_table()
+
+    def _rebuild_playlists_menu_bar(self) -> None:
+        """Reconstruye las píldoras interactivas de playlists en la sub-barra superior."""
+        if not hasattr(self, "playlists_pills_layout") or not self.playlists_pills_layout:
+            return
+        while self.playlists_pills_layout.count():
+            item = self.playlists_pills_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        btn_all = QPushButton("🗂 Todas las Playlists")
+        btn_all.setObjectName("ActionChipButton")
+        btn_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_all.setProperty("active", "true" if self.current_view == "playlists_hub" else "false")
+        btn_all.clicked.connect(lambda: self.switch_view("playlists_hub"))
+        self.playlists_pills_layout.addWidget(btn_all)
+
+        for pid, pl in self.store.playlists.items():
+            count = len(pl.track_ids)
+            btn_pl = QPushButton(f"🎵 {pl.name} ({count})")
+            btn_pl.setObjectName("ActionChipButton")
+            btn_pl.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_pl.setProperty("active", "true" if self.current_view == f"playlist:{pid}" else "false")
+            btn_pl.clicked.connect(lambda _checked, p=pid: self.switch_view(f"playlist:{p}"))
+            self.playlists_pills_layout.addWidget(btn_pl)
+
+        self.playlists_pills_layout.addStretch()
+
+    def _import_txt_to_playlist_dialog(self) -> None:
+        """Permite subir un archivo .txt directamente desde el menú de Playlists para encolar y auto-crearla."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar lista de canciones (.txt) para Playlist",
+            "",
+            "Archivos de texto (*.txt);;Todos los archivos (*)",
+        )
+        if not file_path:
+            return
+        try:
+            content = Path(file_path).read_text(encoding="utf-8")
+        except Exception as exc:
+            QMessageBox.warning(self, "Error al leer archivo", f"No se pudo leer el archivo:\n{exc}")
+            return
+
+        stem = Path(file_path).stem.replace("_", " ").strip().title()
+        entries = parse_playlist_txt(content, default_playlist_name=stem)
+        if not entries:
+            QMessageBox.information(self, "Archivo vacío", "El archivo no contiene canciones válidas.")
+            return
+
+        total_added = 0
+        total_skipped = 0
+        created_pls: set[str] = set()
+
+        grouped: dict[str, list[str]] = {}
+        for query, pl_name in entries:
+            target_pl = pl_name or stem
+            grouped.setdefault(target_pl, []).append(query)
+
+        for pl_name, queries in grouped.items():
+            pl = self.store.get_or_create_playlist_by_name(pl_name)
+            created_pls.add(pl.name)
+            for q in queries:
+                t = self.store.find_track_by_query_or_filename(query=q)
+                if t:
+                    self.store.add_track_to_playlist(pl.id, t.id)
+            self.store.save()
+            added, skipped = self.download_queue.add(queries, keep_local=True, target_playlist=pl_name)
+            total_added += added
+            total_skipped += skipped
+
+        self.store.save()
+        if hasattr(self, "_sync_playlists_to_cloud"):
+            try:
+                self._sync_playlists_to_cloud(notify=False)
+            except Exception:
+                pass
+        self._refresh_playlist_sidebar()
+        self._rebuild_playlists_menu_bar()
+        self._update_download_badge()
+        self.open_download_queue_panel()
+        self.switch_view("playlists_hub")
+
+        pl_names_str = ", ".join(created_pls)
+        QMessageBox.information(
+            self,
+            "Playlists Importadas",
+            f"✔ Se procesaron {len(grouped)} playlist(s): {pl_names_str}\n"
+            f"• Canciones encoladas para descarga: {total_added}\n"
+            f"• Ya existentes en biblioteca o cola: {total_skipped}",
+        )
 
     def _update_download_badge(self) -> None:
         items = self.download_queue.list()
@@ -2759,20 +3001,51 @@ class SpotiLinuxWindow(QMainWindow):
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
-        queries = dlg.get_queries()
-        if not queries:
+        keep_local = dlg.should_keep_local()
+        target_playlist = dlg.get_target_playlist()
+        raw_text = dlg.txt_list.toPlainText()
+        entries = parse_playlist_txt(raw_text, default_playlist_name=target_playlist)
+        if not entries:
+            queries = dlg.get_queries()
+            entries = [(q, target_playlist) for q in queries]
+
+        if not entries:
             QMessageBox.information(self, "Lista vacía", "No ingresaste ninguna canción o enlace para procesar.")
             return
 
-        keep_local = dlg.should_keep_local()
-        added, skipped = self.download_queue.add(queries, keep_local=keep_local)
+        total_added = 0
+        total_skipped = 0
+        grouped: dict[str, list[str]] = {}
+        for q, pl_name in entries:
+            grouped.setdefault(pl_name, []).append(q)
+
+        for pl_name, queries in grouped.items():
+            if pl_name:
+                pl = self.store.get_or_create_playlist_by_name(pl_name)
+                for q in queries:
+                    t = self.store.find_track_by_query_or_filename(query=q)
+                    if t:
+                        self.store.add_track_to_playlist(pl.id, t.id)
+                self.store.save()
+            added, skipped = self.download_queue.add(queries, keep_local=keep_local, target_playlist=pl_name)
+            total_added += added
+            total_skipped += skipped
+
+        self.store.save()
+        if hasattr(self, "_sync_playlists_to_cloud"):
+            try:
+                self._sync_playlists_to_cloud(notify=False)
+            except Exception:
+                pass
+        self._refresh_playlist_sidebar()
+        self._rebuild_playlists_menu_bar()
         self._update_download_badge()
         self.open_download_queue_panel()
-        if skipped > 0:
+        if total_skipped > 0:
             QMessageBox.information(
                 self,
                 "Canciones encoladas",
-                f"✔ Se agregaron {added} canciones a la cola de descargas.\n(Se omitieron {skipped} por estar ya registradas).",
+                f"✔ Se agregaron {total_added} canciones a la cola de descargas.\n(Se omitieron {total_skipped} por estar ya registradas).",
             )
 
     def _on_upload_to_drive_finished(self, uploaded_tracks: list[TrackMetadata], status_msg: str) -> None:
@@ -2860,13 +3133,23 @@ class SpotiLinuxWindow(QMainWindow):
     def switch_view(self, view_key: str) -> None:
         self.current_view = view_key
 
+        is_pl_view = (view_key == "playlists_hub" or view_key.startswith("playlist:"))
+
         self._refresh_button_active(self.btn_nav_home, view_key == "home")
         self._refresh_button_active(self.btn_nav_library, view_key == "library")
+        self._refresh_button_active(self.btn_nav_playlists, is_pl_view)
+        if hasattr(self, "btn_view_playlists_tab") and self.btn_view_playlists_tab:
+            self._refresh_button_active(self.btn_view_playlists_tab, is_pl_view)
         self._refresh_button_active(self.btn_nav_gdrive, view_key == "gdrive")
         self._refresh_button_active(self.btn_nav_liked, view_key == "liked")
         self._refresh_button_active(self.btn_nav_recent, view_key == "recent")
 
         self._refresh_playlist_sidebar()
+        if hasattr(self, "playlists_menu_bar") and self.playlists_menu_bar:
+            self.playlists_menu_bar.setVisible(is_pl_view)
+            if is_pl_view:
+                self._rebuild_playlists_menu_bar()
+
         self.quick_scroll.setVisible(view_key == "home")
         self.track_table.setVisible(view_key != "home")
 
@@ -3244,6 +3527,23 @@ class SpotiLinuxWindow(QMainWindow):
                     True,
                 )
 
+        if self.current_view == "playlists_hub":
+            pl_track_ids = []
+            seen = set()
+            for pl in self.store.playlists.values():
+                for tid in pl.track_ids:
+                    if tid in self.store.tracks and tid not in seen:
+                        seen.add(tid)
+                        pl_track_ids.append(tid)
+            tracks = [self.store.tracks[tid] for tid in pl_track_ids]
+            return (
+                "SECCIÓN PLAYLISTS",
+                "Tus Playlists y Canciones",
+                f"{len(self.store.playlists)} playlists con canciones organizadas y separadas por lista",
+                tracks,
+                False,
+            )
+
         if self.current_view == "library":
             return (
                 "BIBLIOTECA LOCAL & NUBE",
@@ -3304,6 +3604,10 @@ class SpotiLinuxWindow(QMainWindow):
             banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="🎵", colors=((29, 185, 84), (16, 95, 170), (140, 50, 210)))
             banner_rgb = (29, 135, 78)
             stats_text = f"{len(self.store.playlists)} playlists disponibles  •  {len(self.store.liked_ids)} favoritas"
+        elif self.current_view == "playlists_hub":
+            banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="📂", colors=((30, 215, 96), (18, 140, 70), (24, 24, 32)))
+            banner_rgb = (30, 215, 96)
+            stats_text = f"{len(self.store.playlists)} playlists  •  {len(tracks)} canciones"
         elif self.current_view == "liked":
             banner_pix = make_liked_cover_pixmap(138, radius=10)
             banner_rgb = (82, 42, 188)
@@ -3320,71 +3624,202 @@ class SpotiLinuxWindow(QMainWindow):
         show_dl = is_custom_pl or self.current_view in ("gdrive", "liked") or any(t.filepath.startswith("gdrive://") for t in tracks)
         self.hero_banner.set_banner_data(badge, title, subtitle, stats_text, banner_pix, banner_rgb, is_custom_pl, show_download=show_dl)
 
-        self.track_table.setRowCount(len(tracks))
         active_id = self.engine.current_track.id if self.engine.current_track else None
+        self.table_row_tracks = []
 
-        for row, track in enumerate(tracks):
-            self.track_table.setRowHeight(row, 56)
-            is_active = track.id == active_id
-            is_cloud = track.filepath.startswith("gdrive://") or Path(track.filepath).name.startswith("gd_")
+        if self.current_view == "playlists_hub":
+            rows_data: list[tuple[str, Optional[TrackMetadata], Optional[str]]] = []
+            for pid, pl in self.store.playlists.items():
+                p_tracks = [self.store.tracks[tid] for tid in pl.track_ids if tid in self.store.tracks]
+                if self.active_genre_filter == "Cloud ☁️":
+                    p_tracks = [t for t in p_tracks if t.filepath.startswith("gdrive://") or "Drive" in t.album or "Cloud" in t.genre or Path(t.filepath).name.startswith("gd_")]
+                elif self.active_genre_filter != "Todo":
+                    gf = self.active_genre_filter.lower()
+                    p_tracks = [t for t in p_tracks if gf in t.genre.lower() or gf in t.album.lower()]
+                if query:
+                    p_tracks = [t for t in p_tracks if query in t.title.lower() or query in t.artist.lower() or query in t.album.lower() or query in t.genre.lower()]
 
-            # Col 0: # / Play
-            num_item = QTableWidgetItem("▶" if is_active else str(row + 1))
-            num_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            num_item.setForeground(QColor("#1DB954") if is_active else QColor("#A7A7A7"))
-            if is_active:
-                f = num_item.font()
-                f.setBold(True)
-                num_item.setFont(f)
-            num_item.setData(Qt.ItemDataRole.UserRole, track.id)
-            self.track_table.setItem(row, 0, num_item)
+                if p_tracks:
+                    rows_data.append(("header", None, f"playlist:{pid}:{pl.name}:{len(p_tracks)}"))
+                    for t in p_tracks:
+                        rows_data.append(("track", t, pl.name))
 
-            # Col 1: Tarjeta con Portada + Título + Artista / Álbum + Badge de Playlist
-            cloud_tag = "  ☁️" if is_cloud else ""
-            album_str = f"  •  {track.album}" if track.album and track.album != "Desconocido" else ""
-            pl_names = self.store.get_track_playlists(track) if hasattr(self.store, "get_track_playlists") else []
-            pl_tag = f"  [{', '.join(pl_names)}]" if pl_names else ""
-            title_text = f"{track.title}{cloud_tag}\n{track.artist}{album_str}{pl_tag}"
-            title_item = QTableWidgetItem(title_text)
-            title_item.setIcon(QIcon(make_rounded_pixmap(track.cover_path, 42, radius=8)))
-            title_item.setForeground(QColor("#1DB954") if is_active else QColor("#FFFFFF"))
-            f_title = title_item.font()
-            f_title.setBold(True)
-            title_item.setFont(f_title)
-            self.track_table.setItem(row, 1, title_item)
+            self.track_table.setRowCount(len(rows_data))
+            for row, (kind, track, extra) in enumerate(rows_data):
+                if kind == "header":
+                    self.track_table.setRowHeight(row, 38)
+                    self.table_row_tracks.append(None)
+                    parts = extra.split(":", 3) if extra else []
+                    pid = parts[1] if len(parts) > 1 else ""
+                    pname = parts[2] if len(parts) > 2 else ""
+                    pcount = parts[3] if len(parts) > 3 else ""
 
-            # Col 2: Me gusta (♥ / ♡)
-            liked = self.store.is_liked(track.id)
-            heart_item = QTableWidgetItem("♥" if liked else "♡")
-            heart_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            heart_item.setForeground(QColor("#1DB954") if liked else QColor("#888888"))
-            f_h = heart_item.font()
-            f_h.setPointSize(14)
-            heart_item.setFont(f_h)
-            self.track_table.setItem(row, 2, heart_item)
+                    h_item0 = QTableWidgetItem("📁")
+                    h_item0.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    h_item0.setBackground(QColor("#181822"))
+                    h_item0.setForeground(QColor("#1ED760"))
+                    h_item0.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                    h_item0.setData(Qt.ItemDataRole.UserRole, f"header:{pid}")
+                    self.track_table.setItem(row, 0, h_item0)
 
-            # Col 3: Duración
-            dur_txt = format_duration(track.duration) if track.duration > 0 else "Cloud ☁️"
-            dur_item = QTableWidgetItem(dur_txt)
-            dur_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            dur_item.setForeground(QColor("#A7A7A7"))
-            self.track_table.setItem(row, 3, dur_item)
+                    h_item1 = QTableWidgetItem(f"PLAYLIST: {pname.upper()}  •  {pcount} canciones")
+                    f_h = h_item1.font()
+                    f_h.setBold(True)
+                    f_h.setPointSize(11)
+                    h_item1.setFont(f_h)
+                    h_item1.setBackground(QColor("#181822"))
+                    h_item1.setForeground(QColor("#FFFFFF"))
+                    h_item1.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                    self.track_table.setItem(row, 1, h_item1)
+
+                    h_item2 = QTableWidgetItem("")
+                    h_item2.setBackground(QColor("#181822"))
+                    h_item2.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                    self.track_table.setItem(row, 2, h_item2)
+
+                    h_item3 = QTableWidgetItem("▶ Play")
+                    h_item3.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    h_item3.setBackground(QColor("#181822"))
+                    h_item3.setForeground(QColor("#1ED760"))
+                    f_p = h_item3.font()
+                    f_p.setBold(True)
+                    h_item3.setFont(f_p)
+                    h_item3.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                    h_item3.setData(Qt.ItemDataRole.UserRole, f"header:{pid}")
+                    self.track_table.setItem(row, 3, h_item3)
+                else:
+                    assert track is not None
+                    self.table_row_tracks.append(track)
+                    self.track_table.setRowHeight(row, 56)
+                    is_active = track.id == active_id
+                    is_cloud = track.filepath.startswith("gdrive://") or Path(track.filepath).name.startswith("gd_")
+
+                    num_item = QTableWidgetItem("▶" if is_active else str(len([t for t in self.table_row_tracks if t is not None])))
+                    num_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    num_item.setForeground(QColor("#1DB954") if is_active else QColor("#A7A7A7"))
+                    if is_active:
+                        f = num_item.font()
+                        f.setBold(True)
+                        num_item.setFont(f)
+                    num_item.setData(Qt.ItemDataRole.UserRole, track.id)
+                    self.track_table.setItem(row, 0, num_item)
+
+                    cloud_tag = "  ☁️" if is_cloud else ""
+                    album_str = f"  •  {track.album}" if track.album and track.album != "Desconocido" else ""
+                    pl_tag = f"  [{extra}]" if extra else ""
+                    title_text = f"{track.title}{cloud_tag}\n{track.artist}{album_str}{pl_tag}"
+                    title_item = QTableWidgetItem(title_text)
+                    title_item.setIcon(QIcon(make_rounded_pixmap(track.cover_path, 42, radius=8)))
+                    title_item.setForeground(QColor("#1DB954") if is_active else QColor("#FFFFFF"))
+                    f_title = title_item.font()
+                    f_title.setBold(True)
+                    title_item.setFont(f_title)
+                    self.track_table.setItem(row, 1, title_item)
+
+                    liked = self.store.is_liked(track.id)
+                    heart_item = QTableWidgetItem("♥" if liked else "♡")
+                    heart_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    heart_item.setForeground(QColor("#1DB954") if liked else QColor("#888888"))
+                    f_h = heart_item.font()
+                    f_h.setPointSize(14)
+                    heart_item.setFont(f_h)
+                    self.track_table.setItem(row, 2, heart_item)
+
+                    dur_txt = format_duration(track.duration) if track.duration > 0 else "Cloud ☁️"
+                    dur_item = QTableWidgetItem(dur_txt)
+                    dur_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                    dur_item.setForeground(QColor("#A7A7A7"))
+                    self.track_table.setItem(row, 3, dur_item)
+
+            self.displayed_tracks = [t for t in self.table_row_tracks if t is not None]
+        else:
+            self.track_table.setRowCount(len(tracks))
+            self.table_row_tracks = list(tracks)
+            self.displayed_tracks = tracks
+
+            for row, track in enumerate(tracks):
+                self.track_table.setRowHeight(row, 56)
+                is_active = track.id == active_id
+                is_cloud = track.filepath.startswith("gdrive://") or Path(track.filepath).name.startswith("gd_")
+
+                # Col 0: # / Play
+                num_item = QTableWidgetItem("▶" if is_active else str(row + 1))
+                num_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                num_item.setForeground(QColor("#1DB954") if is_active else QColor("#A7A7A7"))
+                if is_active:
+                    f = num_item.font()
+                    f.setBold(True)
+                    num_item.setFont(f)
+                num_item.setData(Qt.ItemDataRole.UserRole, track.id)
+                self.track_table.setItem(row, 0, num_item)
+
+                # Col 1: Tarjeta con Portada + Título + Artista / Álbum + Badge de Playlist
+                cloud_tag = "  ☁️" if is_cloud else ""
+                album_str = f"  •  {track.album}" if track.album and track.album != "Desconocido" else ""
+                pl_names = self.store.get_track_playlists(track) if hasattr(self.store, "get_track_playlists") else []
+                pl_tag = f"  [{', '.join(pl_names)}]" if pl_names else ""
+                title_text = f"{track.title}{cloud_tag}\n{track.artist}{album_str}{pl_tag}"
+                title_item = QTableWidgetItem(title_text)
+                title_item.setIcon(QIcon(make_rounded_pixmap(track.cover_path, 42, radius=8)))
+                title_item.setForeground(QColor("#1DB954") if is_active else QColor("#FFFFFF"))
+                f_title = title_item.font()
+                f_title.setBold(True)
+                title_item.setFont(f_title)
+                self.track_table.setItem(row, 1, title_item)
+
+                # Col 2: Me gusta (♥ / ♡)
+                liked = self.store.is_liked(track.id)
+                heart_item = QTableWidgetItem("♥" if liked else "♡")
+                heart_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                heart_item.setForeground(QColor("#1DB954") if liked else QColor("#888888"))
+                f_h = heart_item.font()
+                f_h.setPointSize(14)
+                heart_item.setFont(f_h)
+                self.track_table.setItem(row, 2, heart_item)
+
+                # Col 3: Duración
+                dur_txt = format_duration(track.duration) if track.duration > 0 else "Cloud ☁️"
+                dur_item = QTableWidgetItem(dur_txt)
+                dur_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                dur_item.setForeground(QColor("#A7A7A7"))
+                self.track_table.setItem(row, 3, dur_item)
 
     # ================================================================== #
     #                     INTERACCIÓN CON CANCIONES                      #
     # ================================================================== #
 
     def _on_table_double_clicked(self, row: int, col: int = 0) -> None:
-        if 0 <= row < len(self.displayed_tracks):
+        if 0 <= row < len(self.table_row_tracks):
+            track = self.table_row_tracks[row]
+            if track is None:
+                item_data = self.track_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+                if item_data and str(item_data).startswith("header:"):
+                    pid = str(item_data).split(":", 1)[1]
+                    pl = self.store.playlists.get(pid)
+                    if pl and pl.track_ids:
+                        pl_tracks = [self.store.tracks[tid] for tid in pl.track_ids if tid in self.store.tracks]
+                        if pl_tracks:
+                            self._play_track_or_stream_from_cloud(pl_tracks[0], pl_tracks)
+                return
             if col == 2:
                 return
-            track = self.displayed_tracks[row]
             self._play_track_or_stream_from_cloud(track, self.displayed_tracks)
 
     def _on_table_cell_clicked(self, row: int, col: int) -> None:
-        if not (0 <= row < len(self.displayed_tracks)):
+        if not (0 <= row < len(self.table_row_tracks)):
             return
-        track = self.displayed_tracks[row]
+        track = self.table_row_tracks[row]
+        if track is None:
+            item_data = self.track_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            if item_data and str(item_data).startswith("header:") and col in (0, 3):
+                pid = str(item_data).split(":", 1)[1]
+                pl = self.store.playlists.get(pid)
+                if pl and pl.track_ids:
+                    pl_tracks = [self.store.tracks[tid] for tid in pl.track_ids if tid in self.store.tracks]
+                    if pl_tracks:
+                        self._play_track_or_stream_from_cloud(pl_tracks[0], pl_tracks)
+            return
+
         if col == 2:
             self.store.toggle_like(track.id)
             self._sync_playlists_to_cloud()
@@ -3400,13 +3835,15 @@ class SpotiLinuxWindow(QMainWindow):
         selected_rows = sorted(set(idx.row() for idx in self.track_table.selectedIndexes()))
         if not selected_rows:
             row = self.track_table.rowAt(pos.y())
-            if 0 <= row < len(self.displayed_tracks):
+            if 0 <= row < len(self.table_row_tracks):
                 selected_rows = [row]
 
         if not selected_rows:
             return
 
-        selected_tracks = [self.displayed_tracks[r] for r in selected_rows if 0 <= r < len(self.displayed_tracks)]
+        selected_tracks = [self.table_row_tracks[r] for r in selected_rows if 0 <= r < len(self.table_row_tracks) and self.table_row_tracks[r] is not None]
+        if not selected_tracks:
+            return
         selected_track_ids = [t.id for t in selected_tracks]
         n_tracks = len(selected_tracks)
         primary_track = selected_tracks[0]

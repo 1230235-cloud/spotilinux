@@ -61,16 +61,17 @@ class TestDownloadQueueUI(unittest.TestCase):
         self.assertEqual(self.panel.table.item(2, 1).text(), "Track C")
 
     def test_retry_failed_action(self):
-        self.queue.add(["Failed Song"])
+        self.queue.add(["Failed Song"], target_playlist="Rock Clasico")
         item = self.queue.get(1)
         self.queue.mark_error(item.id, "Simulated Error", is_transient=False)
 
         self.panel._refresh_table()
-        self.assertEqual(self.panel.table.item(0, 2).text(), "❌ Error")
+        self.assertEqual(self.panel.table.item(0, 2).text(), "🎵 Rock Clasico")
+        self.assertEqual(self.panel.table.item(0, 3).text(), "❌ Error")
 
         # Ejecutar retry failed desde el panel
         self.panel._retry_failed()
-        self.assertEqual(self.panel.table.item(0, 2).text(), "⏳ En cola")
+        self.assertEqual(self.panel.table.item(0, 3).text(), "⏳ En cola")
         self.assertEqual(self.queue.get(1).status, "pending")
 
     def test_clear_finished_action(self):

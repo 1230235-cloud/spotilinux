@@ -35,9 +35,36 @@ class QueueItem:
     created_at: float
     started_at: float
     finished_at: float
+    target_playlist: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+def parse_playlist_txt(content: str, default_playlist_name: str = "") -> List[Tuple[str, str]]:
+    """
+    Analiza el contenido de un archivo .txt y devuelve una lista de tuplas (query, playlist_name).
+    - Si encuentra líneas '# Playlist: Mi Lista' o '[Mi Lista]', cambia la playlist activa para las siguientes canciones.
+    - Si no hay encabezados, asigna `default_playlist_name` (ej. el nombre del archivo .txt).
+    """
+    current_pl = default_playlist_name.strip()
+    entries: List[Tuple[str, str]] = []
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            low = line[1:].strip()
+            if low.lower().startswith("playlist:"):
+                pl_candidate = low.split(":", 1)[1].strip()
+                if pl_candidate:
+                    current_pl = pl_candidate
+            continue
+        if line.startswith("[") and line.endswith("]") and len(line) > 2:
+            current_pl = line[1:-1].strip()
+            continue
+        entries.append((line, current_pl))
+    return entries
 
 
 class DownloadQueue:
@@ -88,11 +115,18 @@ class DownloadQueue:
                     result_json TEXT DEFAULT '',
                     created_at REAL NOT NULL,
                     started_at REAL DEFAULT 0,
-                    finished_at REAL DEFAULT 0
+                    finished_at REAL DEFAULT 0,
+                    target_playlist TEXT DEFAULT ''
                 );
             """)
+            # Migración idempotente si la tabla ya existía sin target_playlist
+            cur = conn.execute("PRAGMA table_info(queue_items);")
+            cols = {row["name"] for row in cur.fetchall()}
+            if "target_playlist" not in cols:
+                conn.execute("ALTER TABLE queue_items ADD COLUMN target_playlist TEXT DEFAULT '';")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status_retry ON queue_items (status, next_retry_at);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_query_key ON queue_items (query_key);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_target_playlist ON queue_items (target_playlist);")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS queue_meta (
                     key TEXT PRIMARY KEY,
@@ -101,6 +135,12 @@ class DownloadQueue:
             """)
 
     def _row_to_item(self, row: sqlite3.Row) -> QueueItem:
+        target_pl = ""
+        try:
+            target_pl = str(row["target_playlist"] or "")
+        except (IndexError, KeyError):
+            pass
+
         return QueueItem(
             id=int(row["id"]),
             query=str(row["query"]),
@@ -118,9 +158,15 @@ class DownloadQueue:
             created_at=float(row["created_at"]),
             started_at=float(row["started_at"]),
             finished_at=float(row["finished_at"]),
+            target_playlist=target_pl,
         )
 
-    def add(self, queries: List[str], keep_local: bool = True) -> Tuple[int, int]:
+    def add(
+        self,
+        queries: List[str],
+        keep_local: bool = True,
+        target_playlist: str = "",
+    ) -> Tuple[int, int]:
         """
         Adds multiple queries to the queue.
         Deduplicates against pending, running or already done items.
@@ -129,6 +175,7 @@ class DownloadQueue:
         added = 0
         skipped = 0
         now = time.time()
+        tgt_pl = target_playlist.strip()
 
         with self._lock, self._connection() as conn:
             for raw_q in queries:
@@ -142,21 +189,28 @@ class DownloadQueue:
 
                 # Check if already present in non-error/non-cancelled state
                 cur = conn.execute(
-                    "SELECT id FROM queue_items WHERE query_key = ? AND status IN ('pending', 'running', 'done') LIMIT 1",
+                    "SELECT id, status, target_playlist FROM queue_items WHERE query_key = ? AND status IN ('pending', 'running', 'done') LIMIT 1",
                     (q_key,),
                 )
-                if cur.fetchone():
+                existing = cur.fetchone()
+                if existing:
                     skipped += 1
+                    # Si ya estaba en cola pero sin playlist definida y ahora sí se le asigna una, actualizarla
+                    if tgt_pl and not str(existing["target_playlist"] or "").strip():
+                        conn.execute(
+                            "UPDATE queue_items SET target_playlist = ? WHERE id = ?",
+                            (tgt_pl, existing["id"]),
+                        )
                     continue
 
                 conn.execute(
                     """
                     INSERT INTO queue_items (
                         query, query_key, status, stage, progress, attempts, max_attempts,
-                        next_retry_at, keep_local, title, error, result_json, created_at
-                    ) VALUES (?, ?, 'pending', 'queued', 0, 0, 3, 0, ?, '', '', '', ?)
+                        next_retry_at, keep_local, title, error, result_json, created_at, target_playlist
+                    ) VALUES (?, ?, 'pending', 'queued', 0, 0, 3, 0, ?, '', '', '', ?, ?)
                     """,
-                    (q, q_key, 1 if keep_local else 0, now),
+                    (q, q_key, 1 if keep_local else 0, now, tgt_pl),
                 )
                 added += 1
 
@@ -420,7 +474,7 @@ class QueueRunner:
 
                     t = threading.Thread(
                         target=self._execute_item,
-                        args=(item.id, item.query, item.keep_local, cancel_ev),
+                        args=(item.id, item.query, item.target_playlist, item.keep_local, cancel_ev),
                         name=f"QueueTask-{item.id}",
                         daemon=True,
                     )
@@ -431,9 +485,21 @@ class QueueRunner:
 
             time.sleep(0.5)
 
-    def _execute_item(self, item_id: int, query: str, keep_local: bool, cancel_ev: threading.Event) -> None:
+    def _execute_item(
+        self,
+        item_id: int,
+        query: str,
+        target_playlist: str,
+        keep_local: bool,
+        cancel_ev: threading.Event,
+    ) -> None:
         self.queue.mark_running(item_id)
-        self.on_event({"type": "item_started", "item_id": item_id, "query": query})
+        self.on_event({
+            "type": "item_started",
+            "item_id": item_id,
+            "query": query,
+            "target_playlist": target_playlist,
+        })
 
         def progress_callback(stage: str, pct: float, msg: str) -> None:
             if cancel_ev.is_set():
@@ -445,6 +511,7 @@ class QueueRunner:
                 "stage": stage,
                 "progress": pct,
                 "message": msg,
+                "target_playlist": target_playlist,
             })
 
         try:
@@ -456,7 +523,7 @@ class QueueRunner:
 
             if cancel_ev.is_set():
                 self.queue.mark_cancelled(item_id)
-                self.on_event({"type": "item_cancelled", "item_id": item_id})
+                self.on_event({"type": "item_cancelled", "item_id": item_id, "target_playlist": target_playlist})
                 return
 
             res = downloader.process_query(
@@ -468,13 +535,19 @@ class QueueRunner:
 
             if cancel_ev.is_set():
                 self.queue.mark_cancelled(item_id)
-                self.on_event({"type": "item_cancelled", "item_id": item_id})
+                self.on_event({"type": "item_cancelled", "item_id": item_id, "target_playlist": target_playlist})
                 return
 
             if res.get("status") == "success":
                 title = res.get("title", query)
                 self.queue.mark_done(item_id, title, res)
-                self.on_event({"type": "item_done", "item_id": item_id, "result": res})
+                self.on_event({
+                    "type": "item_done",
+                    "item_id": item_id,
+                    "query": query,
+                    "target_playlist": target_playlist,
+                    "result": res,
+                })
             else:
                 err_msg = res.get("error", "Error desconocido")
                 is_transient = res.get("error_kind") == "transient"
@@ -482,16 +555,25 @@ class QueueRunner:
                 self.on_event({
                     "type": "item_error",
                     "item_id": item_id,
+                    "query": query,
+                    "target_playlist": target_playlist,
                     "error": err_msg,
                     "transient": is_transient,
                 })
         except Exception as exc:
             if cancel_ev.is_set():
                 self.queue.mark_cancelled(item_id)
-                self.on_event({"type": "item_cancelled", "item_id": item_id})
+                self.on_event({"type": "item_cancelled", "item_id": item_id, "target_playlist": target_playlist})
             else:
                 self.queue.mark_error(item_id, str(exc), is_transient=False)
-                self.on_event({"type": "item_error", "item_id": item_id, "error": str(exc), "transient": False})
+                self.on_event({
+                    "type": "item_error",
+                    "item_id": item_id,
+                    "query": query,
+                    "target_playlist": target_playlist,
+                    "error": str(exc),
+                    "transient": False,
+                })
         finally:
             with self._lock:
                 self._running_threads.pop(item_id, None)

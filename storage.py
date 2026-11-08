@@ -584,6 +584,36 @@ class LibraryStore:
         self.save()
         return pl
 
+    def get_or_create_playlist_by_name(self, name: str, description: str = "") -> Playlist:
+        clean_name = name.strip() or "Nueva Playlist"
+        low = clean_name.lower()
+        for pl in self.playlists.values():
+            if pl.name.strip().lower() == low:
+                return pl
+        return self.create_playlist(clean_name, description or "Playlist descargada desde archivo .txt")
+
+    def find_track_by_query_or_filename(
+        self, audio_filename: str = "", title: str = "", query: str = ""
+    ) -> Optional[TrackMetadata]:
+        if audio_filename:
+            target_name = Path(audio_filename).name.lower()
+            for t in self.tracks.values():
+                if Path(t.filepath).name.lower() == target_name:
+                    return t
+
+        norm_title = normalize_track_key(title or query)
+        if norm_title:
+            for t in self.tracks.values():
+                if normalize_track_key(t.title) == norm_title:
+                    return t
+
+        if query:
+            q_low = query.strip().lower()
+            for t in self.tracks.values():
+                if q_low in t.title.lower() or t.title.lower() in q_low:
+                    return t
+        return None
+
     def rename_playlist(self, playlist_id: str, new_name: str, new_desc: str = "") -> None:
         if playlist_id in self.playlists:
             self.playlists[playlist_id].name = new_name.strip() or self.playlists[playlist_id].name

@@ -16,7 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from download_queue import DownloadQueue, QueueItem, QueueRunner
+from download_queue import DownloadQueue, QueueItem, QueueRunner, parse_playlist_txt
+from storage import LibraryStore
 from media_sync_worker import MediaDownloaderWorker, classify_error
 
 
@@ -277,6 +278,59 @@ class TestQueueRunner(unittest.TestCase):
         item = self.queue.get(1)
         self.assertEqual(item.status, "cancelled")
         self.assertTrue(cancelled_flag.is_set())
+
+    def test_parse_playlist_txt_default_and_sections(self):
+        sample_txt = """
+# Lista de canciones favoritas
+Song 1 - Artist 1
+Song 2 - Artist 2
+
+# Playlist: Rock Classics
+Rock 1 - Band A
+Rock 2 - Band B
+
+[Anime Openings]
+Opening 1 - LiSA
+Opening 2 - Aimer
+"""
+        entries = parse_playlist_txt(sample_txt, default_playlist_name="Gym Tracks")
+        self.assertEqual(len(entries), 6)
+        self.assertEqual(entries[0], ("Song 1 - Artist 1", "Gym Tracks"))
+        self.assertEqual(entries[1], ("Song 2 - Artist 2", "Gym Tracks"))
+        self.assertEqual(entries[2], ("Rock 1 - Band A", "Rock Classics"))
+        self.assertEqual(entries[3], ("Rock 2 - Band B", "Rock Classics"))
+        self.assertEqual(entries[4], ("Opening 1 - LiSA", "Anime Openings"))
+        self.assertEqual(entries[5], ("Opening 2 - Aimer", "Anime Openings"))
+
+    def test_queue_persists_target_playlist_and_migrates(self):
+        added, skipped = self.queue.add(["Phonk 1", "Phonk 2"], target_playlist="Drift Phonk")
+        self.assertEqual(added, 2)
+        items = self.queue.list()
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0].target_playlist, "Drift Phonk")
+        self.assertEqual(items[1].target_playlist, "Drift Phonk")
+
+        # Verificar persistencia reabriendo la base de datos
+        queue2 = DownloadQueue(self.db_path)
+        item1 = queue2.get(items[0].id)
+        self.assertIsNotNone(item1)
+        self.assertEqual(item1.target_playlist, "Drift Phonk")
+
+    def test_storage_get_or_create_playlist_and_find_track(self):
+        store_path = Path(self.temp_dir.name) / "store.json"
+        store = LibraryStore(store_path)
+        pl1 = store.get_or_create_playlist_by_name("Lo-Fi Beats", "Musica relajante")
+        self.assertEqual(pl1.name, "Lo-Fi Beats")
+        self.assertEqual(pl1.description, "Musica relajante")
+
+        # Re-obtener la misma sin duplicar
+        pl2 = store.get_or_create_playlist_by_name("lo-fi beats")
+        self.assertEqual(pl1.id, pl2.id)
+        self.assertEqual(len(store.playlists), 1)
+
+        # Buscar pista simulada
+        t = store.find_track_by_query_or_filename(title="NonExistentTrack")
+        self.assertIsNone(t)
 
 
 class TestErrorClassificationAndWorker(unittest.TestCase):

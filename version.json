@@ -1,19 +1,20 @@
 {
-  "versionCode": 30,
-  "versionName": "2.11.2",
-  "releaseDate": "2026-11-06",
+  "versionCode": 31,
+  "versionName": "2.12.0",
+  "releaseDate": "2026-11-08",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.11.2",
+    "version": "2.12.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
+    "Descarga directa de archivos .txt a playlists auto-creadas con target_playlist",
+    "Menú y sección dedicada de Playlists separadas en el apartado de canciones (Escritorio y APK)",
+    "Sub-barra interactiva de píldoras Dark OLED y separación visual de canciones por bloques de playlist",
+    "Importación de listas .txt tanto en Escritorio como en la app móvil Android con sincronización a Drive",
     "Eliminación del modo claro dejando selector dual limpio: Normal y Libre",
-    "Adaptación de barras de espectro en Modo Libre con proporciones simétricas y halo ambiental reactivo",
-    "Sistema de diseño Dark Pill unificado para opciones, filtros, carátulas y modales de Playlists",
-    "Transiciones ultra fluidas sin trabas mediante índice de playlists O(1) y aceleración por GPU",
     "Aleatorio avanzado con Pilas y Colas: sin repetición en el ciclo y retroceso histórico fiel",
     "Sincronización multi-dispositivo temporal con activación a 30s y TTL de 10 minutos"
   ]

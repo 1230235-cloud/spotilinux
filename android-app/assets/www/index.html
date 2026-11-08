@@ -100,6 +100,16 @@
         </div>
       </button>
 
+      <button class="sm-item-btn" id="smNavSongsPlaylists" onclick="closeSideMenu(); openSongsPlaylistsSection()">
+        <div class="sm-item-icon" style="color:var(--green-bright); background:rgba(30, 215, 96, 0.12); border:1px solid rgba(30, 215, 96, 0.28);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Canciones por Playlist</div>
+          <div class="sm-item-sub">Playlists descargadas y separadas por lista</div>
+        </div>
+      </button>
+
       <button class="sm-item-btn" onclick="closeSideMenu(); startRandomPlayback()">
         <div class="sm-item-icon" style="color:var(--green-bright); background:rgba(30, 215, 96, 0.12); border:1px solid rgba(30, 215, 96, 0.28);">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -367,11 +377,27 @@
       <div id="tab-songs" class="tab-pane">
         <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; align-items:center;">
           <button class="btn-chip active" id="flt-all" onclick="setFilter('all')">Todo</button>
+          <button class="btn-chip" id="flt-playlists-section" onclick="setFilter('playlists_section')">🎵 Playlists</button>
           <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">Descargadas</button>
           <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">Favoritos</button>
           <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">Google Drive</button>
           <button class="btn-chip" id="flt-playlist" onclick="openPlaylistSelectFilterModal()">📁 Por Playlist ▾</button>
           <button class="btn-chip" id="flt-shuffle" onclick="startRandomPlayback()">Aleatorio</button>
+        </div>
+
+        <!-- SUB-MENÚ DEDICADO DE PLAYLISTS SEPARADAS EN LA SECCIÓN DE CANCIONES -->
+        <div id="songsPlaylistsMenuBar" class="songs-pl-menubar" style="display:none;">
+          <div class="songs-pl-menubar-top">
+            <span class="songs-pl-menubar-label">🎵 MENÚ DE PLAYLISTS</span>
+            <div style="display:flex; gap:6px;">
+              <button class="pl-dark-pill-sm" id="btnOnlyDownloadedPl" onclick="toggleOnlyDownloadedInPlaylistsView()">⬇️ Solo Descargadas</button>
+              <button class="pl-dark-pill-sm active" onclick="document.getElementById('txtPlaylistPickerMobile').click()">📂 Importar .txt</button>
+              <input type="file" id="txtPlaylistPickerMobile" accept=".txt,text/plain" style="display:none" onchange="importTxtAsPlaylistMobile(event)" />
+            </div>
+          </div>
+          <div id="songsPlaylistsPillsRow" class="songs-pl-pills-row">
+            <!-- Píldoras generadas dinámicamente -->
+          </div>
         </div>
         <div class="section-title">
           <span id="listHeading">Biblioteca de Canciones</span>

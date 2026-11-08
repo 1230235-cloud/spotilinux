@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -15,6 +16,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QMenu,
     QMessageBox,
@@ -26,13 +28,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from download_queue import DownloadQueue, QueueItem, QueueRunner
+from download_queue import DownloadQueue, QueueItem, QueueRunner, parse_playlist_txt
 
 
 class QueueSignals(QObject):
     """Puente seguro de señales Qt entre los hilos del QueueRunner y la GUI."""
     item_changed = pyqtSignal(int)
     summary_changed = pyqtSignal()
+    item_completed_for_playlist = pyqtSignal(int, str, str, dict)  # item_id, query, target_playlist, result_dict
 
 
 class DownloadQueuePanel(QDialog):
@@ -207,10 +210,17 @@ class DownloadQueuePanel(QDialog):
         self.btn_add.clicked.connect(self._open_add_dialog)
         actions_row.addWidget(self.btn_add)
 
-        self.btn_import = QPushButton("📂 Importar .txt...", self)
+        self.btn_import = QPushButton("📂 Subir .txt a Playlist...", self)
         self.btn_import.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_import.clicked.connect(self._import_txt_file)
         actions_row.addWidget(self.btn_import)
+
+        lbl_filter_pl = QLabel("Playlist:", self)
+        actions_row.addWidget(lbl_filter_pl)
+        self.cmb_filter_playlist = QComboBox(self)
+        self.cmb_filter_playlist.addItem("Todas las playlists")
+        self.cmb_filter_playlist.currentTextChanged.connect(lambda _: self._refresh_table())
+        actions_row.addWidget(self.cmb_filter_playlist)
 
         actions_row.addStretch()
 
@@ -226,12 +236,13 @@ class DownloadQueuePanel(QDialog):
 
         layout.addLayout(actions_row)
 
-        # Tabla de Descargas
+        # Tabla de Descargas (7 columnas con Playlist Destino)
         self.table = QTableWidget(self)
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "#",
             "Consulta / Canción",
+            "Playlist Destino",
             "Estado",
             "Etapa",
             "Progreso",
@@ -249,9 +260,10 @@ class DownloadQueuePanel(QDialog):
         h_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         h_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         h_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        h_header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(4, 160)
-        h_header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        h_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        h_header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(5, 140)
+        h_header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
 
         layout.addWidget(self.table)
 
@@ -262,21 +274,23 @@ class DownloadQueuePanel(QDialog):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             queries = dlg.get_queries()
             keep_local = dlg.should_keep_local()
+            tgt_pl = getattr(dlg, "get_target_playlist", lambda: "")()
             if queries:
-                added, skipped = self.queue.add(queries, keep_local=keep_local)
+                added, skipped = self.queue.add(queries, keep_local=keep_local, target_playlist=tgt_pl)
                 self._refresh_table()
-                if skipped > 0:
+                pl_info = f" en la playlist «{tgt_pl}»" if tgt_pl else ""
+                if skipped > 0 or added > 0:
                     QMessageBox.information(
                         self,
                         "Descargas encoladas",
-                        f"Se agregaron {added} canciones a la cola.\nSe omitieron {skipped} por estar ya registradas.",
+                        f"Se agregaron {added} canciones a la cola{pl_info}.\n(Omitidas por estar ya registradas: {skipped})",
                     )
 
     def _import_txt_file(self) -> None:
-        """Permite seleccionar un archivo .txt con canciones línea por línea."""
+        """Permite seleccionar un archivo .txt con canciones línea por línea para crear una Playlist."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Seleccionar lista de canciones",
+            "Seleccionar lista de canciones (.txt)",
             "",
             "Archivos de texto (*.txt);;Todos los archivos (*)",
         )
@@ -284,13 +298,38 @@ class DownloadQueuePanel(QDialog):
             return
 
         try:
-            lines = Path(file_path).read_text(encoding="utf-8").splitlines()
-            added, skipped = self.queue.add(lines, keep_local=True)
+            content = Path(file_path).read_text(encoding="utf-8")
+            raw_stem = Path(file_path).stem.replace("_", " ").strip()
+            default_name = raw_stem.title() if raw_stem else "Nueva Playlist"
+
+            pl_name, ok = QInputDialog.getText(
+                self,
+                "Crear Playlist desde .txt",
+                "Nombre de la Playlist a crear con estas canciones:",
+                text=default_name,
+            )
+            if not ok or not pl_name.strip():
+                return
+            pl_name = pl_name.strip()
+
+            entries = parse_playlist_txt(content, default_playlist_name=pl_name)
+            if not entries:
+                QMessageBox.information(self, "Lista vacía", "No se encontraron canciones válidas en el archivo .txt.")
+                return
+
+            total_added = 0
+            total_skipped = 0
+            for q, pl in entries:
+                a, s = self.queue.add([q], keep_local=True, target_playlist=pl)
+                total_added += a
+                total_skipped += s
+
             self._refresh_table()
             QMessageBox.information(
                 self,
                 "Importación Exitosa",
-                f"Se agregaron {added} canciones desde {Path(file_path).name}.\n(Omitidas por duplicado: {skipped})",
+                f"✔ Se importaron {total_added} canciones asignadas a la playlist «{pl_name}».\n"
+                f"(Omitidas por duplicado: {total_skipped})",
             )
         except Exception as exc:
             QMessageBox.warning(self, "Error al importar", f"No se pudo leer el archivo:\n{exc}")
@@ -343,8 +382,29 @@ class DownloadQueuePanel(QDialog):
         )
 
     def _refresh_table(self) -> None:
-        items = self.queue.list()
+        all_items = self.queue.list()
         self._refresh_summary_label()
+
+        # Actualizar opciones del selector de playlists sin perder la selección actual
+        distinct_pls = sorted(set(it.target_playlist.strip() for it in all_items if it.target_playlist.strip()))
+        if hasattr(self, "cmb_filter_playlist"):
+            cur_sel = self.cmb_filter_playlist.currentText()
+            self.cmb_filter_playlist.blockSignals(True)
+            self.cmb_filter_playlist.clear()
+            self.cmb_filter_playlist.addItem("Todas las playlists")
+            for pl in distinct_pls:
+                self.cmb_filter_playlist.addItem(pl)
+            idx = self.cmb_filter_playlist.findText(cur_sel)
+            self.cmb_filter_playlist.setCurrentIndex(idx if idx >= 0 else 0)
+            self.cmb_filter_playlist.blockSignals(False)
+
+            active_pl_filter = self.cmb_filter_playlist.currentText()
+            if active_pl_filter and active_pl_filter != "Todas las playlists":
+                items = [it for it in all_items if it.target_playlist.strip() == active_pl_filter]
+            else:
+                items = all_items
+        else:
+            items = all_items
 
         self.table.setRowCount(len(items))
         for row, item in enumerate(items):
@@ -360,7 +420,14 @@ class DownloadQueuePanel(QDialog):
                 query_cell.setToolTip(f"Error: {item.error}")
             self.table.setItem(row, 1, query_cell)
 
-            # Col 2: Estado
+            # Col 2: Playlist Destino
+            pl_text = f"🎵 {item.target_playlist}" if item.target_playlist else "Biblioteca General"
+            pl_cell = QTableWidgetItem(pl_text)
+            pl_cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            pl_cell.setForeground(QColor("#10B981") if item.target_playlist else QColor("#71717A"))
+            self.table.setItem(row, 2, pl_cell)
+
+            # Col 3: Estado
             status_labels = {
                 "pending": ("⏳ En cola", "#A1A1AA"),
                 "running": ("⚡ Descargando", "#60A5FA"),
@@ -371,9 +438,9 @@ class DownloadQueuePanel(QDialog):
             st_text, st_color = status_labels.get(item.status, (item.status, "#E4E4E7"))
             status_cell = QTableWidgetItem(st_text)
             status_cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 2, status_cell)
+            self.table.setItem(row, 3, status_cell)
 
-            # Col 3: Etapa
+            # Col 4: Etapa
             stage_labels = {
                 "queued": "En espera",
                 "starting": "Iniciando",
@@ -390,9 +457,9 @@ class DownloadQueuePanel(QDialog):
             stage_display = stage_labels.get(item.stage, item.stage or "-")
             stage_cell = QTableWidgetItem(stage_display)
             stage_cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 3, stage_cell)
+            self.table.setItem(row, 4, stage_cell)
 
-            # Col 4: Progreso (QProgressBar)
+            # Col 5: Progreso (QProgressBar)
             pbar = QProgressBar()
             pbar.setMinimum(0)
             pbar.setMaximum(100)
@@ -401,9 +468,9 @@ class DownloadQueuePanel(QDialog):
                 pbar.setValue(100)
             elif item.status == "error":
                 pbar.setStyleSheet("QProgressBar::chunk { background-color: #EF4444; }")
-            self.table.setCellWidget(row, 4, pbar)
+            self.table.setCellWidget(row, 5, pbar)
 
-            # Col 5: Botón de acción rápido
+            # Col 6: Botón de acción rápido
             action_btn = QPushButton()
             action_btn.setObjectName("BtnActionSmall")
             action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -418,7 +485,7 @@ class DownloadQueuePanel(QDialog):
                 action_btn.setText("Quitar")
                 action_btn.clicked.connect(lambda _, i=item.id: self._remove_item(i))
 
-            self.table.setCellWidget(row, 5, action_btn)
+            self.table.setCellWidget(row, 6, action_btn)
 
     def _cancel_item(self, item_id: int) -> None:
         self.runner.cancel_item(item_id)

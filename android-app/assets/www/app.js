@@ -3320,6 +3320,11 @@ function getFilteredTracks() {
     if (activeFilter === "saved" && !t.downloaded) return false;
     if (activeFilter === "liked" && !t.liked) return false;
     if (activeFilter === "cloud" && !t.cloud) return false;
+    if (activeFilter === "playlists_section") {
+      if (onlyDownloadedInPlaylistsView && !t.downloaded) return false;
+      const inAnyPl = playlists.some(pl => pl.trackIds && pl.trackIds.some(tid => trackMatchesPlaylistId(t, tid)));
+      if (!inAnyPl) return false;
+    }
     if (activeFilter.startsWith("pl:")) {
       const plId = activeFilter.replace("pl:", "");
       if (plId === "pl_liked") {
@@ -3530,8 +3535,70 @@ let lastRenderedTracksCacheKey = "";
 function renderTracks(forceRebuild = false) {
   const listEl = document.getElementById("trackList");
   if (!listEl) return;
-  const filtered = getFilteredTracks();
+  renderSongsPlaylistsMenuBar();
   const searchQ = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
+
+  if (activeFilter === "playlists_section") {
+    listEl.innerHTML = "";
+    const frag = document.createDocumentFragment();
+    let totalRendered = 0;
+
+    playlists.forEach(pl => {
+      let plTracks = getPlaylistTracks(pl);
+      if (onlyDownloadedInPlaylistsView) {
+        plTracks = plTracks.filter(t => t.downloaded);
+      }
+      if (searchQ) {
+        plTracks = plTracks.filter(t => {
+          const title = (t.title || "").toLowerCase();
+          const artist = (t.artist || "").toLowerCase();
+          const album = (t.album || "").toLowerCase();
+          return title.includes(searchQ) || artist.includes(searchQ) || album.includes(searchQ);
+        });
+      }
+      if (!plTracks.length) return;
+      totalRendered += plTracks.length;
+
+      const grpHeader = document.createElement("div");
+      grpHeader.className = "pl-section-group-header";
+      const downloadedCount = plTracks.filter(t => t.downloaded).length;
+      grpHeader.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
+          <div style="font-size:20px;">📁</div>
+          <div style="min-width:0;">
+            <div class="pl-section-group-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(pl.name)}</div>
+            <div class="pl-section-group-sub">${downloadedCount} descargadas • ${plTracks.length} canciones</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <button class="pl-dark-pill-sm active" onclick="playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</button>
+          <button class="pl-dark-pill-sm" onclick="playPlaylistShuffle('${pl.id}')" title="Aleatorio">${ICONS.shuffle}</button>
+        </div>
+      `;
+      frag.appendChild(grpHeader);
+
+      plTracks.forEach(t => {
+        frag.appendChild(createTrackRowElement(t, plTracks));
+      });
+    });
+
+    if (totalRendered === 0) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.style.cssText = "text-align:center; padding:45px 20px; color:#888; font-size:13px;";
+      emptyDiv.innerHTML = `
+        <div style="font-size:38px; margin-bottom:12px;">📂</div>
+        <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">No hay canciones en Playlists</div>
+        <div style="color:#aaa; max-width:280px; margin:0 auto 18px; line-height:1.4;">Importa un archivo .txt o crea una playlist para ver tus canciones separadas y organizadas por lista.</div>
+        <button class="pl-dark-pill-sm active" onclick="document.getElementById('txtPlaylistPickerMobile').click()" style="padding:8px 16px;">📂 Importar .txt</button>
+      `;
+      frag.appendChild(emptyDiv);
+    }
+
+    listEl.appendChild(frag);
+    return;
+  }
+
+  const filtered = getFilteredTracks();
   const currentKey = `${playlistCacheVersion}_${filtered.length}_${activeFilter}_${searchQ}_${isMultiSelectMode}`;
 
   if (!forceRebuild && lastRenderedTracksCacheKey === currentKey && listEl.children.length > 0) {
@@ -5940,12 +6007,152 @@ function switchTab(tab) {
   });
 }
 
+let onlyDownloadedInPlaylistsView = false;
+
+function toggleOnlyDownloadedInPlaylistsView() {
+  onlyDownloadedInPlaylistsView = !onlyDownloadedInPlaylistsView;
+  const btn = document.getElementById("btnOnlyDownloadedPl");
+  if (btn) btn.classList.toggle("active", onlyDownloadedInPlaylistsView);
+  renderTracks(true);
+}
+
+function openSongsPlaylistsSection() {
+  switchTab("songs");
+  setFilter("playlists_section");
+}
+
+function renderSongsPlaylistsMenuBar() {
+  const bar = document.getElementById("songsPlaylistsMenuBar");
+  if (!bar) return;
+  const isPlSection = activeFilter === "playlists_section" || activeFilter.startsWith("pl:");
+  bar.style.display = isPlSection ? "block" : "none";
+  if (!isPlSection) return;
+
+  const row = document.getElementById("songsPlaylistsPillsRow");
+  if (!row) return;
+  row.innerHTML = "";
+
+  // 1. Píldora "Todas Separadas"
+  const allBtn = document.createElement("button");
+  allBtn.className = "pl-dark-pill-sm" + (activeFilter === "playlists_section" ? " active" : "");
+  allBtn.textContent = "🗂 Todas Separadas";
+  allBtn.onclick = () => setFilter("playlists_section");
+  row.appendChild(allBtn);
+
+  // 2. Píldoras individuales por playlist
+  playlists.forEach(pl => {
+    const plTracks = getPlaylistTracks(pl);
+    const dlCount = plTracks.filter(t => t.downloaded).length;
+    const btn = document.createElement("button");
+    btn.className = "pl-dark-pill-sm" + (activeFilter === `pl:${pl.id}` ? " active" : "");
+    btn.textContent = `🎵 ${pl.name} (${dlCount}/${plTracks.length})`;
+    btn.onclick = () => setFilter(`pl:${pl.id}`);
+    row.appendChild(btn);
+  });
+}
+
+function importTxtAsPlaylistMobile(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    try {
+      const text = evt.target.result;
+      const defaultName = file.name.replace(/\.txt$/i, "").replace(/_/g, " ").trim();
+      const lines = text.split(/\r?\n/);
+
+      let currentPlName = defaultName || "Playlist Importada";
+      const grouped = {};
+
+      for (let raw of lines) {
+        let line = raw.trim();
+        if (!line) continue;
+        if (line.startsWith("#")) {
+          const low = line.slice(1).trim();
+          if (low.toLowerCase().startsWith("playlist:")) {
+            const cand = low.split(":", 2)[1]?.trim();
+            if (cand) currentPlName = cand;
+          }
+          continue;
+        }
+        if (line.startsWith("[") && line.endsWith("]") && line.length > 2) {
+          currentPlName = line.slice(1, -1).trim();
+          continue;
+        }
+        if (!grouped[currentPlName]) grouped[currentPlName] = [];
+        grouped[currentPlName].push(line);
+      }
+
+      let createdCount = 0;
+      let matchedCount = 0;
+
+      for (const [plName, qList] of Object.entries(grouped)) {
+        let pl = playlists.find(p => p.name.trim().toLowerCase() === plName.toLowerCase());
+        if (!pl) {
+          pl = {
+            id: "pl_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+            name: plName,
+            desc: "Playlist importada desde archivo .txt",
+            trackIds: []
+          };
+          if (Array.isArray(drivePlaylistImages) && drivePlaylistImages.length > 0) {
+            const randomImg = drivePlaylistImages[Math.floor(Math.random() * drivePlaylistImages.length)];
+            pl.coverUrl = randomImg.url;
+            pl.coverDriveId = randomImg.id;
+          }
+          playlists.unshift(pl);
+          createdCount++;
+        }
+        if (!pl.trackIds) pl.trackIds = [];
+
+        qList.forEach(q => {
+          const normQ = q.toLowerCase();
+          const found = tracks.find(t => {
+            const full = ((t.title || "") + " " + (t.artist || "")).toLowerCase();
+            return full.includes(normQ) || normQ.includes((t.title || "").toLowerCase());
+          });
+          if (found && !pl.trackIds.includes(found.id)) {
+            pl.trackIds.push(found.id);
+            matchedCount++;
+          }
+        });
+      }
+
+      playlistCacheVersion++;
+      if (userAccount && userAccount.email) {
+        userAccount.playlists = playlists;
+        if (accountsDb[userAccount.email]) {
+          accountsDb[userAccount.email].playlists = playlists;
+          accountsDb[userAccount.email].updatedAt = Date.now();
+          accountsDb[userAccount.email].updated_at = Date.now();
+        }
+      }
+      savePersistentState();
+      renderHomePlaylists();
+      openSongsPlaylistsSection();
+      if (typeof uploadPlaylistsToDrive === "function") {
+        uploadPlaylistsToDrive();
+      }
+      showToast(`✔ Se procesaron ${Object.keys(grouped).length} playlist(s) (${matchedCount} canciones vinculadas)`);
+    } catch (err) {
+      console.error("Error al importar playlist .txt:", err);
+      showToast("Error al importar archivo .txt");
+    } finally {
+      e.target.value = "";
+    }
+  };
+  reader.readAsText(file);
+}
+
 function setFilter(flt) {
   activeFilter = flt;
   ["all", "saved", "liked", "cloud"].forEach(k => {
     const el = document.getElementById("flt-" + k);
     if (el) el.classList.toggle("active", k === flt);
   });
+  const plSecBtn = document.getElementById("flt-playlists-section");
+  if (plSecBtn) plSecBtn.classList.toggle("active", flt === "playlists_section");
+
   const plBtn = document.getElementById("flt-playlist");
   if (plBtn) {
     if (flt.startsWith("pl:")) {
@@ -5972,6 +6179,8 @@ function setFilter(flt) {
         const pl = playlists.find(p => p.id === plId);
         heading.textContent = pl ? ("Playlist • " + pl.name) : "Biblioteca de Canciones";
       }
+    } else if (flt === "playlists_section") {
+      heading.textContent = "Playlists Descargadas y Organizadas";
     } else if (flt === "saved") {
       heading.textContent = "Canciones Descargadas";
     } else if (flt === "liked") {
@@ -5983,6 +6192,7 @@ function setFilter(flt) {
     }
   }
   renderTracks();
+  renderSongsPlaylistsMenuBar();
 }
 
 function cycleMaomaoStyle() {

@@ -2373,3 +2373,73 @@
     gap: 6px;
     flex-shrink: 0;
   }
+
+  /* ========================================================================= */
+  /* SUB-MENÚ DE PLAYLISTS Y BLOQUES SEPARADOS EN SECCIÓN CANCIONES           */
+  /* ========================================================================= */
+  .songs-pl-menubar {
+    background: #121218;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 10px 12px;
+    margin: 6px 0 10px 0;
+  }
+  .songs-pl-menubar-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .songs-pl-menubar-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    color: var(--green-bright);
+  }
+  .songs-pl-pills-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pl-dark-pill-sm {
+    background: #181820;
+    color: #e4e4ec;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .pl-dark-pill-sm:active {
+    transform: scale(0.95);
+  }
+  .pl-dark-pill-sm.active {
+    background: var(--green-bright);
+    color: #000;
+    border-color: var(--green-bright);
+  }
+  .pl-section-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(90deg, rgba(30, 215, 96, 0.14) 0%, rgba(24, 24, 32, 0.92) 100%);
+    border: 1px solid rgba(30, 215, 96, 0.28);
+    border-radius: 12px;
+    padding: 9px 12px;
+    margin: 14px 0 6px 0;
+  }
+  .pl-section-group-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffffff;
+  }
+  .pl-section-group-sub {
+    font-size: 10px;
+    color: #a6a6b4;
+    margin-top: 1px;
+  }
