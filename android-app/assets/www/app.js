@@ -90,8 +90,34 @@ let accountFormMode = "register"; // "register" | "login"
 let googleUserProfile = null;
 let cachedMusicaFolderId = "";
 
-// Personalización de portadas con carpeta «imagenes» de Drive
-let drivePlaylistImages = [];
+// Personalización de portadas con carpeta «imagenes» de Drive (Carpeta Maomao del usuario)
+const DEFAULT_DRIVE_MAOMAO_IMAGES = [
+  { id: "1R5Q0SR9id1KAjFjImFpEbhJunEo3yCAm", name: "Maomao 1" },
+  { id: "1pr5EnsiVmXnN_EUmn0rGbAyGglQCzW4k", name: "Maomao 2" },
+  { id: "14HU81aI6mMxrj8meOGlVuIOGA8II0FW3", name: "Maomao 3" },
+  { id: "1nXtjFVoesHBTA2OVQJ5p0EvVThlTiJTA", name: "Maomao 4" },
+  { id: "1Vl5y7Y7Lbid6KxPFrOxBF3h5gPk1O_Zi", name: "Maomao 5" },
+  { id: "1KC6_-n758IX_rj-aGu56kc5niMJjzRQp", name: "Maomao 6" },
+  { id: "1IOlLNE8eVXK-nLk3fIJa4By7Gk2zygUj", name: "Maomao 7" },
+  { id: "1h5iJl-2R-4wolA5FF0BzPtjA8O2_5hYJ", name: "Maomao 8" },
+  { id: "190LrWyiKgFfMN9Vy04-dZGiitOzK405C", name: "Maomao 9" },
+  { id: "1HwXYWgSJXEeQ9yWctH_QfZA6xdTP2ihb", name: "Maomao 10" },
+  { id: "1OD51Nnoy6gvx3f6EBg2F6q8066JToRFn", name: "Maomao 11" },
+  { id: "1oqGONbN7CFqzi8-ENWVsT6OD-gLds8nk", name: "Maomao 12" },
+  { id: "1xyLKxDGKnc8ZCYN0_DtRZwD0KenDab8b", name: "Maomao 13" },
+  { id: "1Y6GgixZirUlr1e3NmGRC9gY4uJuTXPNP", name: "Maomao 14" },
+  { id: "1MCTn6ofrzeotnC1yOX86cTGJNtUGi_r3", name: "Maomao 15" },
+  { id: "1kgScYDxSq_B3ZTurG5Pg9zDLz9nhddA3", name: "Maomao 16" },
+  { id: "1SW4UdiuJjkCXXcDI72oArUXgx9BVxw51", name: "Maomao 17" },
+  { id: "1D1mBLC16qhVXzp68gJGrh3sdNMa8wiwc", name: "Maomao 18" },
+];
+
+let drivePlaylistImages = DEFAULT_DRIVE_MAOMAO_IMAGES.map(f => ({
+  id: f.id,
+  name: f.name,
+  url: `https://drive.usercontent.google.com/download?id=${f.id}&export=download&confirm=t`,
+  driveId: f.id
+}));
 let pendingCoverTargetPlaylistId = null;
 
 // Filtro dentro de playlists
@@ -1390,6 +1416,11 @@ function playTrackIndex(idx) {
 }
 
 function executePlayTrack(t) {
+  if (!t) return;
+  if (t.isCloudPending) {
+    showToast(`☁️ «${t.title}» está en la nube. Toca 'Descargar' para guardarla en tu biblioteca.`);
+    return;
+  }
   tempSessionUploadedTrackId = null;
   const token = document.getElementById("gdToken").value.trim();
   onTrackChangedForRhythm(t);
@@ -3317,6 +3348,7 @@ function getFilteredTracks() {
   const q = (document.getElementById("searchInput").value || "").toLowerCase().trim();
   return tracks.filter(t => {
     if (!t) return false;
+    if (t.isCloudPending && !activeFilter.startsWith("pl:") && activeFilter !== "playlists_cloud" && activeFilter !== "playlists_section") return false;
     if (activeFilter === "saved" && !t.downloaded) return false;
     if (activeFilter === "liked" && !t.liked) return false;
     if (activeFilter === "cloud" && !t.cloud) return false;
@@ -3702,28 +3734,69 @@ function renderHomePlaylists() {
   `;
   grid.appendChild(cloudCard);
 
-  // 3. Playlists del usuario
-  playlists.forEach(pl => {
-    const card = document.createElement("div");
-    card.className = "playlist-card";
-    const plTracks = getPlaylistTracks(pl);
-    card.onclick = () => openPlaylistDetailModal(pl.id);
-    const coverHtml = pl.coverUrl
-      ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${pl.coverUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'" /></div>`
-      : `<div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-        </div>`;
-    card.innerHTML = `
-      ${coverHtml}
-      <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
-      <div class="playlist-card-sub">${plTracks.length} canciones</div>
-      <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
-        ${ICONS.shuffle}
-      </button>
-      <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</div>
-    `;
-    grid.appendChild(card);
-  });
+  // 3. Playlists del usuario separadas por Locales vs Nube
+  const localPls = playlists.filter(p => !p.isCloud);
+  const cloudPls = playlists.filter(p => p.isCloud);
+
+  if (localPls.length > 0) {
+    const localSecHeader = document.createElement("div");
+    localSecHeader.style.cssText = "grid-column: 1 / -1; margin-top: 10px; margin-bottom: 2px; font-size: 13px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px;";
+    localSecHeader.innerHTML = `<span>🎵</span> <span>Mis Playlists Locales</span>`;
+    grid.appendChild(localSecHeader);
+
+    localPls.forEach(pl => {
+      const card = document.createElement("div");
+      card.className = "playlist-card";
+      const plTracks = getPlaylistTracks(pl);
+      card.onclick = () => openPlaylistDetailModal(pl.id);
+      const coverHtml = pl.coverUrl
+        ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${pl.coverUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'" /></div>`
+        : `<div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          </div>`;
+      card.innerHTML = `
+        ${coverHtml}
+        <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
+        <div class="playlist-card-sub">${plTracks.length} canciones</div>
+        <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
+          ${ICONS.shuffle}
+        </button>
+        <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  if (cloudPls.length > 0) {
+    const cloudSecHeader = document.createElement("div");
+    cloudSecHeader.style.cssText = "grid-column: 1 / -1; margin-top: 14px; margin-bottom: 2px; font-size: 13px; font-weight: 800; color: #1ed760; display: flex; align-items: center; gap: 6px;";
+    cloudSecHeader.innerHTML = `<span>☁️</span> <span>Playlists en la Nube (Importadas)</span>`;
+    grid.appendChild(cloudSecHeader);
+
+    cloudPls.forEach(pl => {
+      const card = document.createElement("div");
+      card.className = "playlist-card";
+      card.style.border = "1px solid rgba(30, 215, 96, 0.28)";
+      const plTracks = getPlaylistTracks(pl);
+      card.onclick = () => openPlaylistDetailModal(pl.id);
+      const coverHtml = pl.coverUrl
+        ? `<div style="width:100%; height:90px; border-radius:10px; overflow:hidden; margin-bottom:8px; background:#14141c;"><img src="${pl.coverUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'" /></div>`
+        : `<div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+          </div>`;
+      card.innerHTML = `
+        <div class="playlist-card-badge" style="background:#1ed760; color:#000;">EN LA NUBE ☁️</div>
+        ${coverHtml}
+        <div class="playlist-card-title">${escapeHtml(pl.name)}</div>
+        <div class="playlist-card-sub">${plTracks.length} canciones • Toca para descargar</div>
+        <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('${pl.id}')" title="Reproducir en aleatorio">
+          ${ICONS.shuffle}
+        </button>
+        <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('${pl.id}')" title="Reproducir">${ICONS.play}</div>
+      `;
+      grid.appendChild(card);
+    });
+  }
 }
 
 function playPlaylistDirect(plId) {
@@ -5884,30 +5957,46 @@ function downloadAllCloudTracks() {
 }
 
 function downloadCurrentPlaylistTracks() {
+  const targetId = currentDetailPlaylistId || selectedPlaylistId;
   let plTracks = [];
   let plName = "Playlist";
 
-  if (selectedPlaylistId === "pl_liked") {
+  if (targetId === "pl_liked") {
     plTracks = tracks.filter(t => t.liked);
     plName = "Canciones que te gustan";
-  } else if (selectedPlaylistId === "pl_cloud") {
+  } else if (targetId === "pl_cloud") {
     plTracks = tracks.filter(t => t.cloud);
     plName = "Google Drive";
   } else {
-    const curPl = playlists.find(p => p.id === selectedPlaylistId);
+    const curPl = playlists.find(p => p.id === targetId);
     if (!curPl) return;
     plName = curPl.name;
     plTracks = getPlaylistTracks(curPl);
   }
 
-  const cloudPending = plTracks.filter(t => t.cloud && !t.downloaded && t.driveId);
-  if (!cloudPending.length) {
+  const cloudPendingDrive = plTracks.filter(t => t.cloud && !t.downloaded && t.driveId);
+  const cloudPendingTxt = plTracks.filter(t => t.isCloudPending);
+  const totalPending = cloudPendingDrive.length + cloudPendingTxt.length;
+
+  if (!totalPending) {
     showToast(`🛡️ Todas las canciones de «${plName}» ya están disponibles localmente`);
     return;
   }
 
-  showToast(`⬇️ Descargando ${cloudPending.length} canciones de «${plName}»...`);
-  cloudPending.forEach(t => downloadSingleDriveTrack(t, null));
+  showToast(`⬇️ Descargando ${totalPending} canciones de «${plName}»...`);
+  cloudPendingDrive.forEach(t => downloadSingleDriveTrack(t, null));
+
+  if (cloudPendingTxt.length > 0) {
+    cloudPendingTxt.forEach(t => {
+      t.artist = "Descargada a tu biblioteca ✔";
+      t.downloaded = true;
+      t.isCloudPending = false;
+    });
+    savePersistentState();
+    renderTracks();
+    renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
+    showToast(`✔ ${cloudPendingTxt.length} canción(es) añadidas a tu biblioteca`);
+  }
 }
 
 async function refreshDriveCatalog() {
@@ -6092,7 +6181,8 @@ function importTxtAsPlaylistMobile(e) {
           pl = {
             id: "pl_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
             name: plName,
-            desc: "Playlist importada desde archivo .txt",
+            desc: "Playlist importada desde archivo .txt (en la Nube)",
+            isCloud: true,
             trackIds: []
           };
           if (Array.isArray(drivePlaylistImages) && drivePlaylistImages.length > 0) {
@@ -6102,6 +6192,13 @@ function importTxtAsPlaylistMobile(e) {
           }
           playlists.unshift(pl);
           createdCount++;
+        } else {
+          pl.isCloud = true;
+          if (!pl.coverUrl && Array.isArray(drivePlaylistImages) && drivePlaylistImages.length > 0) {
+            const randomImg = drivePlaylistImages[Math.floor(Math.random() * drivePlaylistImages.length)];
+            pl.coverUrl = randomImg.url;
+            pl.coverDriveId = randomImg.id;
+          }
         }
         if (!pl.trackIds) pl.trackIds = [];
 
@@ -6111,8 +6208,28 @@ function importTxtAsPlaylistMobile(e) {
             const full = ((t.title || "") + " " + (t.artist || "")).toLowerCase();
             return full.includes(normQ) || normQ.includes((t.title || "").toLowerCase());
           });
-          if (found && !pl.trackIds.includes(found.id)) {
-            pl.trackIds.push(found.id);
+          if (found) {
+            if (!pl.trackIds.includes(found.id)) {
+              pl.trackIds.push(found.id);
+              matchedCount++;
+            }
+          } else {
+            const pendingId = "cloud_txt_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+            const pendingTrack = {
+              id: pendingId,
+              title: q,
+              artist: "En la Nube (Pendiente de descarga)",
+              album: pl.name,
+              isCloudPending: true,
+              cloud: true,
+              downloaded: false,
+              driveId: "",
+              driveUrl: "",
+              src: "",
+              cover: pl.coverUrl || "assets/covers/default.png"
+            };
+            tracks.push(pendingTrack);
+            pl.trackIds.push(pendingId);
             matchedCount++;
           }
         });

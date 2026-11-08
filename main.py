@@ -114,8 +114,15 @@ from styles import SPOTIFY_QSS
 from visualizer_widget import AudioVisualizerWidget, EqualizerPanel
 
 
+_ROUNDED_PIXMAP_CACHE: dict[tuple[str, int, int], QPixmap] = {}
+
+
 def make_rounded_pixmap(path: str, size: int, radius: int = 6) -> QPixmap:
-    """Carga una imagen y la recorta con esquinas redondeadas nítidas."""
+    """Carga una imagen y la recorta con esquinas redondeadas nítidas utilizando caché en memoria."""
+    cache_key = (path, size, radius)
+    if cache_key in _ROUNDED_PIXMAP_CACHE:
+        return _ROUNDED_PIXMAP_CACHE[cache_key]
+
     target = QPixmap(size, size)
     target.fill(Qt.GlobalColor.transparent)
 
@@ -142,6 +149,11 @@ def make_rounded_pixmap(path: str, size: int, radius: int = 6) -> QPixmap:
     painter.setClipPath(clip)
     painter.drawPixmap(0, 0, src)
     painter.end()
+
+    if len(_ROUNDED_PIXMAP_CACHE) > 300:
+        _ROUNDED_PIXMAP_CACHE.clear()
+
+    _ROUNDED_PIXMAP_CACHE[cache_key] = target
     return target
 
 
@@ -1746,15 +1758,8 @@ class SpotiLinuxWindow(QMainWindow):
         self.setMinimumSize(1040, 680)
         self.setAcceptDrops(True)
 
-        # 1. Asegurar pistas de demostración y cargar biblioteca
-        demo_dir = self.base_dir / "demo_tracks"
-        ensure_demo_tracks(demo_dir)
-
+        # 1. Cargar biblioteca instantáneamente desde base de datos persistente (Arranque ultra rápido)
         self.store = LibraryStore(self.base_dir)
-        for folder in list(self.store.watched_folders):
-            self.store.scan_folder(Path(folder))
-        if not self.store.tracks:
-            self.store.scan_folder(demo_dir)
 
         # 2. Inicializar motor de audio y ecualizador
         self.engine = AudioEngine(self.base_dir / "data" / "eq_cache")
@@ -1846,7 +1851,25 @@ class SpotiLinuxWindow(QMainWindow):
 
         # Solicitar acceso a Google Drive o rastreo automático desde el inicio
         QTimer.singleShot(450, self._check_first_run_welcome)
+        QTimer.singleShot(1200, self._deferred_background_scan)
         QTimer.singleShot(2500, self._check_github_updates)
+
+    def _deferred_background_scan(self) -> None:
+        """Escanea carpetas locales en segundo plano para no demorar el arranque inicial."""
+        def _scan():
+            try:
+                demo_dir = self.base_dir / "demo_tracks"
+                if not demo_dir.exists():
+                    ensure_demo_tracks(demo_dir)
+                for folder in list(self.store.watched_folders):
+                    self.store.scan_folder(Path(folder))
+                if not self.store.tracks and demo_dir.exists():
+                    self.store.scan_folder(demo_dir)
+                self.store.save()
+            except Exception as e:
+                pass
+
+        threading.Thread(target=_scan, daemon=True, name="DeferredLibraryScan").start()
 
     def _check_first_run_welcome(self) -> None:
         if self.store.gdrive_config.access_token and not self.store.google_user.get("name"):
@@ -2849,7 +2872,19 @@ class SpotiLinuxWindow(QMainWindow):
             pl = self.store.get_or_create_playlist_by_name(
                 target_playlist,
                 description="Playlist generada desde cola de descargas",
+                is_cloud=True,
             )
+            # Reconciliar placeholder pendiente si existía
+            for tid in list(pl.track_ids):
+                old_t = self.store.tracks.get(tid)
+                if old_t and old_t.filepath.startswith("cloud://pending") and (
+                    normalize_track_key(old_t.title) == normalize_track_key(track.title)
+                    or normalize_track_key(old_t.title) == normalize_track_key(query)
+                ):
+                    self.store.reconcile_playlist_track_ids(tid, track.id)
+                    if tid in self.store.tracks:
+                        del self.store.tracks[tid]
+                    break
             self.store.add_track_to_playlist(pl.id, track.id)
             self.store.save()
             if hasattr(self, "_sync_playlists_to_cloud"):
@@ -2859,7 +2894,7 @@ class SpotiLinuxWindow(QMainWindow):
                     pass
             self._refresh_playlist_sidebar()
             self._rebuild_playlists_menu_bar()
-            if self.current_view in ("playlists_hub", f"playlist:{pl.id}"):
+            if self.current_view in ("playlists_hub", "playlists_cloud", f"playlist:{pl.id}"):
                 self._refresh_track_table()
 
     def _rebuild_playlists_menu_bar(self) -> None:
@@ -2878,9 +2913,17 @@ class SpotiLinuxWindow(QMainWindow):
         btn_all.clicked.connect(lambda: self.switch_view("playlists_hub"))
         self.playlists_pills_layout.addWidget(btn_all)
 
+        btn_cloud = QPushButton("☁️ Playlists en la Nube")
+        btn_cloud.setObjectName("ActionChipButton")
+        btn_cloud.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cloud.setProperty("active", "true" if self.current_view == "playlists_cloud" else "false")
+        btn_cloud.clicked.connect(lambda: self.switch_view("playlists_cloud"))
+        self.playlists_pills_layout.addWidget(btn_cloud)
+
         for pid, pl in self.store.playlists.items():
             count = len(pl.track_ids)
-            btn_pl = QPushButton(f"🎵 {pl.name} ({count})")
+            icon = "☁️ " if pl.is_cloud else "🎵 "
+            btn_pl = QPushButton(f"{icon}{pl.name} ({count})")
             btn_pl.setObjectName("ActionChipButton")
             btn_pl.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_pl.setProperty("active", "true" if self.current_view == f"playlist:{pid}" else "false")
@@ -2921,13 +2964,12 @@ class SpotiLinuxWindow(QMainWindow):
             grouped.setdefault(target_pl, []).append(query)
 
         for pl_name, queries in grouped.items():
-            pl = self.store.get_or_create_playlist_by_name(pl_name)
+            pl, linked, pending = self.store.populate_cloud_playlist_from_queries(
+                pl_name,
+                queries,
+                description=f"Playlist importada desde {stem}.txt (en la Nube)",
+            )
             created_pls.add(pl.name)
-            for q in queries:
-                t = self.store.find_track_by_query_or_filename(query=q)
-                if t:
-                    self.store.add_track_to_playlist(pl.id, t.id)
-            self.store.save()
             added, skipped = self.download_queue.add(queries, keep_local=True, target_playlist=pl_name)
             total_added += added
             total_skipped += skipped
@@ -2942,15 +2984,16 @@ class SpotiLinuxWindow(QMainWindow):
         self._rebuild_playlists_menu_bar()
         self._update_download_badge()
         self.open_download_queue_panel()
-        self.switch_view("playlists_hub")
+        self.switch_view("playlists_cloud")
 
         pl_names_str = ", ".join(created_pls)
         QMessageBox.information(
             self,
-            "Playlists Importadas",
-            f"✔ Se procesaron {len(grouped)} playlist(s): {pl_names_str}\n"
-            f"• Canciones encoladas para descarga: {total_added}\n"
-            f"• Ya existentes en biblioteca o cola: {total_skipped}",
+            "Playlists en la Nube Creadas",
+            f"✔ Se importaron {len(grouped)} playlist(s) en la Nube: {pl_names_str}\n"
+            f"• Las canciones se agregaron de inmediato a la playlist.\n"
+            f"• Descargas encoladas: {total_added} (ya existentes o en cola: {total_skipped})\n"
+            f"• Puedes descargarlas a tu biblioteca local desde el botón de la playlist.",
         )
 
     def _update_download_badge(self) -> None:
@@ -3021,12 +3064,11 @@ class SpotiLinuxWindow(QMainWindow):
 
         for pl_name, queries in grouped.items():
             if pl_name:
-                pl = self.store.get_or_create_playlist_by_name(pl_name)
-                for q in queries:
-                    t = self.store.find_track_by_query_or_filename(query=q)
-                    if t:
-                        self.store.add_track_to_playlist(pl.id, t.id)
-                self.store.save()
+                self.store.populate_cloud_playlist_from_queries(
+                    pl_name,
+                    queries,
+                    description=f"Playlist importada desde cola de descargas (en la Nube)",
+                )
             added, skipped = self.download_queue.add(queries, keep_local=keep_local, target_playlist=pl_name)
             total_added += added
             total_skipped += skipped
@@ -3102,7 +3144,18 @@ class SpotiLinuxWindow(QMainWindow):
         track: TrackMetadata,
         context_list: Optional[list[TrackMetadata]] = None,
     ) -> None:
-        """Si la pista es de Google Drive (gdrive://) y aún no está en caché local, la transmite al vuelo."""
+        """Si la pista es de Google Drive o pendiente en la nube, gestiona transmisión o encolado."""
+        if track.filepath.startswith("cloud://pending"):
+            self.download_queue.add([track.title], keep_local=True, target_playlist=track.album)
+            self._update_download_badge()
+            self.open_download_queue_panel()
+            QMessageBox.information(
+                self,
+                "Descargando Canción de la Nube",
+                f"«{track.title}» está en la nube. Se ha añadido a la cola de descargas para guardarse en tu biblioteca local.",
+            )
+            return
+
         if track.filepath.startswith("gdrive://"):
             self.lbl_bar_title.setText(f"☁️ Cargando: {track.title}...")
             self.lbl_bar_artist.setText("Transmitiendo desde la carpeta «Musica» de Google Drive...")
@@ -3133,7 +3186,7 @@ class SpotiLinuxWindow(QMainWindow):
     def switch_view(self, view_key: str) -> None:
         self.current_view = view_key
 
-        is_pl_view = (view_key == "playlists_hub" or view_key.startswith("playlist:"))
+        is_pl_view = (view_key in ("playlists_hub", "playlists_cloud") or view_key.startswith("playlist:"))
 
         self._refresh_button_active(self.btn_nav_home, view_key == "home")
         self._refresh_button_active(self.btn_nav_library, view_key == "library")
@@ -3162,12 +3215,42 @@ class SpotiLinuxWindow(QMainWindow):
     def _refresh_playlist_sidebar(self) -> None:
         self.playlist_list.blockSignals(True)
         self.playlist_list.clear()
-        for pid, pl in self.store.playlists.items():
-            item = QListWidgetItem(f"🎵  {pl.name}  ({len(pl.track_ids)})")
-            item.setData(Qt.ItemDataRole.UserRole, pid)
-            self.playlist_list.addItem(item)
-            if self.current_view == f"playlist:{pid}":
-                item.setSelected(True)
+
+        local_pls = [p for p in self.store.playlists.values() if not p.is_cloud]
+        cloud_pls = [p for p in self.store.playlists.values() if p.is_cloud]
+
+        if local_pls:
+            h_local = QListWidgetItem("── MIS PLAYLISTS ──")
+            h_local.setFlags(Qt.ItemFlag.NoItemFlags)
+            h_local.setForeground(QColor("#777777"))
+            font_local = h_local.font()
+            font_local.setBold(True)
+            font_local.setPointSize(9)
+            h_local.setFont(font_local)
+            self.playlist_list.addItem(h_local)
+            for pl in local_pls:
+                item = QListWidgetItem(f"🎵  {pl.name}  ({len(pl.track_ids)})")
+                item.setData(Qt.ItemDataRole.UserRole, pl.id)
+                self.playlist_list.addItem(item)
+                if self.current_view == f"playlist:{pl.id}":
+                    item.setSelected(True)
+
+        if cloud_pls:
+            h_cloud = QListWidgetItem("── PLAYLISTS EN LA NUBE ☁️ ──")
+            h_cloud.setFlags(Qt.ItemFlag.NoItemFlags)
+            h_cloud.setForeground(QColor("#1ED760"))
+            font_cloud = h_cloud.font()
+            font_cloud.setBold(True)
+            font_cloud.setPointSize(9)
+            h_cloud.setFont(font_cloud)
+            self.playlist_list.addItem(h_cloud)
+            for pl in cloud_pls:
+                item = QListWidgetItem(f"☁️  {pl.name}  ({len(pl.track_ids)})")
+                item.setData(Qt.ItemDataRole.UserRole, pl.id)
+                self.playlist_list.addItem(item)
+                if self.current_view == f"playlist:{pl.id}":
+                    item.setSelected(True)
+
         self.playlist_list.blockSignals(False)
 
     def _rebuild_quick_access_cards(self) -> None:
@@ -3479,7 +3562,7 @@ class SpotiLinuxWindow(QMainWindow):
         self._refresh_track_table()
 
     def _get_base_tracks_for_view(self) -> tuple[str, str, str, list[TrackMetadata], bool]:
-        all_tracks = list(self.store.tracks.values())
+        all_tracks = [t for t in self.store.tracks.values() if not t.filepath.startswith("cloud://pending")]
 
         if self.current_view == "gdrive":
             tracks = [
@@ -3519,27 +3602,49 @@ class SpotiLinuxWindow(QMainWindow):
             pl = self.store.playlists.get(pid)
             if pl:
                 tracks = [self.store.tracks[tid] for tid in pl.track_ids if tid in self.store.tracks]
+                badge_text = "☁️ PLAYLIST EN LA NUBE" if pl.is_cloud else "PLAYLIST PERSONALIZADA"
+                desc_text = pl.description or ("Playlist en la Nube (importada desde .txt)" if pl.is_cloud else "Playlist creada en SpotiLinux")
                 return (
-                    "PLAYLIST PERSONALIZADA",
+                    badge_text,
                     pl.name,
-                    pl.description or "Playlist creada en SpotiLinux",
+                    desc_text,
                     tracks,
                     True,
                 )
 
-        if self.current_view == "playlists_hub":
+        if self.current_view == "playlists_cloud":
+            cloud_pls = [pl for pl in self.store.playlists.values() if pl.is_cloud]
             pl_track_ids = []
             seen = set()
-            for pl in self.store.playlists.values():
+            for pl in cloud_pls:
                 for tid in pl.track_ids:
                     if tid in self.store.tracks and tid not in seen:
                         seen.add(tid)
                         pl_track_ids.append(tid)
             tracks = [self.store.tracks[tid] for tid in pl_track_ids]
             return (
-                "SECCIÓN PLAYLISTS",
-                "Tus Playlists y Canciones",
-                f"{len(self.store.playlists)} playlists con canciones organizadas y separadas por lista",
+                "PLAYLISTS EN LA NUBE ☁️",
+                "Playlists en la Nube / Importadas",
+                f"{len(cloud_pls)} playlist(s) importadas listas para reproducir o descargar a tu biblioteca local",
+                tracks,
+                False,
+            )
+
+        if self.current_view == "playlists_hub":
+            local_pls = [pl for pl in self.store.playlists.values() if not pl.is_cloud]
+            pls_to_show = local_pls if local_pls else list(self.store.playlists.values())
+            pl_track_ids = []
+            seen = set()
+            for pl in pls_to_show:
+                for tid in pl.track_ids:
+                    if tid in self.store.tracks and tid not in seen:
+                        seen.add(tid)
+                        pl_track_ids.append(tid)
+            tracks = [self.store.tracks[tid] for tid in pl_track_ids]
+            return (
+                "MIS PLAYLISTS",
+                "Tus Playlists Locales",
+                f"{len(local_pls)} playlist(s) creadas localmente en tu biblioteca",
                 tracks,
                 False,
             )
@@ -3607,7 +3712,13 @@ class SpotiLinuxWindow(QMainWindow):
         elif self.current_view == "playlists_hub":
             banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="📂", colors=((30, 215, 96), (18, 140, 70), (24, 24, 32)))
             banner_rgb = (30, 215, 96)
-            stats_text = f"{len(self.store.playlists)} playlists  •  {len(tracks)} canciones"
+            local_count = len([p for p in self.store.playlists.values() if not p.is_cloud])
+            stats_text = f"{local_count} playlists locales  •  {len(tracks)} canciones"
+        elif self.current_view == "playlists_cloud":
+            banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="☁️", colors=((20, 160, 120), (14, 90, 80), (18, 24, 30)))
+            banner_rgb = (20, 160, 120)
+            cloud_count = len([p for p in self.store.playlists.values() if p.is_cloud])
+            stats_text = f"{cloud_count} playlists en la nube  •  {len(tracks)} canciones"
         elif self.current_view == "liked":
             banner_pix = make_liked_cover_pixmap(138, radius=10)
             banner_rgb = (82, 42, 188)
@@ -3621,15 +3732,26 @@ class SpotiLinuxWindow(QMainWindow):
             banner_pix = make_liked_cover_pixmap(138, radius=10)
             banner_rgb = (29, 115, 72)
 
-        show_dl = is_custom_pl or self.current_view in ("gdrive", "liked") or any(t.filepath.startswith("gdrive://") for t in tracks)
+        show_dl = (
+            is_custom_pl
+            or self.current_view in ("gdrive", "liked", "playlists_cloud")
+            or any(t.filepath.startswith("gdrive://") or t.filepath.startswith("cloud://pending") for t in tracks)
+        )
         self.hero_banner.set_banner_data(badge, title, subtitle, stats_text, banner_pix, banner_rgb, is_custom_pl, show_download=show_dl)
 
         active_id = self.engine.current_track.id if self.engine.current_track else None
         self.table_row_tracks = []
 
-        if self.current_view == "playlists_hub":
+        if self.current_view in ("playlists_hub", "playlists_cloud"):
             rows_data: list[tuple[str, Optional[TrackMetadata], Optional[str]]] = []
-            for pid, pl in self.store.playlists.items():
+            if self.current_view == "playlists_cloud":
+                source_pls = {pid: pl for pid, pl in self.store.playlists.items() if pl.is_cloud}
+            else:
+                source_pls = {pid: pl for pid, pl in self.store.playlists.items() if not pl.is_cloud}
+                if not source_pls:
+                    source_pls = self.store.playlists
+
+            for pid, pl in source_pls.items():
                 p_tracks = [self.store.tracks[tid] for tid in pl.track_ids if tid in self.store.tracks]
                 if self.active_genre_filter == "Cloud ☁️":
                     p_tracks = [t for t in p_tracks if t.filepath.startswith("gdrive://") or "Drive" in t.album or "Cloud" in t.genre or Path(t.filepath).name.startswith("gd_")]
@@ -4103,7 +4225,7 @@ class SpotiLinuxWindow(QMainWindow):
             )
 
     def _download_entire_playlist(self, key: Optional[str] = None) -> None:
-        """Descarga todas las pistas de Google Drive de una playlist a music_library/ verificando duplicados."""
+        """Descarga todas las pistas de la playlist a music_library/ verificando duplicados."""
         target_key = key or self.current_view
         if target_key == "home":
             target_key = self.home_preview_key
@@ -4123,29 +4245,39 @@ class SpotiLinuxWindow(QMainWindow):
             QMessageBox.information(self, "Descargar Playlist", "No hay canciones disponibles en esta lista para descargar.")
             return
 
-        cloud_pending = [t for t in pl_tracks if t.filepath.startswith("gdrive://")]
-        if not cloud_pending:
+        cloud_gdrive = [t for t in pl_tracks if t.filepath.startswith("gdrive://")]
+        cloud_pending_txt = [t for t in pl_tracks if t.filepath.startswith("cloud://pending")]
+        total_pending = len(cloud_gdrive) + len(cloud_pending_txt)
+
+        if total_pending == 0:
             QMessageBox.information(
                 self,
                 "Descargar Playlist",
-                f"Todas las canciones de «{name}» ya están disponibles localmente sin duplicados.",
+                f"Todas las canciones de «{name}» ya están disponibles localmente en tu biblioteca.",
             )
             return
 
         reply = QMessageBox.question(
             self,
-            "Descargar Playlist Completa",
-            f"¿Deseas descargar las {len(cloud_pending)} canciones de Google Drive de «{name}» a tu carpeta local?\n\n"
-            "Se verificarán duplicados automáticamente en segundo plano sin congelar la aplicación.",
+            "Descargar Playlist a la Biblioteca",
+            f"¿Deseas descargar las {total_pending} canciones pendientes de «{name}» a tu biblioteca local?\n\n"
+            "Se añadirán a tu biblioteca y estarán disponibles offline.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        self.hero_banner.lbl_subtitle.setText(
-            f"⬇️ Iniciando descarga en segundo plano de {len(cloud_pending)} canciones de «{name}»..."
-        )
-        self.cloud_service.download_playlist_batch(cloud_pending, self.store.tracks)
+        if cloud_pending_txt:
+            queries = [t.title for t in cloud_pending_txt]
+            self.download_queue.add(queries, keep_local=True, target_playlist=name)
+            self._update_download_badge()
+            self.open_download_queue_panel()
+
+        if cloud_gdrive:
+            self.hero_banner.lbl_subtitle.setText(
+                f"⬇️ Iniciando descarga en segundo plano de {len(cloud_gdrive)} canciones de «{name}»..."
+            )
+            self.cloud_service.download_playlist_batch(cloud_gdrive, self.store.tracks)
 
     def _on_playlist_download_progress(self, current: int, total: int, title: str) -> None:
         self.hero_banner.lbl_subtitle.setText(f"⬇️ Descargando ({current}/{total}): «{title}»...")

@@ -1103,6 +1103,9 @@ public class MainActivity extends Activity {
                         videoFolders.add("1tKyv8TEFVGP0f-r8ohMeDj5lz3OC-bsa");
                     }
                     List<String> imageFolders = new ArrayList<>();
+                    if (!imageFolders.contains("1A7kzeO1Hfbz3mBi5War17IjNBX_-FnAE")) {
+                        imageFolders.add("1A7kzeO1Hfbz3mBi5War17IjNBX_-FnAE");
+                    }
 
                     String htmlRoot = fetchUrlText("https://drive.google.com/embeddedfolderview?id=" + fid + "#list");
                     JSONArray pendingAudio = musicApiSuccess ? new JSONArray() : filesArr;

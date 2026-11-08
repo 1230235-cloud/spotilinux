@@ -43,6 +43,7 @@ DEFAULT_ROOT_DRIVE_FOLDER_URL = (
     "https://drive.google.com/drive/folders/1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT?usp=sharing"
 )
 DEFAULT_MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T"
+DEFAULT_IMAGENES_DRIVE_FOLDER_ID = "1A7kzeO1Hfbz3mBi5War17IjNBX_-FnAE"
 DEFAULT_DRIVE_SERVER_URL = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec"
 DEFAULT_CLOUD_SERVER_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a"
 DEFAULT_CLOUD_OBJECT_NAME = "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT"
@@ -369,53 +370,65 @@ def resolve_videos_subfolder_id(config: GoogleDriveConfig) -> Optional[tuple[str
     return None
 
 
-def resolve_imagenes_subfolder_id(config: GoogleDriveConfig) -> Optional[tuple[str, str]]:
+def resolve_imagenes_subfolder_id(config: Optional[GoogleDriveConfig] = None) -> tuple[str, str]:
     """
-    Busca la subcarpeta 'imagenes' (o 'imágenes' / 'images') dentro de la raíz de Drive.
-    Retorna (imagenes_folder_id, nombre_carpeta) o None.
+    Busca la subcarpeta 'imagenes' (o 'imágenes' / 'images') en Google Drive.
+    Si se encuentra en la raíz del usuario la retorna; de lo contrario utiliza
+    la carpeta compartida de Maomao del usuario (1A7kzeO1Hfbz3mBi5War17IjNBX_-FnAE).
     """
-    root_id = config.folder_id or DEFAULT_ROOT_DRIVE_FOLDER_ID
-    if config.access_token or config.api_key:
-        headers = {"Authorization": f"Bearer {config.access_token}"} if config.access_token else {}
-        q = (
-            f"'{root_id}' in parents and trashed = false and "
-            "mimeType = 'application/vnd.google-apps.folder'"
-        )
-        params: dict[str, str] = {
-            "q": q,
-            "pageSize": "50",
-            "fields": "files(id, name)",
-            "supportsAllDrives": "true",
-            "includeItemsFromAllDrives": "true",
-        }
-        if config.api_key and not config.access_token:
-            params["key"] = config.api_key
+    if config and getattr(config, "imagenes_folder_id", None):
+        return config.imagenes_folder_id, "imagenes"
+
+    root_id = config.folder_id if config and config.folder_id else None
+    if root_id:
         try:
-            r = requests.get(
-                "https://www.googleapis.com/drive/v3/files",
-                headers=headers,
-                params=params,
-                timeout=10,
-            )
-            if r.status_code == 200:
-                folders = r.json().get("files", [])
-                for f in folders:
-                    fname = f.get("name", "").lower()
-                    if "imagen" in fname or "image" in fname or "caratula" in fname or "cover" in fname:
-                        return f["id"], f["name"]
+            entries = list_public_drive_folder_items(root_id)
+            for e in entries:
+                low = e.get("name", "").lower()
+                if e.get("is_folder") and ("imagen" in low or "image" in low or "caratula" in low or "cover" in low):
+                    return e["id"], e["name"]
         except Exception:
             pass
 
-    # Fallback mediante vista pública embebida
+    return DEFAULT_IMAGENES_DRIVE_FOLDER_ID, "imagenes"
+
+
+def get_random_drive_cover_path(covers_dir: Path, timeout: int = 6) -> Optional[str]:
+    """
+    Obtiene una carátula aleatoria de la carpeta 'imagenes' de Maomao en Google Drive.
+    Si ya está en caché local la devuelve de inmediato; si no, descarga una al vuelo.
+    """
+    target_dir = covers_dir / "drive_covers"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    existing = list(target_dir.glob("*.jpg")) + list(target_dir.glob("*.jpeg")) + list(target_dir.glob("*.png"))
+    if existing and random.random() < 0.65:
+        return str(random.choice(existing))
+
     try:
-        entries = list_public_drive_folder_items(root_id)
-        for e in entries:
-            low = e.get("name", "").lower()
-            if e.get("is_folder") and ("imagen" in low or "image" in low or "caratula" in low or "cover" in low):
-                return e["id"], e["name"]
+        items = list_public_drive_folder_items(DEFAULT_IMAGENES_DRIVE_FOLDER_ID)
+        img_items = [
+            it for it in items
+            if not it.get("is_folder") and (
+                any(it.get("name", "").lower().endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp"))
+                or "image" in it.get("name", "").lower()
+            )
+        ]
+        if not img_items:
+            return str(random.choice(existing)) if existing else None
+
+        chosen = random.choice(img_items)
+        dest_path = target_dir / f"{chosen['id']}.jpg"
+        if dest_path.exists() and dest_path.stat().st_size > 1000:
+            return str(dest_path)
+
+        url = f"https://drive.usercontent.google.com/download?id={chosen['id']}&export=download&confirm=t"
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
+        if resp.status_code == 200 and len(resp.content) > 1000:
+            dest_path.write_bytes(resp.content)
+            return str(dest_path)
     except Exception:
         pass
-    return None
+    return str(random.choice(existing)) if existing else None
 
 
 def find_free_port(start: int = 8765, end: int = 8775) -> int:

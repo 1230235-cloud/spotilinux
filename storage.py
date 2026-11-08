@@ -4,8 +4,10 @@ Almacenamiento persistente de la biblioteca musical, playlists, favoritos,
 cuentas de usuario multi-dispositivo, historial de reproducción y ecualizador.
 """
 
+import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import sqlite3
@@ -39,6 +41,8 @@ class Playlist:
     created_at: float = field(default_factory=time.time)
     cover_url: str = ""
     cover_drive_id: str = ""
+    cover_path: str = ""
+    is_cloud: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -53,6 +57,8 @@ class Playlist:
             created_at=float(data.get("created_at", time.time())),
             cover_url=data.get("cover_url", data.get("coverUrl", "")),
             cover_drive_id=data.get("cover_drive_id", data.get("coverDriveId", "")),
+            cover_path=data.get("cover_path", data.get("coverPath", "")),
+            is_cloud=bool(data.get("is_cloud", data.get("isCloud", False))),
         )
 
 
@@ -584,16 +590,98 @@ class LibraryStore:
         self.save()
         return pl
 
-    def get_or_create_playlist_by_name(self, name: str, description: str = "") -> Playlist:
+    def get_or_create_playlist_by_name(
+        self,
+        name: str,
+        description: str = "",
+        is_cloud: bool = False,
+    ) -> Playlist:
         clean_name = name.strip() or "Nueva Playlist"
         low = clean_name.lower()
         for pl in self.playlists.values():
             if pl.name.strip().lower() == low:
+                if is_cloud and not pl.is_cloud:
+                    pl.is_cloud = True
+                    self.save()
                 return pl
-        return self.create_playlist(clean_name, description or "Playlist descargada desde archivo .txt")
+        pl = self.create_playlist(
+            clean_name,
+            description or ("Playlist en la Nube (importada desde .txt)" if is_cloud else "Playlist creada en SpotiLinux"),
+        )
+        pl.is_cloud = is_cloud
+        from gdrive_sync import get_random_drive_cover_path
+        rnd_cover = get_random_drive_cover_path(self.covers_dir)
+        if rnd_cover:
+            pl.cover_path = rnd_cover
+        self.save()
+        return pl
+
+    def populate_cloud_playlist_from_queries(
+        self,
+        playlist_name: str,
+        queries: list[str],
+        description: str = "",
+    ) -> tuple[Playlist, int, int]:
+        """
+        Crea o actualiza una playlist de la NUBE a partir de una lista de nombres de canciones.
+        Agrega las canciones de inmediato: si ya existen localmente las vincula; si no,
+        crea pistas en la nube 'cloud://pending' para que sean visibles inmediatamente
+        en la sección de Playlists de la Nube con su opción de descarga.
+        Retorna (playlist, vinculadas_existentes, pendientes_en_nube).
+        """
+        pl = self.get_or_create_playlist_by_name(
+            playlist_name,
+            description=description or "Playlist importada desde lista .txt (en la Nube)",
+            is_cloud=True,
+        )
+        linked_local = 0
+        pending_cloud = 0
+
+        for raw_q in queries:
+            q = raw_q.strip()
+            if not q or q.startswith("#"):
+                continue
+
+            matched = self.find_track_by_query_or_filename(query=q, prefer_real=True)
+            if matched and not matched.filepath.startswith("cloud://pending"):
+                # Si existía un placeholder previo para esta query, reemplazarlo por la pista real
+                for tid in list(pl.track_ids):
+                    old_t = self.tracks.get(tid)
+                    if old_t and old_t.filepath.startswith("cloud://pending") and (
+                        normalize_track_key(old_t.title) == normalize_track_key(matched.title)
+                        or normalize_track_key(old_t.title) == normalize_track_key(q)
+                    ):
+                        self.reconcile_playlist_track_ids(tid, matched.id)
+                        if tid in self.tracks:
+                            del self.tracks[tid]
+                if matched.id not in pl.track_ids:
+                    pl.track_ids.append(matched.id)
+                linked_local += 1
+            else:
+                tid = f"cloud_txt_{hashlib.md5(q.encode('utf-8')).hexdigest()[:12]}"
+                if tid not in self.tracks:
+                    track = TrackMetadata(
+                        id=tid,
+                        filepath=f"cloud://pending/{tid}",
+                        title=q,
+                        artist="En la Nube (Pendiente de descarga)",
+                        album=pl.name,
+                        genre="Cloud",
+                        year="2026",
+                        duration=0.0,
+                        cover_path=getattr(pl, "cover_path", "") or str(self.covers_dir / "cloud_default.jpg"),
+                        dominant_color=(30, 215, 96),
+                    )
+                    self.tracks[tid] = track
+                if tid not in pl.track_ids:
+                    pl.track_ids.append(tid)
+                pending_cloud += 1
+
+        self.save()
+        return pl, linked_local, pending_cloud
 
     def find_track_by_query_or_filename(
-        self, audio_filename: str = "", title: str = "", query: str = ""
+        self, audio_filename: str = "", title: str = "", query: str = "", prefer_real: bool = True
     ) -> Optional[TrackMetadata]:
         if audio_filename:
             target_name = Path(audio_filename).name.lower()
@@ -601,17 +689,25 @@ class LibraryStore:
                 if Path(t.filepath).name.lower() == target_name:
                     return t
 
+        candidates = []
         norm_title = normalize_track_key(title or query)
         if norm_title:
             for t in self.tracks.values():
                 if normalize_track_key(t.title) == norm_title:
-                    return t
+                    candidates.append(t)
 
-        if query:
+        if not candidates and query:
             q_low = query.strip().lower()
             for t in self.tracks.values():
                 if q_low in t.title.lower() or t.title.lower() in q_low:
-                    return t
+                    candidates.append(t)
+
+        if candidates:
+            if prefer_real:
+                real = [c for c in candidates if not c.filepath.startswith("cloud://pending")]
+                if real:
+                    return real[0]
+            return candidates[0]
         return None
 
     def rename_playlist(self, playlist_id: str, new_name: str, new_desc: str = "") -> None:

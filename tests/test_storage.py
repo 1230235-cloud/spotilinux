@@ -144,6 +144,46 @@ class TestLibraryStoreSqlite(unittest.TestCase):
         self.assertNotIn("del_123", pl.track_ids)
         self.assertFalse(dummy_file.exists())
 
+    def test_populate_cloud_playlist_from_queries(self):
+        """Verifica que las canciones de una lista .txt se agreguen de inmediato a la playlist en la nube."""
+        queries = ["Yorushika - That's Why I Gave Up on Music", "Eve - Kaikai Kitan", "RADWIMPS - Sparkle"]
+        pl, linked, pending = self.store.populate_cloud_playlist_from_queries(
+            "Anime Hits 2026",
+            queries,
+            description="Playlists importada de prueba",
+        )
+        self.assertTrue(pl.is_cloud)
+        self.assertEqual(len(pl.track_ids), 3)
+        self.assertEqual(pending, 3)
+        self.assertEqual(linked, 0)
+
+        # Verificar que las pistas existan en store y tengan prefijo cloud://pending
+        for tid in pl.track_ids:
+            t = self.store.tracks.get(tid)
+            self.assertIsNotNone(t)
+            self.assertTrue(t.filepath.startswith("cloud://pending/"))
+
+        # Si volvemos a llamar con una ya existente localmente
+        existing_t = TrackMetadata(
+            id="local_track_99",
+            filepath="/tmp/music/local.mp3",
+            title="Eve - Kaikai Kitan",
+            artist="Eve",
+            album="Kitan",
+            genre="J-Pop",
+            year="2021",
+            duration=210.0,
+            cover_path="",
+            dominant_color=(30, 215, 96),
+        )
+        self.store.tracks["local_track_99"] = existing_t
+        pl2, linked2, pending2 = self.store.populate_cloud_playlist_from_queries(
+            "Anime Hits 2026",
+            ["Eve - Kaikai Kitan", "Nueva Cancion 123"],
+        )
+        self.assertIn("local_track_99", pl2.track_ids)
+        self.assertGreaterEqual(linked2, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -70,13 +70,14 @@ class MaomaoDancerWidget(QWidget):
         """Energías por rango de frecuencia (solo para brillo, moños y expresión; el ritmo viene de set_beat)."""
         self.is_playing = is_playing
         if not is_playing or len(bars) == 0:
-            self.bass_energy *= 0.85
-            self.mid_energy *= 0.85
-            self.high_energy *= 0.85
-            self.overall_energy *= 0.85
-            self.amp *= 0.90
-            self.phase = (self.phase + 0.04) % (2 * math.pi * 100)
-            self._blink_timer = (self._blink_timer + 0.04) % 12.0
+            if self.overall_energy > 0.005 or self.amp > 0.005:
+                self.bass_energy *= 0.85
+                self.mid_energy *= 0.85
+                self.high_energy *= 0.85
+                self.overall_energy *= 0.85
+                self.amp *= 0.90
+            self.phase = (self.phase + 0.03) % (2 * math.pi * 100)
+            self._blink_timer = (self._blink_timer + 0.03) % 12.0
             self.update()
             return
 
@@ -204,9 +205,11 @@ class MaomaoDancerWidget(QWidget):
         painter.setBrush(QColor(0, 0, 0, 130))
         painter.drawEllipse(QPointF(cx, floor_y + 2), shadow_w, 6.5)
 
+        pose = self._dance_pose()
+
         if self.is_playing:
             # Onda en el suelo que nace en cada beat y se expande suavemente
-            pose_f = self._dance_pose()["frac"]
+            pose_f = pose["frac"]
             ring_w = shadow_w + 6.0 + pose_f * 40.0
             alpha = int(150 * (1.0 - pose_f) ** 1.6 * (0.4 + 0.6 * self.amp))
             painter.setPen(QPen(QColor(29, 185, 84, alpha), 1.8))
@@ -214,7 +217,6 @@ class MaomaoDancerWidget(QWidget):
             painter.drawEllipse(QPointF(cx, floor_y + 2), ring_w, 3.0 + pose_f * 7.0)
 
         # 2. Parámetros cinemáticos del baile de Maomao (sincronizados con el compás)
-        pose = self._dance_pose()
         bounce = pose["lift"]
         sway_x = pose["sway"]
         head_tilt = pose["head"]
