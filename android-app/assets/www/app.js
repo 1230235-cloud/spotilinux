@@ -121,6 +121,24 @@ let drivePlaylistImages = DEFAULT_DRIVE_MAOMAO_IMAGES.map(f => ({
 }));
 let pendingCoverTargetPlaylistId = null;
 
+function assignUniqueMaomaoCover(pl) {
+  if (pl.coverDriveId && pl.coverUrl) {
+    return pl.coverUrl;
+  }
+  const usedDriveIds = new Set(
+    playlists
+      .filter(p => p.id !== pl.id && p.coverDriveId)
+      .map(p => p.coverDriveId)
+  );
+  const available = DEFAULT_DRIVE_MAOMAO_IMAGES.filter(img => !usedDriveIds.has(img.id));
+  const pool = available.length > 0 ? available : DEFAULT_DRIVE_MAOMAO_IMAGES;
+  const chosen = pool[Math.floor(Math.random() * pool.length)];
+  pl.coverDriveId = chosen.id;
+  pl.coverUrl = `assets/covers/maomao/${chosen.id}.jpg`;
+  savePersistentState();
+  return pl.coverUrl;
+}
+
 function getPlaylistCoverUrl(pl) {
   if (!pl) return "assets/covers/default.png";
   if (pl.coverDriveId) {
@@ -129,14 +147,16 @@ function getPlaylistCoverUrl(pl) {
   if (pl.coverUrl) {
     if (pl.coverUrl.includes("id=")) {
       const m = pl.coverUrl.match(/id=([a-zA-Z0-9_-]+)/);
-      if (m && m[1]) return `assets/covers/maomao/${m[1]}.jpg`;
+      if (m && m[1]) {
+        pl.coverDriveId = m[1];
+        pl.coverUrl = `assets/covers/maomao/${m[1]}.jpg`;
+        savePersistentState();
+        return pl.coverUrl;
+      }
     }
     return pl.coverUrl;
   }
-  const rnd = DEFAULT_DRIVE_MAOMAO_IMAGES[Math.floor(Math.random() * DEFAULT_DRIVE_MAOMAO_IMAGES.length)];
-  pl.coverDriveId = rnd.id;
-  pl.coverUrl = `assets/covers/maomao/${rnd.id}.jpg`;
-  return pl.coverUrl;
+  return assignUniqueMaomaoCover(pl);
 }
 
 // Filtro dentro de playlists
@@ -3595,7 +3615,8 @@ function renderTracks(forceRebuild = false) {
     const frag = document.createDocumentFragment();
     let totalRendered = 0;
 
-    playlists.forEach(pl => {
+    const cloudPlaylists = playlists.filter(pl => pl.isCloud);
+    cloudPlaylists.forEach(pl => {
       let plTracks = getPlaylistTracks(pl);
       if (onlyDownloadedInPlaylistsView) {
         plTracks = plTracks.filter(t => t.downloaded);
@@ -3640,10 +3661,9 @@ function renderTracks(forceRebuild = false) {
       const emptyDiv = document.createElement("div");
       emptyDiv.style.cssText = "text-align:center; padding:45px 20px; color:#888; font-size:13px;";
       emptyDiv.innerHTML = `
-        <div style="font-size:38px; margin-bottom:12px;">📂</div>
+        <div style="color:var(--green-bright); display:flex; justify-content:center; margin-bottom:12px;">${ICONS.music}</div>
         <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">No hay canciones en Playlists</div>
-        <div style="color:#aaa; max-width:280px; margin:0 auto 18px; line-height:1.4;">Importa un archivo .txt o crea una playlist para ver tus canciones separadas y organizadas por lista.</div>
-        <button class="pl-dark-pill-sm active" onclick="document.getElementById('txtPlaylistPickerMobile').click()" style="padding:8px 16px;">📂 Importar .txt</button>
+        <div style="color:#aaa; max-width:280px; margin:0 auto; line-height:1.4;">Las playlists descargadas desde la app de escritorio aparecerán aquí organizadas automáticamente.</div>
       `;
       frag.appendChild(emptyDiv);
     }
@@ -4212,11 +4232,12 @@ function openPlaylistSelectFilterModal() {
   const icCloud = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
   choices.appendChild(makeFilterChoice(icCloud, "Google Drive", cloudCount, "pl:pl_cloud", activeFilter === "pl:pl_cloud"));
 
-  // Playlists del usuario
-  const icFolder = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
-  playlists.forEach(pl => {
+  // Playlists creadas al descargar desde la app de escritorio
+  const icMusicPl = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+  const cloudPlaylists = playlists.filter(pl => pl.isCloud);
+  cloudPlaylists.forEach(pl => {
     const plTracks = getPlaylistTracks(pl);
-    choices.appendChild(makeFilterChoice(icFolder, pl.name, plTracks.length, "pl:" + pl.id, activeFilter === ("pl:" + pl.id)));
+    choices.appendChild(makeFilterChoice(icMusicPl, pl.name, plTracks.length, "pl:" + pl.id, activeFilter === ("pl:" + pl.id)));
   });
 
   modal.classList.add("open");
@@ -6145,138 +6166,20 @@ function renderSongsPlaylistsMenuBar() {
   allBtn.onclick = () => setFilter("playlists_section");
   row.appendChild(allBtn);
 
-  // 2. Píldoras individuales por playlist
-  playlists.forEach(pl => {
+  // 2. Píldoras individuales por playlist (solo creadas por descarga desde escritorio)
+  const cloudPlaylists = playlists.filter(pl => pl.isCloud);
+  cloudPlaylists.forEach(pl => {
     const plTracks = getPlaylistTracks(pl);
     const dlCount = plTracks.filter(t => t.downloaded).length;
     const btn = document.createElement("button");
     btn.className = "pl-dark-pill-sm" + (activeFilter === `pl:${pl.id}` ? " active" : "");
-    btn.textContent = `${pl.isCloud ? "☁️ " : "🎵 "}${pl.name} (${dlCount}/${plTracks.length})`;
+    btn.textContent = `🎵 ${pl.name} (${dlCount}/${plTracks.length})`;
     btn.onclick = () => setFilter(`pl:${pl.id}`);
     row.appendChild(btn);
   });
 }
 
-function importTxtAsPlaylistMobile(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    try {
-      const text = evt.target.result;
-      const defaultName = file.name.replace(/\.txt$/i, "").replace(/_/g, " ").trim();
-      const lines = text.split(/\r?\n/);
 
-      let currentPlName = defaultName || "Playlist Importada";
-      const grouped = {};
-
-      for (let raw of lines) {
-        let line = raw.trim();
-        if (!line) continue;
-        if (line.startsWith("#")) {
-          const low = line.slice(1).trim();
-          if (low.toLowerCase().startsWith("playlist:")) {
-            const cand = low.split(":", 2)[1]?.trim();
-            if (cand) currentPlName = cand;
-          }
-          continue;
-        }
-        if (line.startsWith("[") && line.endsWith("]") && line.length > 2) {
-          currentPlName = line.slice(1, -1).trim();
-          continue;
-        }
-        if (!grouped[currentPlName]) grouped[currentPlName] = [];
-        grouped[currentPlName].push(line);
-      }
-
-      let createdCount = 0;
-      let matchedCount = 0;
-
-      for (const [plName, qList] of Object.entries(grouped)) {
-        let pl = playlists.find(p => p.name.trim().toLowerCase() === plName.toLowerCase());
-        if (!pl) {
-          pl = {
-            id: "pl_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-            name: plName,
-            desc: "Playlist importada desde archivo .txt (en la Nube)",
-            isCloud: true,
-            trackIds: []
-          };
-          if (Array.isArray(drivePlaylistImages) && drivePlaylistImages.length > 0) {
-            const randomImg = drivePlaylistImages[Math.floor(Math.random() * drivePlaylistImages.length)];
-            pl.coverUrl = randomImg.url;
-            pl.coverDriveId = randomImg.id;
-          }
-          playlists.unshift(pl);
-          createdCount++;
-        } else {
-          pl.isCloud = true;
-          if (!pl.coverUrl && Array.isArray(drivePlaylistImages) && drivePlaylistImages.length > 0) {
-            const randomImg = drivePlaylistImages[Math.floor(Math.random() * drivePlaylistImages.length)];
-            pl.coverUrl = randomImg.url;
-            pl.coverDriveId = randomImg.id;
-          }
-        }
-        if (!pl.trackIds) pl.trackIds = [];
-
-        qList.forEach(q => {
-          const normQ = q.toLowerCase();
-          const found = tracks.find(t => {
-            const full = ((t.title || "") + " " + (t.artist || "")).toLowerCase();
-            return full.includes(normQ) || normQ.includes((t.title || "").toLowerCase());
-          });
-          if (found) {
-            if (!pl.trackIds.includes(found.id)) {
-              pl.trackIds.push(found.id);
-              matchedCount++;
-            }
-          } else {
-            const pendingId = "cloud_txt_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-            const pendingTrack = {
-              id: pendingId,
-              title: q,
-              artist: "En la Nube (Pendiente de descarga)",
-              album: pl.name,
-              isCloudPending: true,
-              cloud: true,
-              downloaded: false,
-              driveId: "",
-              driveUrl: "",
-              src: "",
-              cover: pl.coverUrl || "assets/covers/default.png"
-            };
-            tracks.push(pendingTrack);
-            pl.trackIds.push(pendingId);
-            matchedCount++;
-          }
-        });
-      }
-
-      playlistCacheVersion++;
-      if (userAccount && userAccount.email) {
-        userAccount.playlists = playlists;
-        if (accountsDb[userAccount.email]) {
-          accountsDb[userAccount.email].playlists = playlists;
-          accountsDb[userAccount.email].updatedAt = Date.now();
-          accountsDb[userAccount.email].updated_at = Date.now();
-        }
-      }
-      savePersistentState();
-      renderHomePlaylists();
-      openSongsPlaylistsSection();
-      if (typeof uploadPlaylistsToDrive === "function") {
-        uploadPlaylistsToDrive();
-      }
-      showToast(`✔ Se procesaron ${Object.keys(grouped).length} playlist(s) (${matchedCount} canciones vinculadas)`);
-    } catch (err) {
-      console.error("Error al importar playlist .txt:", err);
-      showToast("Error al importar archivo .txt");
-    } finally {
-      e.target.value = "";
-    }
-  };
-  reader.readAsText(file);
-}
 
 function setFilter(flt) {
   activeFilter = flt;
@@ -6296,11 +6199,11 @@ function setFilter(flt) {
       else if (plId === "pl_cloud") plBtn.textContent = "☁️ Drive ▾";
       else {
         const pl = playlists.find(p => p.id === plId);
-        plBtn.textContent = pl ? ("📁 " + (pl.name.length > 12 ? pl.name.slice(0, 10) + "…" : pl.name) + " ▾") : "📁 Playlist ▾";
+        plBtn.textContent = pl ? ("🎵 " + (pl.name.length > 12 ? pl.name.slice(0, 10) + "…" : pl.name) + " ▾") : "🎵 Playlist ▾";
       }
     } else {
       plBtn.classList.remove("active");
-      plBtn.textContent = "📁 Por Playlist ▾";
+      plBtn.textContent = "Por Playlist ▾";
     }
   }
   const heading = document.getElementById("listHeading");

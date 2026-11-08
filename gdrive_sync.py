@@ -15,6 +15,7 @@ import hashlib
 import html
 import json
 import mimetypes
+import random
 import re
 import secrets
 import time
@@ -44,6 +45,27 @@ DEFAULT_ROOT_DRIVE_FOLDER_URL = (
 )
 DEFAULT_MUSICA_FOLDER_ID = "1HeT9OPYwMUGYi4CVYLpHc4sJMIYmmJ9T"
 DEFAULT_IMAGENES_DRIVE_FOLDER_ID = "1A7kzeO1Hfbz3mBi5War17IjNBX_-FnAE"
+
+MAOMAO_DRIVE_IMAGE_IDS: list[str] = [
+    "1R5Q0SR9id1KAjFjImFpEbhJunEo3yCAm",
+    "1pr5EnsiVmXnN_EUmn0rGbAyGglQCzW4k",
+    "14HU81aI6mMxrj8meOGlVuIOGA8II0FW3",
+    "1nXtjFVoesHBTA2OVQJ5p0EvVThlTiJTA",
+    "1Vl5y7Y7Lbid6KxPFrOxBF3h5gPk1O_Zi",
+    "1KC6_-n758IX_rj-aGu56kc5niMJjzRQp",
+    "1IOlLNE8eVXK-nLk3fIJa4By7Gk2zygUj",
+    "1h5iJl-2R-4wolA5FF0BzPtjA8O2_5hYJ",
+    "190LrWyiKgFfMN9Vy04-dZGiitOzK405C",
+    "1HwXYWgSJXEeQ9yWctH_QfZA6xdTP2ihb",
+    "1OD51Nnoy6gvx3f6EBg2F6q8066JToRFn",
+    "1oqGONbN7CFqzi8-ENWVsT6OD-gLds8nk",
+    "1xyLKxDGKnc8ZCYN0_DtRZwD0KenDab8b",
+    "1Y6GgixZirUlr1e3NmGRC9gY4uJuTXPNP",
+    "1MCTn6ofrzeotnC1yOX86cTGJNtUGi_r3",
+    "1kgScYDxSq_B3ZTurG5Pg9zDLz9nhddA3",
+    "1SW4UdiuJjkCXXcDI72oArUXgx9BVxw51",
+    "1D1mBLC16qhVXzp68gJGrh3sdNMa8wiwc",
+]
 DEFAULT_DRIVE_SERVER_URL = "https://script.google.com/macros/s/AKfycbzwOO_eEw7ldBwGUPwX_MqYZfgRA6-N9meQ_z8k43V-0KBc0cmj43ap2qV6vT0ynO4dIQ/exec"
 DEFAULT_CLOUD_SERVER_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a"
 DEFAULT_CLOUD_OBJECT_NAME = "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT"
@@ -393,41 +415,47 @@ def resolve_imagenes_subfolder_id(config: Optional[GoogleDriveConfig] = None) ->
     return DEFAULT_IMAGENES_DRIVE_FOLDER_ID, "imagenes"
 
 
-def get_random_drive_cover_path(covers_dir: Path, timeout: int = 6) -> Optional[str]:
+def get_random_drive_cover_path(
+    covers_dir: Path, timeout: int = 6, exclude_paths: Optional[set[str]] = None
+) -> Optional[str]:
     """
-    Obtiene una carátula aleatoria de la carpeta 'imagenes' de Maomao en Google Drive.
-    Si ya está en caché local la devuelve de inmediato; si no, descarga una al vuelo.
+    Obtiene una carátula de Maomao garantizando exclusividad:
+    Excluye las carátulas que ya estén ocupadas por otras playlists.
+    Una vez asignada, la carátula se conserva estática.
     """
     target_dir = covers_dir / "drive_covers"
     target_dir.mkdir(parents=True, exist_ok=True)
     existing = list(target_dir.glob("*.jpg")) + list(target_dir.glob("*.jpeg")) + list(target_dir.glob("*.png"))
-    if existing and random.random() < 0.65:
-        return str(random.choice(existing))
 
-    try:
-        items = list_public_drive_folder_items(DEFAULT_IMAGENES_DRIVE_FOLDER_ID)
-        img_items = [
-            it for it in items
-            if not it.get("is_folder") and (
-                any(it.get("name", "").lower().endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp"))
-                or "image" in it.get("name", "").lower()
-            )
-        ]
-        if not img_items:
-            return str(random.choice(existing)) if existing else None
+    excluded = {str(p) for p in (exclude_paths or set()) if p}
+    available_existing = [str(p) for p in existing if str(p) not in excluded]
 
-        chosen = random.choice(img_items)
-        dest_path = target_dir / f"{chosen['id']}.jpg"
-        if dest_path.exists() and dest_path.stat().st_size > 1000:
-            return str(dest_path)
+    if available_existing:
+        return random.choice(available_existing)
 
-        url = f"https://drive.usercontent.google.com/download?id={chosen['id']}&export=download&confirm=t"
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
-        if resp.status_code == 200 and len(resp.content) > 1000:
-            dest_path.write_bytes(resp.content)
-            return str(dest_path)
-    except Exception:
-        pass
+    used_ids = {Path(p).stem for p in excluded}
+    available_ids = [fid for fid in MAOMAO_DRIVE_IMAGE_IDS if fid not in used_ids]
+    target_pool = available_ids if available_ids else MAOMAO_DRIVE_IMAGE_IDS
+
+    chosen_id = random.choice(target_pool)
+    dest_path = target_dir / f"{chosen_id}.jpg"
+    if dest_path.exists() and dest_path.stat().st_size > 1000:
+        return str(dest_path)
+
+    urls = [
+        f"https://lh3.googleusercontent.com/d/{chosen_id}=w600",
+        f"https://drive.google.com/thumbnail?id={chosen_id}&sz=w600",
+        f"https://drive.usercontent.google.com/download?id={chosen_id}&export=download&confirm=t",
+    ]
+    for u in urls:
+        try:
+            resp = requests.get(u, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                dest_path.write_bytes(resp.content)
+                return str(dest_path)
+        except Exception:
+            pass
+
     return str(random.choice(existing)) if existing else None
 
 

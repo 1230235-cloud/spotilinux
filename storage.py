@@ -610,9 +610,12 @@ class LibraryStore:
         )
         pl.is_cloud = is_cloud
         from gdrive_sync import get_random_drive_cover_path
-        rnd_cover = get_random_drive_cover_path(self.covers_dir)
+        used_covers = {p.cover_path for p in self.playlists.values() if getattr(p, "cover_path", "") and p.id != pl.id}
+        rnd_cover = get_random_drive_cover_path(self.covers_dir, exclude_paths=used_covers)
         if rnd_cover:
             pl.cover_path = rnd_cover
+            pl.cover_drive_id = Path(rnd_cover).stem
+            pl.cover_url = f"https://lh3.googleusercontent.com/d/{pl.cover_drive_id}=w600"
         self.save()
         return pl
 

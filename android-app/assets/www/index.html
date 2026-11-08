@@ -381,7 +381,7 @@
           <button class="btn-chip" id="flt-saved" onclick="setFilter('saved')">Descargadas</button>
           <button class="btn-chip" id="flt-liked" onclick="setFilter('liked')">Favoritos</button>
           <button class="btn-chip" id="flt-cloud" onclick="setFilter('cloud')">Google Drive</button>
-          <button class="btn-chip" id="flt-playlist" onclick="openPlaylistSelectFilterModal()">📁 Por Playlist ▾</button>
+          <button class="btn-chip" id="flt-playlist" onclick="openPlaylistSelectFilterModal()">Por Playlist ▾</button>
           <button class="btn-chip" id="flt-shuffle" onclick="startRandomPlayback()">Aleatorio</button>
         </div>
 
@@ -391,8 +391,6 @@
             <span class="songs-pl-menubar-label">🎵 MENÚ DE PLAYLISTS</span>
             <div style="display:flex; gap:6px;">
               <button class="pl-dark-pill-sm" id="btnOnlyDownloadedPl" onclick="toggleOnlyDownloadedInPlaylistsView()">⬇️ Solo Descargadas</button>
-              <button class="pl-dark-pill-sm active" onclick="document.getElementById('txtPlaylistPickerMobile').click()">📂 Importar .txt</button>
-              <input type="file" id="txtPlaylistPickerMobile" accept=".txt,text/plain" style="display:none" onchange="importTxtAsPlaylistMobile(event)" />
             </div>
           </div>
           <div id="songsPlaylistsPillsRow" class="songs-pl-pills-row">
@@ -778,7 +776,7 @@
   <div id="playlistSelectFilterModal" class="modal-backdrop">
     <div class="modal-card" style="max-width:380px; max-height:85vh; display:flex; flex-direction:column; padding:16px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-        <h3 style="margin:0; font-size:15px; color:#fff;">📁 Filtrar por Playlist</h3>
+        <h3 style="margin:0; font-size:15px; color:#fff;">Filtrar por Playlist</h3>
         <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closePlaylistSelectFilterModal()">✕</button>
       </div>
       <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Selecciona la playlist para explorar y buscar sus canciones:</p>

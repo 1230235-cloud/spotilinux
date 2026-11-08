@@ -1015,7 +1015,7 @@ class AccountDialog(QDialog):
 
         desc = QLabel(
             f"Tus playlists y canciones se sincronizan con tu cuenta en:\n"
-            f"📁 Drive ID: {DEFAULT_ROOT_DRIVE_FOLDER_ID} ({CLOUD_DB_FILENAME} + carpeta «Musica»)"
+            f"☁️ Drive ID: {DEFAULT_ROOT_DRIVE_FOLDER_ID} ({CLOUD_DB_FILENAME} + carpeta «Musica»)"
         )
         desc.setWordWrap(True)
         desc.setStyleSheet("color: #A6A6B4; font-size: 11px; font-weight: normal;")
@@ -3369,9 +3369,12 @@ class SpotiLinuxWindow(QMainWindow):
             pl_cov_path = getattr(pl, "cover_path", "")
             if not pl_cov_path or not Path(pl_cov_path).exists():
                 from gdrive_sync import get_random_drive_cover_path
-                rnd = get_random_drive_cover_path(self.store.covers_dir)
+                used = {p.cover_path for p in self.store.playlists.values() if getattr(p, "cover_path", "") and p.id != pid}
+                rnd = get_random_drive_cover_path(self.store.covers_dir, exclude_paths=used)
                 if rnd:
                     pl.cover_path = rnd
+                    pl.cover_drive_id = Path(rnd).stem
+                    pl.cover_url = f"https://lh3.googleusercontent.com/d/{pl.cover_drive_id}=w600"
                     pl_cov_path = rnd
                     self.store.save()
 
@@ -3722,7 +3725,7 @@ class SpotiLinuxWindow(QMainWindow):
             banner_rgb = (29, 135, 78)
             stats_text = f"{len(self.store.playlists)} playlists disponibles  •  {len(self.store.liked_ids)} favoritas"
         elif self.current_view == "playlists_hub":
-            banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="📂", colors=((30, 215, 96), (18, 140, 70), (24, 24, 32)))
+            banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="🎵", colors=((30, 215, 96), (18, 140, 70), (24, 24, 32)))
             banner_rgb = (30, 215, 96)
             local_count = len([p for p in self.store.playlists.values() if not p.is_cloud])
             stats_text = f"{local_count} playlists locales  •  {len(tracks)} canciones"
@@ -3743,9 +3746,12 @@ class SpotiLinuxWindow(QMainWindow):
             pl_cov = getattr(pl, "cover_path", "") if pl else ""
             if pl and (not pl_cov or not Path(pl_cov).exists()):
                 from gdrive_sync import get_random_drive_cover_path
-                rnd = get_random_drive_cover_path(self.store.covers_dir)
+                used = {p.cover_path for p in self.store.playlists.values() if getattr(p, "cover_path", "") and p.id != pid}
+                rnd = get_random_drive_cover_path(self.store.covers_dir, exclude_paths=used)
                 if rnd:
                     pl.cover_path = rnd
+                    pl.cover_drive_id = Path(rnd).stem
+                    pl.cover_url = f"https://lh3.googleusercontent.com/d/{pl.cover_drive_id}=w600"
                     pl_cov = rnd
                     self.store.save()
 
