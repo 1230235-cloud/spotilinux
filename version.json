@@ -1,19 +1,20 @@
 {
-  "versionCode": 32,
-  "versionName": "2.13.0",
+  "versionCode": 33,
+  "versionName": "2.14.0",
   "releaseDate": "2026-11-08",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.13.0",
+    "version": "2.14.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Integración directa de todas las canciones a playlists importadas desde .txt como pistas pendientes de la nube",
-    "Sección separada y dedicada 'Playlists en la Nube' tanto en Escritorio como en APK móvil con botón de descarga a biblioteca",
-    "Integración completa de la carpeta de imágenes de Maomao en Google Drive con asignación y selección de portadas aleatorias",
-    "Optimización drástica de arranque con escaneo diferido en segundo plano y renderizado fluido a 60 FPS de Maomao sin tirones",
-    "Caché en memoria de carátulas redondeadas y reducción de cómputo redundante en cada fotograma de animación"
+    "Menú de acciones por pulsación prolongada (long-press) en móvil y escritorio con opciones Mover, Ocultar y Seleccionar varias",
+    "Ocultar canciones para la cuenta activa con sincronización en Google Drive y opción de restaurar",
+    "Mover canciones entre playlists con reubicación fluida e intuitiva",
+    "Carátulas estáticas y exclusivas de Maomao fijadas por playlist sin repeticiones",
+    "Eliminación total del símbolo de carpeta y estandarización visual con iconos limpios",
+    "Vista plana y directa de canciones en la pestaña Todo sin separadores redundantes"
   ]
 }
