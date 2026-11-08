@@ -104,6 +104,7 @@ class LibraryStore:
         self.google_user: dict = {}
         # Cuenta SpotiLinux vinculada a Drive (username, email, password_hash)
         self.user_account: dict = {}
+        self.hidden_track_ids: list[str] = []
 
         # Estado del reproductor y ecualizador
         self.volume: int = 80
@@ -213,6 +214,7 @@ class LibraryStore:
                     ("watched_folders", json.dumps(self.watched_folders)),
                     ("gdrive_config", json.dumps(self.gdrive_config.to_dict())),
                     ("user_account", json.dumps(self.user_account)),
+                    ("hidden_track_ids", json.dumps(self.hidden_track_ids)),
                     ("player_state", json.dumps({
                         "volume": self.volume,
                         "shuffle": self.shuffle,
@@ -256,6 +258,7 @@ class LibraryStore:
             self.welcome_shown = bool(raw.get("welcome_shown", False))
             self.google_user = dict(raw.get("google_user", {}))
             self.user_account = dict(raw.get("user_account", {}))
+            self.hidden_track_ids = list(raw.get("hidden_track_ids", []))
             self.volume = int(raw.get("volume", 80))
             self.shuffle = bool(raw.get("shuffle", False))
             self.repeat_mode = str(raw.get("repeat_mode", "off"))
@@ -293,6 +296,7 @@ class LibraryStore:
             "welcome_shown": self.welcome_shown,
             "google_user": self.google_user,
             "user_account": self.user_account,
+            "hidden_track_ids": self.hidden_track_ids,
             "volume": self.volume,
             "shuffle": self.shuffle,
             "repeat_mode": self.repeat_mode,
@@ -409,6 +413,10 @@ class LibraryStore:
             if lid in self.tracks and lid not in self.liked_ids:
                 self.liked_ids.append(lid)
 
+        for hid in acc_record.get("hidden_track_ids", []):
+            if hid not in self.hidden_track_ids:
+                self.hidden_track_ids.append(hid)
+
         pl_restored = 0
         cloud_playlists = acc_record.get("playlists", {})
         if isinstance(cloud_playlists, dict):
@@ -442,6 +450,25 @@ class LibraryStore:
         self.deduplicate_library()
         self.save()
         return (pl_restored, drive_added)
+
+    def hide_track(self, track_id: str) -> None:
+        """Oculta una canción para que no se muestre en la cuenta."""
+        if track_id not in self.hidden_track_ids:
+            self.hidden_track_ids.append(track_id)
+        if self.user_account:
+            hidden = self.user_account.setdefault("hidden_track_ids", [])
+            if track_id not in hidden:
+                hidden.append(track_id)
+        self.save()
+
+    def unhide_track(self, track_id: str) -> None:
+        """Restaura una canción previamente oculta."""
+        if track_id in self.hidden_track_ids:
+            self.hidden_track_ids.remove(track_id)
+        if self.user_account and "hidden_track_ids" in self.user_account:
+            if track_id in self.user_account["hidden_track_ids"]:
+                self.user_account["hidden_track_ids"].remove(track_id)
+        self.save()
 
     def scan_folder(
         self,

@@ -168,6 +168,16 @@
         </div>
       </button>
 
+      <button class="sm-item-btn" onclick="closeSideMenu(); openHiddenTracksModal()">
+        <div class="sm-item-icon" style="color:#ef4444; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.28);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </div>
+        <div class="sm-item-text">
+          <div class="sm-item-title">Música Oculta en tu Cuenta</div>
+          <div class="sm-item-sub">Ver o restaurar canciones ocultas</div>
+        </div>
+      </button>
+
       <button class="sm-item-btn" onclick="closeSideMenu(); scanPhoneMusic()">
         <div class="sm-item-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
@@ -622,6 +632,93 @@
         <button class="btn-chip active" style="flex:1; padding:8px;" onclick="closeAddToPlaylistAndCreateNew()">＋ Nueva Playlist</button>
         <button class="btn-chip" style="padding:8px;" onclick="closeAddToPlaylistModal()">Cerrar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MENÚ DE ACCIONES AL MANTENER PRESIONADA UNA CANCIÓN -->
+  <div id="trackActionMenuModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:360px; padding:18px; border-radius:24px;">
+      <div id="trackActionHeader" style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div id="trackActionCover" style="width:44px; height:44px; border-radius:10px; background:#1c1c24; overflow:hidden; flex-shrink:0;"></div>
+        <div style="min-width:0; flex:1;">
+          <div id="trackActionTitle" style="font-weight:700; color:#fff; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Título</div>
+          <div id="trackActionArtist" style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Artista</div>
+        </div>
+        <button class="btn-chip" style="padding:4px 8px; font-size:11px;" onclick="closeTrackActionMenu()">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <!-- 1. Mover -->
+        <button class="pl-dark-choice-row" onclick="handleTrackActionMove()" style="padding:12px 14px; border-radius:14px;">
+          <div class="pl-dark-choice-left">
+            <div class="pl-dark-choice-icon" style="color:var(--green-bright); background:rgba(30,215,96,0.12);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l4-4 4 4"/><path d="M9 5v14"/><path d="M19 15l-4 4-4-4"/><path d="M15 19V5"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700; color:#fff; font-size:13px;">Mover</div>
+              <div style="font-size:11px; color:var(--muted);">Reubicar a otra playlist</div>
+            </div>
+          </div>
+          <span style="color:var(--muted); font-size:14px;">›</span>
+        </button>
+
+        <!-- 2. Ocultar -->
+        <button class="pl-dark-choice-row" onclick="handleTrackActionHide()" style="padding:12px 14px; border-radius:14px;">
+          <div class="pl-dark-choice-left">
+            <div class="pl-dark-choice-icon" style="color:#ef4444; background:rgba(239,68,68,0.12); border-color:rgba(239,68,68,0.3);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700; color:#ef4444; font-size:13px;">Ocultar</div>
+              <div style="font-size:11px; color:var(--muted);">Se dejará de mostrar esta música en tu cuenta</div>
+            </div>
+          </div>
+          <span style="color:var(--muted); font-size:14px;">›</span>
+        </button>
+
+        <!-- 3. Seleccionar varias -->
+        <button class="pl-dark-choice-row" onclick="handleTrackActionMultiSelect()" style="padding:12px 14px; border-radius:14px;">
+          <div class="pl-dark-choice-left">
+            <div class="pl-dark-choice-icon" style="color:#60a5fa; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.3);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700; color:#fff; font-size:13px;">Seleccionar varias</div>
+              <div style="font-size:11px; color:var(--muted);">Elegir múltiples canciones a la vez</div>
+            </div>
+          </div>
+          <span style="color:var(--muted); font-size:14px;">›</span>
+        </button>
+      </div>
+      <button class="btn-chip" style="width:100%; margin-top:14px; padding:10px; font-weight:700;" onclick="closeTrackActionMenu()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- MODAL: MOVER CANCIÓN A OTRA PLAYLIST -->
+  <div id="moveTrackModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:380px; max-height:85vh; display:flex; flex-direction:column; padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:15px; color:#fff;">⇄ Mover Canción</h3>
+        <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closeMoveTrackModal()">✕</button>
+      </div>
+      <p id="moveTrackSubtitle" style="font-size:11px; color:var(--muted); margin-bottom:12px;">Selecciona la playlist de destino:</p>
+      <div id="moveTrackChoices" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; margin-bottom:12px; flex:1;"></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-chip active" style="flex:1; padding:8px;" onclick="closeMoveAndCreateNewPlaylist()">＋ Nueva Playlist</button>
+        <button class="btn-chip" style="padding:8px;" onclick="closeMoveTrackModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CANCIONES OCULTAS DE LA CUENTA -->
+  <div id="hiddenTracksModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:400px; max-height:85vh; display:flex; flex-direction:column; padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:15px; color:#fff;">👁️‍🗨️ Música Oculta en tu Cuenta</h3>
+        <button class="btn-chip" style="padding:6px 10px; font-size:12px;" onclick="closeHiddenTracksModal()">✕</button>
+      </div>
+      <p style="font-size:11px; color:var(--muted); margin-bottom:12px;">Estas canciones no se muestran en tu biblioteca ni en tus playlists. Puedes restaurarlas cuando desees:</p>
+      <div id="hiddenTracksChoices" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; margin-bottom:12px; flex:1;"></div>
+      <button class="btn-chip" style="padding:8px; width:100%;" onclick="closeHiddenTracksModal()">Cerrar</button>
     </div>
   </div>
 

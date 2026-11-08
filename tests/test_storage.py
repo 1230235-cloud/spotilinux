@@ -184,6 +184,22 @@ class TestLibraryStoreSqlite(unittest.TestCase):
         self.assertIn("local_track_99", pl2.track_ids)
         self.assertGreaterEqual(linked2, 1)
 
+    def test_hide_and_unhide_track(self):
+        """Verifica que ocultar y restaurar canciones persista en store y en la cuenta."""
+        self.store.user_account = {"email": "user@example.com", "username": "TestUser"}
+        self.store.hide_track("track_secret_1")
+        self.assertIn("track_secret_1", self.store.hidden_track_ids)
+        self.assertIn("track_secret_1", self.store.user_account.get("hidden_track_ids", []))
+
+        # Recargar desde disco para verificar persistencia
+        reloaded = LibraryStore(self.test_dir)
+        self.assertIn("track_secret_1", reloaded.hidden_track_ids)
+
+        # Restaurar
+        reloaded.unhide_track("track_secret_1")
+        self.assertNotIn("track_secret_1", reloaded.hidden_track_ids)
+        self.assertNotIn("track_secret_1", reloaded.user_account.get("hidden_track_ids", []))
+
 
 if __name__ == "__main__":
     unittest.main()

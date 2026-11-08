@@ -36,7 +36,7 @@ from download_queue import DownloadQueue, QueueRunner, parse_playlist_txt
 from download_queue_ui import DownloadQueuePanel, QueueSignals
 from vinyl_view import VinylStandbyOverlay
 import icons
-from PyQt6.QtCore import Qt, QSize, QPoint, QRectF, QTimer, QThread, QUrl, pyqtSignal, qInstallMessageHandler, QtMsgType
+from PyQt6.QtCore import Qt, QSize, QPoint, QRectF, QTimer, QThread, QUrl, pyqtSignal, qInstallMessageHandler, QtMsgType, QEvent
 from PyQt6.QtGui import (
     QAction,
     QColor,
@@ -66,6 +66,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -2621,6 +2622,13 @@ class SpotiLinuxWindow(QMainWindow):
         self.track_table.cellClicked.connect(self._on_table_cell_clicked)
         self.track_table.customContextMenuRequested.connect(self._on_table_context_menu)
 
+        self._table_press_timer = QTimer(self)
+        self._table_press_timer.setSingleShot(True)
+        self._table_press_timer.setInterval(450)
+        self._table_press_pos = None
+        self._table_press_timer.timeout.connect(self._on_table_long_press_timeout)
+        self.track_table.viewport().installEventFilter(self)
+
         self.btn_maomao_style.clicked.connect(lambda: self.maomao_widget.next_dance_style())
         self.btn_cycle_vis.clicked.connect(self.visualizer.next_mode)
         self.visualizer.mode_changed.connect(self._on_visualizer_mode_changed)
@@ -3684,6 +3692,10 @@ class SpotiLinuxWindow(QMainWindow):
     def _refresh_track_table(self) -> None:
         badge, title, subtitle, tracks, is_custom_pl = self._get_base_tracks_for_view()
 
+        # Excluir canciones marcadas como ocultas en la cuenta
+        if getattr(self.store, "hidden_track_ids", None):
+            tracks = [t for t in tracks if t.id not in self.store.hidden_track_ids]
+
         # Actualizar placeholder según la playlist o vista actual
         if is_custom_pl or self.current_view.startswith("playlist:") or self.current_view in ("liked", "gdrive"):
             self.search_input.setPlaceholderText(f"🔍 Buscar canciones en «{title}»...")
@@ -4029,6 +4041,10 @@ class SpotiLinuxWindow(QMainWindow):
                 pl_actions[a] = pid
             act_new_pl_with_tracks = pl_menu.addAction("✨ Crear nueva Playlist con esta canción...")
 
+            menu.addSeparator()
+            act_move = menu.addAction("⇄  Mover a otra Playlist...")
+            act_hide = menu.addAction("👁️‍🗨️  Ocultar de la cuenta (no mostrar más)")
+
             act_remove_from_pl = None
             if self.current_view.startswith("playlist:"):
                 menu.addSeparator()
@@ -4041,6 +4057,10 @@ class SpotiLinuxWindow(QMainWindow):
             act_download_cloud = None
             act_queue = menu.addAction(f"☰  Añadir {n_tracks} canciones a la cola")
             act_like = menu.addAction(f"♥  Guardar las {n_tracks} canciones en Favoritos")
+
+            menu.addSeparator()
+            act_move = menu.addAction(f"⇄  Mover {n_tracks} canciones a otra Playlist...")
+            act_hide = menu.addAction(f"👁️‍🗨️  Ocultar las {n_tracks} canciones de la cuenta")
 
             menu.addSeparator()
             pl_menu = menu.addMenu(f"＋  Añadir {n_tracks} canciones seleccionadas a Playlist")
@@ -4126,6 +4146,66 @@ class SpotiLinuxWindow(QMainWindow):
                 self._sync_playlists_to_cloud()
                 self._refresh_track_table()
                 self._refresh_playlist_sidebar()
+        elif chosen == act_hide:
+            for t in selected_tracks:
+                self.store.hide_track(t.id)
+                if self.engine.current_track and self.engine.current_track.id == t.id:
+                    self.engine.next_track()
+            self._sync_playlists_to_cloud()
+            self._refresh_track_table()
+            self.show_toast(f"🚫 {n_tracks} canción(es) ocultada(s) de tu cuenta.")
+        elif chosen == act_move:
+            self._prompt_move_tracks_to_playlist(selected_tracks)
+
+    def _prompt_move_tracks_to_playlist(self, tracks_to_move: list[TrackMetadata]) -> None:
+        """Mueve canciones a una playlist de destino, removiéndolas de la playlist de origen si aplica."""
+        if not self.store.playlists:
+            self.show_toast("No hay playlists creadas todavía.")
+            return
+        pl_names = [pl.name for pl in self.store.playlists.values()]
+        chosen_name, ok = QInputDialog.getItem(
+            self,
+            "Mover a Playlist",
+            f"Selecciona la playlist de destino para {len(tracks_to_move)} canción(es):",
+            pl_names,
+            0,
+            False,
+        )
+        if ok and chosen_name:
+            target_pl = next((p for p in self.store.playlists.values() if p.name == chosen_name), None)
+            if not target_pl:
+                return
+            source_pl = None
+            if self.current_view.startswith("playlist:"):
+                spid = self.current_view.split(":", 1)[1]
+                source_pl = self.store.playlists.get(spid)
+
+            for t in tracks_to_move:
+                if source_pl and t.id in source_pl.track_ids and source_pl.id != target_pl.id:
+                    source_pl.track_ids.remove(t.id)
+                if t.id not in target_pl.track_ids:
+                    target_pl.track_ids.append(t.id)
+
+            self.store.save()
+            self._sync_playlists_to_cloud()
+            self._refresh_track_table()
+            self.show_toast(f"✔ {len(tracks_to_move)} canción(es) movida(s) a «{target_pl.name}».")
+
+    def eventFilter(self, obj, event):
+        if hasattr(self, "track_table") and obj == self.track_table.viewport():
+            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+                self._table_press_pos = event.pos()
+                self._table_press_timer.start(450)
+            elif event.type() == QEvent.Type.MouseMove:
+                if self._table_press_pos and (event.pos() - self._table_press_pos).manhattanLength() > 10:
+                    self._table_press_timer.stop()
+            elif event.type() in (QEvent.Type.MouseButtonRelease, QEvent.Type.MouseButtonDblClick):
+                self._table_press_timer.stop()
+        return super().eventFilter(obj, event)
+
+    def _on_table_long_press_timeout(self) -> None:
+        if self._table_press_pos:
+            self._on_table_context_menu(self._table_press_pos)
 
     def _open_multi_track_picker_for_current_playlist(self) -> None:
         """Abre un diálogo interactivo para seleccionar varias canciones con checkboxes y agregarlas juntas."""

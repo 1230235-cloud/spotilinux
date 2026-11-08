@@ -2763,7 +2763,7 @@ function ensurePlaylistCacheFresh() {
     for (let k = 0; k < pl.trackIds.length; k++) {
       const tid = pl.trackIds[k];
       const trk = findTrackByPlaylistId(tid);
-      if (trk && !seenTrackIds.has(trk.id)) {
+      if (trk && !seenTrackIds.has(trk.id) && !(typeof isTrackHidden === "function" && isTrackHidden(trk))) {
         seenTrackIds.add(trk.id);
         matchedTracks.push(trk);
         const arr = trackToPlaylistsMap.get(trk.id);
@@ -2785,7 +2785,7 @@ function getPlaylistTracks(pl) {
   const matchedIds = new Set();
   for (const tid of pl.trackIds) {
     const t = findTrackByPlaylistId(tid);
-    if (t && !matchedIds.has(t.id)) {
+    if (t && !matchedIds.has(t.id) && !(typeof isTrackHidden === "function" && isTrackHidden(t))) {
       matched.push(t);
       matchedIds.add(t.id);
     }
@@ -3388,6 +3388,7 @@ function getFilteredTracks() {
   const q = (document.getElementById("searchInput").value || "").toLowerCase().trim();
   return tracks.filter(t => {
     if (!t) return false;
+    if (typeof isTrackHidden === "function" && isTrackHidden(t)) return false;
     if (t.isCloudPending && !activeFilter.startsWith("pl:") && activeFilter !== "playlists_cloud" && activeFilter !== "playlists_section") return false;
     if (activeFilter === "saved" && !t.downloaded) return false;
     if (activeFilter === "liked" && !t.liked) return false;
@@ -3480,6 +3481,424 @@ function openAddSelectedToPlaylistModal() {
   openAddToPlaylistModal(Array.from(selectedTrackIds));
 }
 
+function startMultiSelectWithTrack(trackId) {
+  isMultiSelectMode = true;
+  selectedTrackIds.clear();
+  if (trackId) selectedTrackIds.add(trackId);
+  const btn = document.getElementById("btnToggleMultiSelect");
+  if (btn) {
+    btn.classList.add("active");
+    btn.textContent = "✕ Salir";
+  }
+  const bar = document.getElementById("multiSelectBar");
+  if (bar) bar.classList.add("show");
+  updateMultiSelectBar();
+  renderTracks();
+}
+
+/* ---------------- GESTIÓN DE CANCIONES OCULTAS EN LA CUENTA ---------------- */
+function getActiveAccountEmail() {
+  if (userAccount && userAccount.email) return userAccount.email.trim().toLowerCase();
+  const cached = localStorage.getItem("sp_user_account_email");
+  if (cached) return cached.trim().toLowerCase();
+  return "";
+}
+
+function isTrackHidden(t) {
+  if (!t) return false;
+  const email = getActiveAccountEmail();
+  const acc = (email && accountsDb && accountsDb[email]) ? accountsDb[email] : userAccount;
+  const hiddenIds = (acc && Array.isArray(acc.hiddenTrackIds)) ? acc.hiddenTrackIds : [];
+  const hiddenKeys = (acc && Array.isArray(acc.hiddenTrackKeys)) ? acc.hiddenTrackKeys : [];
+
+  const localKey = `sp_hidden_tracks_${email || 'guest'}`;
+  let localHidden = [];
+  try {
+    localHidden = JSON.parse(localStorage.getItem(localKey) || "[]");
+  } catch(e) {}
+
+  if (hiddenIds.includes(t.id) || localHidden.includes(t.id)) return true;
+  if (t.driveId && (hiddenIds.includes(t.driveId) || localHidden.includes(t.driveId))) return true;
+
+  const key = `${(t.title || "").trim().toLowerCase()}:::${(t.artist || "").trim().toLowerCase()}`;
+  if (hiddenKeys.includes(key)) return true;
+  return false;
+}
+
+function hideTrackForAccount(t) {
+  if (!t) return;
+  const email = getActiveAccountEmail();
+  const targetAccs = [];
+  if (userAccount) targetAccs.push(userAccount);
+  if (email && accountsDb && accountsDb[email]) targetAccs.push(accountsDb[email]);
+
+  const key = `${(t.title || "").trim().toLowerCase()}:::${(t.artist || "").trim().toLowerCase()}`;
+
+  targetAccs.forEach(acc => {
+    if (!Array.isArray(acc.hiddenTrackIds)) acc.hiddenTrackIds = [];
+    if (!Array.isArray(acc.hiddenTrackKeys)) acc.hiddenTrackKeys = [];
+    if (!acc.hiddenTrackIds.includes(t.id)) acc.hiddenTrackIds.push(t.id);
+    if (t.driveId && !acc.hiddenTrackIds.includes(t.driveId)) acc.hiddenTrackIds.push(t.driveId);
+    if (!acc.hiddenTrackKeys.includes(key)) acc.hiddenTrackKeys.push(key);
+    acc.updatedAt = Date.now();
+    acc.updated_at = Date.now();
+  });
+
+  const localKey = `sp_hidden_tracks_${email || 'guest'}`;
+  let localHidden = [];
+  try { localHidden = JSON.parse(localStorage.getItem(localKey) || "[]"); } catch(e){}
+  if (!localHidden.includes(t.id)) localHidden.push(t.id);
+  localStorage.setItem(localKey, JSON.stringify(localHidden));
+
+  // Si está sonando esta canción, avanzar
+  if (isPlaying && tracks[currentIndex] && (tracks[currentIndex].id === t.id || tracks[currentIndex].driveId === t.id)) {
+    nextTrack();
+  }
+
+  playlistCacheVersion++;
+  savePersistentState();
+  if (typeof uploadPlaylistsToDrive === "function") {
+    uploadPlaylistsToDrive();
+  }
+
+  showToast(`🚫 «${t.title || 'Canción'}» se ha ocultado de tu cuenta`);
+  renderTracks();
+}
+
+function unhideTrackForAccount(trackId, trackKey) {
+  const email = getActiveAccountEmail();
+  const targetAccs = [];
+  if (userAccount) targetAccs.push(userAccount);
+  if (email && accountsDb && accountsDb[email]) targetAccs.push(accountsDb[email]);
+
+  targetAccs.forEach(acc => {
+    if (Array.isArray(acc.hiddenTrackIds)) {
+      acc.hiddenTrackIds = acc.hiddenTrackIds.filter(id => id !== trackId);
+    }
+    if (Array.isArray(acc.hiddenTrackKeys) && trackKey) {
+      acc.hiddenTrackKeys = acc.hiddenTrackKeys.filter(k => k !== trackKey);
+    }
+    acc.updatedAt = Date.now();
+    acc.updated_at = Date.now();
+  });
+
+  const localKey = `sp_hidden_tracks_${email || 'guest'}`;
+  let localHidden = [];
+  try { localHidden = JSON.parse(localStorage.getItem(localKey) || "[]"); } catch(e){}
+  localHidden = localHidden.filter(id => id !== trackId);
+  localStorage.setItem(localKey, JSON.stringify(localHidden));
+
+  playlistCacheVersion++;
+  savePersistentState();
+  if (typeof uploadPlaylistsToDrive === "function") {
+    uploadPlaylistsToDrive();
+  }
+
+  showToast("✔ Canción restaurada a tu cuenta");
+  renderHiddenTracksList();
+  renderTracks();
+}
+
+function openHiddenTracksModal() {
+  const modal = document.getElementById("hiddenTracksModal");
+  if (!modal) return;
+  renderHiddenTracksList();
+  modal.classList.add("open");
+}
+
+function closeHiddenTracksModal() {
+  const modal = document.getElementById("hiddenTracksModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function renderHiddenTracksList() {
+  const listEl = document.getElementById("hiddenTracksChoices");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+
+  const hidden = tracks.filter(t => isTrackHidden(t));
+  if (hidden.length === 0) {
+    listEl.innerHTML = `<div style="text-align:center; padding:24px 10px; color:var(--muted); font-size:12px;">No tienes ninguna canción oculta en esta cuenta.</div>`;
+    return;
+  }
+
+  hidden.forEach(t => {
+    const row = document.createElement("div");
+    row.className = "pl-dark-choice-row";
+    row.style.cssText = "display:flex; align-items:center; justify-content:space-between; padding:10px 12px; margin-bottom:6px;";
+    const key = `${(t.title || "").trim().toLowerCase()}:::${(t.artist || "").trim().toLowerCase()}`;
+    row.innerHTML = `
+      <div style="min-width:0; flex:1; margin-right:8px;">
+        <div style="font-weight:700; color:#fff; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(t.title || 'Canción')}</div>
+        <div style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(t.artist || 'Artista')}</div>
+      </div>
+      <button class="btn-chip active" style="padding:5px 12px; font-size:11px;" onclick="unhideTrackForAccount('${t.id}', '${key}')">Restaurar</button>
+    `;
+    listEl.appendChild(row);
+  });
+}
+
+/* ---------------- MENÚ DE ACCIONES AL MANTENER PRESIONADA UNA CANCIÓN ---------------- */
+let selectedActionTrack = null;
+let selectedActionSourcePlId = null;
+
+function openTrackActionMenu(track) {
+  if (!track) return;
+  selectedActionTrack = track;
+  if (activeFilter.startsWith("pl:")) {
+    selectedActionSourcePlId = activeFilter.replace("pl:", "");
+  } else {
+    selectedActionSourcePlId = null;
+  }
+
+  const modal = document.getElementById("trackActionMenuModal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("trackActionTitle");
+  const artistEl = document.getElementById("trackActionArtist");
+  const coverEl = document.getElementById("trackActionCover");
+
+  if (titleEl) titleEl.textContent = track.title || "Canción";
+  if (artistEl) artistEl.textContent = `${track.artist || "Artista"}${track.album ? " • " + track.album : ""}`;
+
+  if (coverEl) {
+    const cov = getTrackCoverUrl(track);
+    if (cov) {
+      coverEl.innerHTML = `<img src="${cov}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='assets/covers/default.png'" />`;
+    } else {
+      coverEl.innerHTML = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--green-bright);">${ICONS.music}</div>`;
+    }
+  }
+
+  modal.classList.add("open");
+}
+
+function closeTrackActionMenu() {
+  const modal = document.getElementById("trackActionMenuModal");
+  if (modal) modal.classList.remove("open");
+}
+
+function handleTrackActionMove() {
+  closeTrackActionMenu();
+  if (!selectedActionTrack) return;
+  openMoveTrackModal(selectedActionTrack, selectedActionSourcePlId);
+}
+
+function handleTrackActionHide() {
+  closeTrackActionMenu();
+  if (!selectedActionTrack) return;
+  hideTrackForAccount(selectedActionTrack);
+}
+
+function handleTrackActionMultiSelect() {
+  closeTrackActionMenu();
+  if (!selectedActionTrack) return;
+  startMultiSelectWithTrack(selectedActionTrack.id);
+}
+
+/* ---------------- MODAL MOVER CANCIÓN A PLAYLIST ---------------- */
+let trackBeingMoved = null;
+let moveSourcePlId = null;
+
+function openMoveTrackModal(track, sourcePlId) {
+  trackBeingMoved = track;
+  moveSourcePlId = sourcePlId;
+  const modal = document.getElementById("moveTrackModal");
+  const choices = document.getElementById("moveTrackChoices");
+  const subtitle = document.getElementById("moveTrackSubtitle");
+  if (!modal || !choices) return;
+
+  choices.innerHTML = "";
+  if (subtitle) {
+    subtitle.textContent = sourcePlId ? `Mover «${track.title || 'canción'}» de esta lista a:` : `Mover o añadir «${track.title || 'canción'}» a:`;
+  }
+
+  const cloudPlaylists = playlists.filter(pl => pl.isCloud);
+  const targetPool = cloudPlaylists.length > 0 ? cloudPlaylists : playlists;
+
+  if (targetPool.length === 0) {
+    choices.innerHTML = `<div style="text-align:center; padding:20px 10px; color:var(--muted); font-size:12px;">No tienes playlists creadas todavía. Crea una para mover esta canción.</div>`;
+  } else {
+    targetPool.forEach(pl => {
+      const isCurrentSource = moveSourcePlId && pl.id === moveSourcePlId;
+      const isAlreadyIn = pl.trackIds && pl.trackIds.some(tid => trackMatchesPlaylistId(track, tid));
+      const btn = document.createElement("button");
+      btn.className = "pl-dark-choice-row" + (isCurrentSource ? " active" : "");
+      btn.style.marginBottom = "6px";
+      btn.innerHTML = `
+        <div class="pl-dark-choice-left">
+          <div class="pl-dark-choice-icon" style="${isAlreadyIn ? 'background:rgba(30,215,96,0.18); color:var(--green-bright);' : ''}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:700; color:#fff; font-size:13px;">${escapeHtml(pl.name)}</div>
+            <div style="font-size:11px; color:var(--muted);">${pl.trackIds ? pl.trackIds.length : 0} temas ${isCurrentSource ? '(Playlist actual)' : (isAlreadyIn ? '(Ya añadida)' : '')}</div>
+          </div>
+        </div>
+        <span class="pl-dark-choice-badge" style="background:${isCurrentSource ? '#333' : 'var(--green-bright)'}; color:${isCurrentSource ? '#aaa' : '#000'}; font-weight:700;">
+          ${isCurrentSource ? 'Actual' : 'Mover aquí'}
+        </span>
+      `;
+      if (!isCurrentSource) {
+        btn.onclick = () => executeMoveTrackToPlaylist(track, pl, moveSourcePlId);
+      }
+      choices.appendChild(btn);
+    });
+  }
+
+  modal.classList.add("open");
+}
+
+function closeMoveTrackModal() {
+  const modal = document.getElementById("moveTrackModal");
+  if (modal) modal.classList.remove("open");
+  trackBeingMoved = null;
+  moveSourcePlId = null;
+}
+
+function closeMoveAndCreateNewPlaylist() {
+  const trk = trackBeingMoved;
+  const src = moveSourcePlId;
+  closeMoveTrackModal();
+  openCreatePlaylistModal();
+  if (trk) {
+    pendingTrackIdForPlaylist = [trk.id];
+  }
+}
+
+function executeMoveTrackToPlaylist(track, destPl, sourcePlId) {
+  if (!track || !destPl) return;
+
+  // Si se mueve desde una playlist origen, removerla de ella
+  if (sourcePlId && sourcePlId !== destPl.id) {
+    const srcPl = playlists.find(p => p.id === sourcePlId);
+    if (srcPl && Array.isArray(srcPl.trackIds)) {
+      srcPl.trackIds = srcPl.trackIds.filter(tid => !trackMatchesPlaylistId(track, tid));
+    }
+  }
+
+  // Añadirla a la playlist destino si no estaba ya
+  if (!Array.isArray(destPl.trackIds)) destPl.trackIds = [];
+  const canonicalId = (track && track.driveId) ? track.driveId : track.id;
+  if (!destPl.trackIds.some(tid => trackMatchesPlaylistId(track, tid))) {
+    destPl.trackIds.push(canonicalId);
+  }
+
+  closeMoveTrackModal();
+  playlistCacheVersion++;
+
+  if (userAccount && userAccount.email) {
+    userAccount.playlists = playlists;
+    if (accountsDb[userAccount.email]) {
+      accountsDb[userAccount.email].playlists = playlists;
+      accountsDb[userAccount.email].updatedAt = Date.now();
+      accountsDb[userAccount.email].updated_at = Date.now();
+    }
+  }
+
+  savePersistentState();
+  if (typeof uploadPlaylistsToDrive === "function") {
+    uploadPlaylistsToDrive();
+  }
+
+  showToast(`✔ «${track.title || 'Canción'}» movida a «${destPl.name}»`);
+  renderTracks();
+  renderHomePlaylists();
+}
+
+/* ---------------- DETECCIÓN Y MANEJO DE PULSACIÓN PROLONGADA (LONG-PRESS) ---------------- */
+function attachLongPressHandlers(rowEl, track) {
+  let pressTimer = null;
+  let didTrigger = false;
+  let startX = 0;
+  let startY = 0;
+
+  const startPress = (clientX, clientY) => {
+    didTrigger = false;
+    startX = clientX;
+    startY = clientY;
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      didTrigger = true;
+      if (window.navigator && window.navigator.vibrate) {
+        try { window.navigator.vibrate(40); } catch(e) {}
+      }
+      openTrackActionMenu(track);
+    }, 450);
+  };
+
+  const cancelPress = () => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  };
+
+  rowEl.addEventListener("touchstart", (e) => {
+    if (isMultiSelectMode) return;
+    const t = e.touches[0];
+    startPress(t.clientX, t.clientY);
+  }, { passive: true });
+
+  rowEl.addEventListener("touchmove", (e) => {
+    if (!pressTimer) return;
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - startX);
+    const dy = Math.abs(t.clientY - startY);
+    if (dx > 10 || dy > 10) {
+      cancelPress();
+    }
+  }, { passive: true });
+
+  rowEl.addEventListener("touchend", () => {
+    cancelPress();
+  });
+
+  rowEl.addEventListener("touchcancel", () => {
+    cancelPress();
+  });
+
+  rowEl.addEventListener("mousedown", (e) => {
+    if (isMultiSelectMode || e.button !== 0) return;
+    startPress(e.clientX, e.clientY);
+  });
+
+  rowEl.addEventListener("mousemove", (e) => {
+    if (!pressTimer) return;
+    const dx = Math.abs(e.clientX - startX);
+    const dy = Math.abs(e.clientY - startY);
+    if (dx > 10 || dy > 10) {
+      cancelPress();
+    }
+  });
+
+  rowEl.addEventListener("mouseup", () => {
+    cancelPress();
+  });
+
+  rowEl.addEventListener("mouseleave", () => {
+    cancelPress();
+  });
+
+  rowEl.addEventListener("contextmenu", (e) => {
+    if (isMultiSelectMode) return;
+    e.preventDefault();
+    cancelPress();
+    openTrackActionMenu(track);
+  });
+
+  const origClick = rowEl.onclick;
+  rowEl.onclick = (ev) => {
+    if (didTrigger) {
+      didTrigger = false;
+      ev.stopPropagation();
+      ev.preventDefault();
+      return;
+    }
+    if (origClick) origClick(ev);
+  };
+}
+
 function createTrackRowElement(t, filtered) {
   const isSelected = selectedTrackIds.has(t.id);
   const isThisPlaying = isPlaying && ((activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id) || (tracks[currentIndex]?.id === t.id));
@@ -3494,6 +3913,7 @@ function createTrackRowElement(t, filtered) {
       playTrackFromQueue(filtered, idxInFiltered >= 0 ? idxInFiltered : 0, activeFilter === "all" ? "Biblioteca" : "Canciones");
     }
   };
+  attachLongPressHandlers(div, t);
 
   // Checkbox de selección múltiple
   const cb = document.createElement("div");
