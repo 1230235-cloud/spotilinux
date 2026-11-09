@@ -3,6 +3,6 @@
 Single source of truth for MaoMusic application version.
 """
 
-APP_VERSION_CODE: int = 34
-APP_VERSION_NAME: str = "2.15.0"
-APP_RELEASE_DATE: str = "2026-11-08"
+APP_VERSION_CODE: int = 35
+APP_VERSION_NAME: str = "2.16.0"
+APP_RELEASE_DATE: str = "2026-11-09"
