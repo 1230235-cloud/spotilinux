@@ -4121,6 +4121,19 @@ function attachTrackGripReorder(gripEl, track, rowEl, explicitPlId) {
       e.preventDefault();
       const container = rowEl.parentElement;
       if (!container) return;
+
+      // Auto-scroll suave cuando se arrastra cerca del borde superior o inferior
+      const scrollParent = container.closest(".tab-pane, .modal-card, #plDetailTrackList") || container;
+      if (scrollParent) {
+        const spRect = scrollParent.getBoundingClientRect();
+        const edgeZone = 64;
+        if (touch.clientY < spRect.top + edgeZone) {
+          scrollParent.scrollTop -= 12;
+        } else if (touch.clientY > spRect.bottom - edgeZone) {
+          scrollParent.scrollTop += 12;
+        }
+      }
+
       const siblings = Array.from(container.querySelectorAll(".track-item:not(.reorder-dragging)"));
       const targetSibling = siblings.find(sib => {
         const rect = sib.getBoundingClientRect();

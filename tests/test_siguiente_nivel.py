@@ -6,10 +6,17 @@ Pruebas unitarias para las funcionalidades de siguiente nivel:
 - Modos visuales (Light / Dark / Free).
 """
 
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PyQt6.QtWidgets import QApplication
+_APP = QApplication.instance() or QApplication(sys.argv)
+
 from audio_engine import AudioEngine
 from metadata import TrackMetadata
 from storage import Playlist

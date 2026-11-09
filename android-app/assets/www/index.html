@@ -502,22 +502,29 @@
             </label>
           </div>
 
-          <div class="field-group">
-            <label>Carpeta Raíz de Google Drive (contiene la BD y la subcarpeta «Musica»):</label>
-            <input type="text" id="gdFolder" value="1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT" placeholder="1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT" />
-          </div>
-          <div class="field-group">
-            <label>Token de Acceso OAuth 2.0 (para subir canciones y guardar BD en Drive):</label>
-            <input type="text" id="gdToken" placeholder="ya29.a0AfH6SM..." oninput="handleTokenManualInput()" />
-          </div>
-          <div class="field-group">
-            <label>Client ID OAuth de Google Cloud (opcional):</label>
-            <input type="text" id="gdClientId" placeholder="123456789-abc.apps.googleusercontent.com" />
-          </div>
-          <div class="field-group">
-            <label>API Key o Enlaces directos (opcional):</label>
-            <input type="text" id="gdApiKey" placeholder="API Key (AIzaSy...) o enlace https://drive.google.com/..." />
-          </div>
+          <details style="margin: 8px 0 12px 0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 8px 10px;">
+            <summary style="cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); user-select: none;">
+              ⚙️ Configuración Avanzada de Google Drive (Opcional)
+            </summary>
+            <div style="margin-top: 10px;">
+              <div class="field-group">
+                <label>Carpeta Raíz de Google Drive (contiene la BD y la subcarpeta «Musica»):</label>
+                <input type="text" id="gdFolder" value="1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT" placeholder="1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT" />
+              </div>
+              <div class="field-group">
+                <label>Token de Acceso OAuth 2.0 (para subir canciones y guardar BD en Drive):</label>
+                <input type="text" id="gdToken" placeholder="ya29.a0AfH6SM..." oninput="handleTokenManualInput()" />
+              </div>
+              <div class="field-group">
+                <label>Client ID OAuth de Google Cloud (opcional):</label>
+                <input type="text" id="gdClientId" placeholder="123456789-abc.apps.googleusercontent.com" />
+              </div>
+              <div class="field-group">
+                <label>API Key o Enlaces directos (opcional):</label>
+                <input type="text" id="gdApiKey" placeholder="API Key (AIzaSy...) o enlace https://drive.google.com/..." />
+              </div>
+            </div>
+          </details>
 
           <input type="file" id="driveUploadPicker" multiple accept="audio/*,.mp3,.flac,.wav,.m4a,.ogg,.opus" style="display:none" onchange="uploadSelectedFilesToDrive(event)" />
 
