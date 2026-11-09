@@ -3364,15 +3364,6 @@ class SpotiLinuxWindow(QMainWindow):
                 "liked",
             )
         )
-        cloud_tracks = self._get_home_preview_tracks("gdrive")[1]
-        cards_data.append(
-            (
-                "Mi Google Drive ☁️",
-                f"{len(cloud_tracks)} pistas en la nube",
-                make_liked_cover_pixmap(56, radius=6, symbol="☁️", colors=((15, 95, 195), (29, 185, 84), (110, 245, 210))),
-                "gdrive",
-            )
-        )
         for pid, pl in self.store.playlists.items():
             pl_cov_path = getattr(pl, "cover_path", "")
             if not pl_cov_path or not Path(pl_cov_path).exists():
@@ -4046,8 +4037,12 @@ class SpotiLinuxWindow(QMainWindow):
             act_hide = menu.addAction("👁️‍🗨️  Ocultar de la cuenta (no mostrar más)")
 
             act_remove_from_pl = None
+            act_reorder_up = None
+            act_reorder_down = None
             if self.current_view.startswith("playlist:"):
                 menu.addSeparator()
+                act_reorder_up = menu.addAction("⬆️  Subir una posición en esta Playlist")
+                act_reorder_down = menu.addAction("⬇️  Bajar una posición en esta Playlist")
                 act_remove_from_pl = menu.addAction(icons.get_icon("playlist_remove", "#e4e4ec", 16), "✕  Quitar de esta Playlist")
 
             menu.addSeparator()
@@ -4129,6 +4124,26 @@ class SpotiLinuxWindow(QMainWindow):
                 self.store.remove_track_from_playlist(pid, tid)
             self._sync_playlists_to_cloud()
             self.switch_view(self.current_view)
+        elif act_reorder_up and chosen == act_reorder_up:
+            spid = self.current_view.split(":", 1)[1]
+            pl = self.store.playlists.get(spid)
+            if pl and primary_track.id in pl.track_ids:
+                idx = pl.track_ids.index(primary_track.id)
+                if idx > 0:
+                    pl.track_ids[idx], pl.track_ids[idx - 1] = pl.track_ids[idx - 1], pl.track_ids[idx]
+                    self.store.save()
+                    self._sync_playlists_to_cloud()
+                    self._refresh_track_table()
+        elif act_reorder_down and chosen == act_reorder_down:
+            spid = self.current_view.split(":", 1)[1]
+            pl = self.store.playlists.get(spid)
+            if pl and primary_track.id in pl.track_ids:
+                idx = pl.track_ids.index(primary_track.id)
+                if idx < len(pl.track_ids) - 1:
+                    pl.track_ids[idx], pl.track_ids[idx + 1] = pl.track_ids[idx + 1], pl.track_ids[idx]
+                    self.store.save()
+                    self._sync_playlists_to_cloud()
+                    self._refresh_track_table()
         elif chosen == act_delete_app:
             msg = f"¿Seguro que deseas eliminar «{primary_track.title}» de la aplicación?" if n_tracks == 1 else f"¿Seguro que deseas eliminar las {n_tracks} canciones seleccionadas de la aplicación?"
             confirm = QMessageBox.question(

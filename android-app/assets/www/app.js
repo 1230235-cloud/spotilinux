@@ -3919,6 +3919,304 @@ function attachLongPressHandlers(rowEl, track) {
   };
 }
 
+/* ---------------- REORGANIZAR POSICIÓN DE CANCIÓN EN PLAYLIST (TRES BARRAS ≡) ---------------- */
+let reorderState = {
+  track: null,
+  playlist: null,
+  currentIndex: -1,
+  totalCount: 0
+};
+
+function openReorderPositionModal(track, explicitPlId) {
+  if (!track) return;
+
+  // Determinar la playlist correspondiente
+  let targetPl = null;
+  if (explicitPlId && explicitPlId !== "pl_liked" && explicitPlId !== "pl_cloud") {
+    targetPl = playlists.find(p => p.id === explicitPlId);
+  } else if (activeFilter && activeFilter.startsWith("pl:")) {
+    const filterPlId = activeFilter.replace("pl:", "");
+    if (filterPlId !== "pl_liked" && filterPlId !== "pl_cloud") {
+      targetPl = playlists.find(p => p.id === filterPlId);
+    }
+  }
+
+  // Si no estamos en una vista de playlist explícita, buscar en qué playlist está la pista
+  if (!targetPl) {
+    const candidatePlaylists = playlists.filter(pl => pl.trackIds && pl.trackIds.some(tid => trackMatchesPlaylistId(track, tid)));
+    if (candidatePlaylists.length === 1) {
+      targetPl = candidatePlaylists[0];
+    } else if (candidatePlaylists.length > 1) {
+      openSelectPlaylistForReorderModal(track, candidatePlaylists);
+      return;
+    }
+  }
+
+  if (!targetPl) {
+    showToast("Añade esta canción a una playlist para organizar su posición");
+    return;
+  }
+
+  const idx = targetPl.trackIds.findIndex(tid => trackMatchesPlaylistId(track, tid));
+  if (idx < 0) {
+    showToast("La canción no se encuentra en esta playlist");
+    return;
+  }
+
+  reorderState = {
+    track,
+    playlist: targetPl,
+    currentIndex: idx,
+    totalCount: targetPl.trackIds.length
+  };
+
+  const modal = document.getElementById("reorderPositionModal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("reorderTitle");
+  const posBadge = document.getElementById("reorderPositionBadge");
+  const plNameEl = document.getElementById("reorderPlaylistName");
+  const coverEl = document.getElementById("reorderCover");
+  const inputEl = document.getElementById("reorderTargetInput");
+
+  if (titleEl) titleEl.textContent = track.title || "Canción";
+  if (posBadge) posBadge.textContent = `Posición actual: ${idx + 1} de ${targetPl.trackIds.length}`;
+  if (plNameEl) plNameEl.textContent = `Acomodar posición dentro de «${targetPl.name}»:`;
+  if (inputEl) {
+    inputEl.value = idx + 1;
+    inputEl.max = targetPl.trackIds.length;
+  }
+
+  if (coverEl) {
+    const cov = getTrackCoverUrl(track);
+    if (cov) {
+      coverEl.innerHTML = `<img src="${cov}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='assets/covers/default.png'" />`;
+    } else {
+      coverEl.innerHTML = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--green-bright);">${ICONS.music}</div>`;
+    }
+  }
+
+  modal.classList.add("open");
+}
+
+function openSelectPlaylistForReorderModal(track, candidatePlaylists) {
+  const modal = document.getElementById("moveTrackModal");
+  const choices = document.getElementById("moveTrackChoices");
+  const subtitle = document.getElementById("moveTrackSubtitle");
+  if (!modal || !choices) return;
+
+  choices.innerHTML = "";
+  if (subtitle) {
+    subtitle.textContent = `Elige en qué playlist deseas reorganizar «${track.title || 'canción'}»:`;
+  }
+
+  candidatePlaylists.forEach(pl => {
+    const btn = document.createElement("button");
+    btn.className = "pl-dark-choice-row";
+    btn.style.marginBottom = "6px";
+    btn.innerHTML = `
+      <div class="pl-dark-choice-left">
+        <div class="pl-dark-choice-icon" style="background:rgba(30,215,96,0.18); color:var(--green-bright);">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
+        <div>
+          <div style="font-weight:700; color:#fff; font-size:13px;">${escapeHtml(pl.name)}</div>
+          <div style="font-size:11px; color:var(--muted);">${pl.trackIds ? pl.trackIds.length : 0} temas</div>
+        </div>
+      </div>
+      <span class="pl-dark-choice-badge" style="background:var(--green-bright); color:#000; font-weight:700;">Reorganizar</span>
+    `;
+    btn.onclick = () => {
+      closeMoveTrackModal();
+      openReorderPositionModal(track, pl.id);
+    };
+    choices.appendChild(btn);
+  });
+
+  modal.classList.add("open");
+}
+
+function closeReorderPositionModal() {
+  const modal = document.getElementById("reorderPositionModal");
+  if (modal) modal.classList.remove("open");
+  reorderState = { track: null, playlist: null, currentIndex: -1, totalCount: 0 };
+}
+
+function applyReorderStep(delta) {
+  if (!reorderState.playlist || reorderState.currentIndex < 0) return;
+  const pl = reorderState.playlist;
+  const targetIdx = Math.max(0, Math.min(pl.trackIds.length - 1, reorderState.currentIndex + delta));
+  if (targetIdx === reorderState.currentIndex) return;
+
+  const [moved] = pl.trackIds.splice(reorderState.currentIndex, 1);
+  pl.trackIds.splice(targetIdx, 0, moved);
+  reorderState.currentIndex = targetIdx;
+  commitPlaylistReorder();
+}
+
+function applyReorderJump(target) {
+  if (!reorderState.playlist || reorderState.currentIndex < 0) return;
+  const pl = reorderState.playlist;
+  const targetIdx = target === "top" ? 0 : pl.trackIds.length - 1;
+  if (targetIdx === reorderState.currentIndex) return;
+
+  const [moved] = pl.trackIds.splice(reorderState.currentIndex, 1);
+  pl.trackIds.splice(targetIdx, 0, moved);
+  reorderState.currentIndex = targetIdx;
+  commitPlaylistReorder();
+}
+
+function applyReorderCustomNumber() {
+  if (!reorderState.playlist || reorderState.currentIndex < 0) return;
+  const inputEl = document.getElementById("reorderTargetInput");
+  const val = parseInt(inputEl?.value, 10);
+  if (isNaN(val) || val < 1) return;
+
+  const pl = reorderState.playlist;
+  const targetIdx = Math.max(0, Math.min(pl.trackIds.length - 1, val - 1));
+  if (targetIdx === reorderState.currentIndex) return;
+
+  const [moved] = pl.trackIds.splice(reorderState.currentIndex, 1);
+  pl.trackIds.splice(targetIdx, 0, moved);
+  reorderState.currentIndex = targetIdx;
+  commitPlaylistReorder();
+}
+
+function commitPlaylistReorder() {
+  const pl = reorderState.playlist;
+  if (!pl) return;
+
+  playlistCacheVersion++;
+  if (userAccount && userAccount.email) {
+    userAccount.playlists = playlists;
+    if (accountsDb[userAccount.email]) {
+      accountsDb[userAccount.email].playlists = playlists;
+      accountsDb[userAccount.email].updatedAt = Date.now();
+      accountsDb[userAccount.email].updated_at = Date.now();
+    }
+  }
+
+  savePersistentState();
+  if (typeof uploadPlaylistsToDrive === "function") {
+    uploadPlaylistsToDrive();
+  }
+
+  const posBadge = document.getElementById("reorderPositionBadge");
+  if (posBadge) {
+    posBadge.textContent = `Posición actual: ${reorderState.currentIndex + 1} de ${pl.trackIds.length}`;
+  }
+  const inputEl = document.getElementById("reorderTargetInput");
+  if (inputEl) {
+    inputEl.value = reorderState.currentIndex + 1;
+  }
+
+  if (currentDetailPlaylistId === pl.id) {
+    renderDetailPlaylistTracks(document.getElementById("plDetailSearchInput")?.value || "");
+  }
+  if (activeFilter === `pl:${pl.id}` || activeFilter === "playlists_section") {
+    renderTracks(true);
+  }
+  showToast(`✔ Posición cambiada al puesto ${reorderState.currentIndex + 1}`);
+}
+
+function attachTrackGripReorder(gripEl, track, rowEl, explicitPlId) {
+  let isDragging = false;
+  let startY = 0;
+
+  const onTouchStart = (e) => {
+    if (isMultiSelectMode) return;
+    const touch = e.touches[0];
+    startY = touch.clientY;
+    isDragging = false;
+  };
+
+  const onTouchMove = (e) => {
+    if (isMultiSelectMode) return;
+    const touch = e.touches[0];
+    const diffY = touch.clientY - startY;
+    if (Math.abs(diffY) > 8 && !isDragging) {
+      isDragging = true;
+      rowEl.classList.add("reorder-dragging");
+      if (window.navigator?.vibrate) {
+        try { window.navigator.vibrate(25); } catch(ex){}
+      }
+    }
+    if (isDragging) {
+      e.preventDefault();
+      const container = rowEl.parentElement;
+      if (!container) return;
+      const siblings = Array.from(container.querySelectorAll(".track-item:not(.reorder-dragging)"));
+      const targetSibling = siblings.find(sib => {
+        const rect = sib.getBoundingClientRect();
+        return touch.clientY >= rect.top && touch.clientY <= rect.bottom;
+      });
+      if (targetSibling) {
+        const rect = targetSibling.getBoundingClientRect();
+        if (touch.clientY < rect.top + rect.height / 2) {
+          container.insertBefore(rowEl, targetSibling);
+        } else {
+          container.insertBefore(rowEl, targetSibling.nextSibling);
+        }
+      }
+    }
+  };
+
+  const onTouchEnd = () => {
+    if (isDragging) {
+      isDragging = false;
+      rowEl.classList.remove("reorder-dragging");
+      const container = rowEl.parentElement;
+      if (container) {
+        const targetPlId = explicitPlId || (activeFilter.startsWith("pl:") ? activeFilter.replace("pl:", "") : null);
+        const pl = playlists.find(p => p.id === targetPlId);
+        if (pl && Array.isArray(pl.trackIds)) {
+          const newTrackIds = [];
+          container.querySelectorAll(".track-item").forEach(item => {
+            const tid = item.getAttribute("data-track-id");
+            if (tid) {
+              const matchedTid = pl.trackIds.find(pid => {
+                const trk = findTrackByPlaylistId(pid);
+                return trk && (trk.id === tid || trk.driveId === tid);
+              }) || tid;
+              if (!newTrackIds.includes(matchedTid)) newTrackIds.push(matchedTid);
+            }
+          });
+          if (newTrackIds.length === pl.trackIds.length) {
+            pl.trackIds = newTrackIds;
+            playlistCacheVersion++;
+            if (userAccount && userAccount.email) {
+              userAccount.playlists = playlists;
+              if (accountsDb[userAccount.email]) {
+                accountsDb[userAccount.email].playlists = playlists;
+                accountsDb[userAccount.email].updatedAt = Date.now();
+                accountsDb[userAccount.email].updated_at = Date.now();
+              }
+            }
+            savePersistentState();
+            if (typeof uploadPlaylistsToDrive === "function") uploadPlaylistsToDrive();
+            showToast("✔ Nuevo orden guardado en la playlist");
+          }
+        }
+      }
+    } else {
+      openReorderPositionModal(track, explicitPlId);
+    }
+  };
+
+  gripEl.addEventListener("touchstart", onTouchStart, { passive: true });
+  gripEl.addEventListener("touchmove", onTouchMove, { passive: false });
+  gripEl.addEventListener("touchend", onTouchEnd);
+  gripEl.addEventListener("touchcancel", () => {
+    isDragging = false;
+    rowEl.classList.remove("reorder-dragging");
+  });
+
+  gripEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openReorderPositionModal(track, explicitPlId);
+  });
+}
+
 function createTrackRowElement(t, filtered) {
   const isSelected = selectedTrackIds.has(t.id);
   const isThisPlaying = isPlaying && ((activePlaybackQueue && activePlaybackQueue[activeQueueIndex]?.id === t.id) || (tracks[currentIndex]?.id === t.id));
@@ -3941,6 +4239,20 @@ function createTrackRowElement(t, filtered) {
   cb.textContent = isSelected ? "✓" : "";
   cb.onclick = (ev) => toggleTrackSelection(t.id, ev);
   div.appendChild(cb);
+
+  // Tres barras pequeñas al lado de la carátula para acomodar posición en playlist
+  const grip = document.createElement("div");
+  grip.className = "track-grip";
+  grip.title = "Arrastra o presiona para acomodar posición en la playlist";
+  grip.innerHTML = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+      <line x1="4" y1="6" x2="20" y2="6"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <line x1="4" y1="18" x2="20" y2="18"/>
+    </svg>
+  `;
+  attachTrackGripReorder(grip, t, div);
+  div.appendChild(grip);
 
   const thumb = document.createElement("div");
   const covUrl = getTrackCoverUrl(t);
@@ -4197,27 +4509,7 @@ function renderHomePlaylists() {
   `;
   grid.appendChild(likedCard);
 
-  // 2. Tarjeta Especial: Google Drive Cloud
-  const cloudList = tracks.filter(t => t.cloud);
-  const cloudCard = document.createElement("div");
-  cloudCard.className = "playlist-card";
-  cloudCard.style.background = "linear-gradient(135deg, #0d261e 0%, #0a1410 100%)";
-  cloudCard.onclick = () => openPlaylistDetailModal("pl_cloud");
-  cloudCard.innerHTML = `
-    <div class="playlist-card-badge">NUBE</div>
-    <div style="margin: 10px 0 4px; color: var(--green-bright); display: flex;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-    </div>
-    <div class="playlist-card-title">Google Drive</div>
-    <div class="playlist-card-sub">${cloudList.length} canciones</div>
-    <button class="playlist-card-shuffle-btn" onclick="event.stopPropagation(); playPlaylistShuffle('pl_cloud')" title="Reproducir en aleatorio">
-      ${ICONS.shuffle}
-    </button>
-    <div class="playlist-card-play-btn" onclick="event.stopPropagation(); playPlaylistDirect('pl_cloud')" title="Reproducir">${ICONS.play}</div>
-  `;
-  grid.appendChild(cloudCard);
-
-  // 3. Playlists del usuario
+  // 2. Playlists del usuario
   const localPls = playlists.filter(p => !p.isCloud);
   const cloudPls = playlists.filter(p => p.isCloud);
 
@@ -4439,6 +4731,21 @@ function renderDetailPlaylistTracks(query = "") {
     numSpan.style.cssText = `font-size:11px; font-weight:800; color:${isThisPlaying ? 'var(--green-bright)' : 'var(--muted)'}; width:20px; text-align:center;`;
     numSpan.textContent = isThisPlaying ? "▶" : String(idx + 1);
     row.appendChild(numSpan);
+
+    if (currentDetailPlaylistId !== "pl_liked" && currentDetailPlaylistId !== "pl_cloud") {
+      const grip = document.createElement("div");
+      grip.className = "track-grip";
+      grip.title = "Arrastra o presiona para acomodar posición en la playlist";
+      grip.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+          <line x1="4" y1="6" x2="20" y2="6"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="18" x2="20" y2="18"/>
+        </svg>
+      `;
+      attachTrackGripReorder(grip, t, row, currentDetailPlaylistId);
+      row.appendChild(grip);
+    }
 
     const thumb = document.createElement("div");
     if (t.cover) {
