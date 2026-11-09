@@ -1,20 +1,17 @@
 {
-  "versionCode": 33,
-  "versionName": "2.14.0",
+  "versionCode": 34,
+  "versionName": "2.15.0",
   "releaseDate": "2026-11-08",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.14.0",
+    "version": "2.15.0",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
-    "Menú de acciones por pulsación prolongada (long-press) en móvil y escritorio con opciones Mover, Ocultar y Seleccionar varias",
-    "Ocultar canciones para la cuenta activa con sincronización en Google Drive y opción de restaurar",
-    "Mover canciones entre playlists con reubicación fluida e intuitiva",
-    "Carátulas estáticas y exclusivas de Maomao fijadas por playlist sin repeticiones",
-    "Eliminación total del símbolo de carpeta y estandarización visual con iconos limpios",
-    "Vista plana y directa de canciones en la pestaña Todo sin separadores redundantes"
+    "Sincronización continua de reproducción cruzada (continuar canción en otro dispositivo) mediante cuenta en Google Drive",
+    "Reorganización de canciones en playlists con tirador de 3 barras (≡) por arrastre táctil y teclado numérico",
+    "Menú contextual optimizado eliminando 'Mover' y depuración de la tarjeta Drive en pantalla de inicio"
   ]
 }
