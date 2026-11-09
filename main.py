@@ -109,7 +109,7 @@ from gdrive_sync import (
 )
 from generate_demos import ensure_demo_tracks
 from maomao_widget import MaomaoDancerWidget
-from metadata import SUPPORTED_EXTENSIONS, TrackMetadata, format_duration
+from metadata import SUPPORTED_EXTENSIONS, TrackMetadata, format_duration, clean_track_title
 from storage import LibraryStore, Playlist
 from styles import SPOTIFY_QSS
 from visualizer_widget import AudioVisualizerWidget, EqualizerPanel
@@ -1751,6 +1751,9 @@ class YouTubeBatchDownloadDialog(QDialog):
 class SpotiLinuxWindow(QMainWindow):
     HOME_PREVIEW_LIMIT = 4  # canciones visibles en la vista previa reducida del Inicio
 
+    remote_session_detected = pyqtSignal(dict)
+    remote_session_dismissed = pyqtSignal()
+
     def __init__(self, base_dir: Path) -> None:
         super().__init__()
         self.base_dir = base_dir
@@ -1758,6 +1761,9 @@ class SpotiLinuxWindow(QMainWindow):
         self.resize(1380, 850)
         self.setMinimumSize(1040, 680)
         self.setAcceptDrops(True)
+
+        self._pending_remote_session: Optional[dict] = None
+        self._last_broadcast_session_time: float = 0.0
 
         # 1. Cargar biblioteca instantáneamente desde base de datos persistente (Arranque ultra rápido)
         self.store = LibraryStore(self.base_dir)
@@ -1850,9 +1856,18 @@ class SpotiLinuxWindow(QMainWindow):
             self.engine.context_tracks = list(initial_ctx)
             self._update_now_playing_ui(initial_ctx[0])
 
+        self.remote_session_detected.connect(self._on_remote_session_detected)
+        self.remote_session_dismissed.connect(lambda: self.cross_device_banner.hide() if hasattr(self, "cross_device_banner") else None)
+
+        self._cross_device_poll_timer = QTimer(self)
+        self._cross_device_poll_timer.setInterval(20000)
+        self._cross_device_poll_timer.timeout.connect(self._check_remote_playback_session)
+        self._cross_device_poll_timer.start()
+
         # Solicitar acceso a Google Drive o rastreo automático desde el inicio
         QTimer.singleShot(450, self._check_first_run_welcome)
         QTimer.singleShot(1200, self._deferred_background_scan)
+        QTimer.singleShot(2200, self._check_remote_playback_session)
         QTimer.singleShot(2500, self._check_github_updates)
 
     def _deferred_background_scan(self) -> None:
@@ -1979,6 +1994,8 @@ class SpotiLinuxWindow(QMainWindow):
         root_layout.setContentsMargins(8, 8, 8, 0)
         root_layout.setSpacing(8)
 
+        self._build_cross_device_banner(root_layout)
+
         panels_row = QHBoxLayout()
         panels_row.setSpacing(8)
 
@@ -1992,6 +2009,74 @@ class SpotiLinuxWindow(QMainWindow):
         # Overlay de tocadiscos de vinilo giratorio y video de fondo (Modo Reposo)
         self.vinyl_overlay = VinylStandbyOverlay(self.base_dir, self)
         self.vinyl_overlay.setVisible(False)
+
+    def _build_cross_device_banner(self, parent_layout: QVBoxLayout) -> None:
+        self.cross_device_banner = QFrame()
+        self.cross_device_banner.setObjectName("CrossDeviceBanner")
+        self.cross_device_banner.setStyleSheet("""
+            QFrame#CrossDeviceBanner {
+                background-color: #161720;
+                border: 1px solid #1ed760;
+                border-radius: 9px;
+            }
+        """)
+        self.cross_device_banner.setVisible(False)
+        lay = QHBoxLayout(self.cross_device_banner)
+        lay.setContentsMargins(12, 6, 12, 6)
+        lay.setSpacing(12)
+
+        lbl_icon = QLabel("📱")
+        lbl_icon.setStyleSheet("font-size: 16px;")
+        lay.addWidget(lbl_icon)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(1)
+        lbl_title = QLabel("Sesión en otro dispositivo")
+        lbl_title.setStyleSheet("color: #1ed760; font-weight: bold; font-size: 11px;")
+        self.lbl_cdb_info = QLabel("Canción • Artista (00:00) [Celular]")
+        self.lbl_cdb_info.setStyleSheet("color: #ffffff; font-size: 12px; font-weight: 500;")
+        text_col.addWidget(lbl_title)
+        text_col.addWidget(self.lbl_cdb_info)
+        lay.addLayout(text_col, stretch=1)
+
+        self.btn_cdb_resume = QPushButton("▶ Continuar aquí")
+        self.btn_cdb_resume.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cdb_resume.setStyleSheet("""
+            QPushButton {
+                background-color: #1ed760;
+                color: #000000;
+                font-weight: bold;
+                font-size: 11px;
+                border-radius: 13px;
+                padding: 5px 14px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #1fdf64;
+            }
+        """)
+        self.btn_cdb_resume.clicked.connect(self._resume_remote_session_track)
+        lay.addWidget(self.btn_cdb_resume)
+
+        btn_close = QPushButton("✕")
+        btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #8e8e9f;
+                font-size: 12px;
+                font-weight: bold;
+                border: none;
+                padding: 4px 6px;
+            }
+            QPushButton:hover {
+                color: #ffffff;
+            }
+        """)
+        btn_close.clicked.connect(self.cross_device_banner.hide)
+        lay.addWidget(btn_close)
+
+        parent_layout.addWidget(self.cross_device_banner)
 
     def _build_left_sidebar(self, parent_layout: QHBoxLayout) -> None:
         self.sidebar_container = QWidget()
@@ -4633,6 +4718,7 @@ class SpotiLinuxWindow(QMainWindow):
         self._refresh_track_table()
         if self.current_view == "home":
             self._rebuild_quick_access_cards()
+        self._broadcast_playback_session(force=True)
 
     def _update_now_playing_ui(self, track: TrackMetadata) -> None:
         self.lbl_bar_cover.setPixmap(make_rounded_pixmap(track.cover_path, 56, radius=6))
@@ -4679,6 +4765,7 @@ class SpotiLinuxWindow(QMainWindow):
             cov = t.cover_path if t else None
             fpath = t.filepath if t else ""
             self.vinyl_overlay.update_state(title, artist, cov, fpath, is_playing)
+        self._broadcast_playback_session(force=True)
 
     def _on_engine_position_changed(self, pos_ms: int, dur_ms: int) -> None:
         if not self._seeking_slider:
@@ -4693,6 +4780,7 @@ class SpotiLinuxWindow(QMainWindow):
 
         if hasattr(self, "vinyl_overlay") and self.vinyl_overlay.isVisible():
             self.vinyl_overlay.sync_playback_position(pos_ms / 1000.0, self.engine.is_playing())
+        self._broadcast_playback_session(force=False)
 
     def _on_seek_preview(self, value: int) -> None:
         if self._seeking_slider:
@@ -4709,6 +4797,176 @@ class SpotiLinuxWindow(QMainWindow):
             dur_ms = int(self.engine.current_track.duration * 1000)
         target_ms = int((self.seek_slider.value() / 1000.0) * dur_ms)
         self.engine.seek(target_ms)
+        self._broadcast_playback_session(force=True)
+
+    # ================================================================== #
+    #         VINCULACIÓN MULTIDISPOSITIVO (CONTINUAR EN OTRO DISPOSITIVO)#
+    # ================================================================== #
+
+    def _on_remote_session_detected(self, session: dict) -> None:
+        if self.engine.is_playing():
+            if hasattr(self, "cross_device_banner"):
+                self.cross_device_banner.hide()
+            return
+        self._pending_remote_session = session
+        title = session.get("title", "Canción")
+        artist = session.get("artist", "Artista")
+        pos_sec = max(0.0, float(session.get("posSec", 0.0)))
+        mins = int(pos_sec // 60)
+        secs = int(pos_sec % 60)
+        time_str = f"{mins}:{secs:02d}"
+        dev_label = "Celular" if session.get("deviceType") == "android" else "Computadora"
+        if hasattr(self, "lbl_cdb_info"):
+            self.lbl_cdb_info.setText(f"{title} • {artist} ({time_str}) [{dev_label}]")
+        if hasattr(self, "cross_device_banner"):
+            self.cross_device_banner.show()
+
+    def _resume_remote_session_track(self) -> None:
+        if hasattr(self, "cross_device_banner"):
+            self.cross_device_banner.hide()
+        remote = getattr(self, "_pending_remote_session", None)
+        if not remote:
+            return
+
+        title_target = clean_track_title(remote.get("title", "")).strip().lower()
+        drive_id = str(remote.get("driveId") or "").strip()
+        track_id = str(remote.get("trackId") or "").strip()
+
+        # Buscar en tracks locales
+        target_track = None
+        for t in self.store.tracks.values():
+            if drive_id and (getattr(t, "drive_id", "") == drive_id or drive_id in t.filepath):
+                target_track = t
+                break
+            if track_id and t.id == track_id:
+                target_track = t
+                break
+            if title_target and clean_track_title(t.title).strip().lower() == title_target:
+                target_track = t
+                break
+
+        pos_sec = max(0.0, float(remote.get("posSec", 0.0)))
+        if target_track:
+            self.play_track(target_track, None)
+            QTimer.singleShot(450, lambda: self.engine.seek(int(pos_sec * 1000)))
+            self.statusBar().showMessage(f"✔ Continuando «{target_track.title}» desde {format_duration(pos_sec)}", 4000)
+        elif drive_id:
+            # Crear track virtual de streaming desde Google Drive
+            v_track = TrackMetadata(
+                id=f"gd_{drive_id}",
+                filepath=f"gdrive://{drive_id}/{remote.get('title', 'Cancion')}.mp3",
+                title=remote.get("title", "Canción en Nube"),
+                artist=remote.get("artist", "Google Drive ☁️"),
+                album=remote.get("album", "MaoMusic Stream"),
+            )
+            self.store.tracks[v_track.id] = v_track
+            self.play_track(v_track, None)
+            QTimer.singleShot(600, lambda: self.engine.seek(int(pos_sec * 1000)))
+            self.statusBar().showMessage(f"✔ Transmitiendo «{v_track.title}» desde {format_duration(pos_sec)}", 4000)
+
+    def _broadcast_playback_session(self, force: bool = False) -> None:
+        track = self.engine.current_track
+        if not track:
+            return
+        now = time.time()
+        if not force and (now - getattr(self, "_last_broadcast_session_time", 0.0) < 12.0):
+            return
+        self._last_broadcast_session_time = now
+
+        pos_sec = max(0.0, self.engine.player.position() / 1000.0)
+        dur_sec = max(0.0, self.engine.player.duration() / 1000.0)
+        if dur_sec <= 0.0:
+            dur_sec = float(track.duration)
+
+        drive_id = ""
+        if track.filepath.startswith("gdrive://"):
+            drive_id = track.filepath[len("gdrive://"):].split("/")[0]
+        elif track.id.startswith("gd_"):
+            drive_id = track.id[3:]
+
+        session_obj = {
+            "deviceId": self.store.device_id,
+            "deviceType": "desktop",
+            "trackId": track.id,
+            "driveId": drive_id,
+            "title": track.title,
+            "artist": track.artist,
+            "album": track.album,
+            "cover": "",
+            "src": track.filepath if track.filepath.startswith("http") else "",
+            "posSec": pos_sec,
+            "duration": dur_sec,
+            "isPlaying": self.engine.is_playing(),
+            "updatedAt": int(now * 1000),
+            "updatedAtMs": int(now * 1000),
+        }
+
+        email = (self.store.user_account.get("email") or "global_playback_session").strip().lower()
+        acc = dict(self.store.user_account or {})
+        acc["email"] = email
+        acc["username"] = acc.get("username") or "Usuario"
+        acc["playback_session"] = session_obj
+        acc["updatedAt"] = int(now * 1000)
+        acc["updated_at"] = int(now * 1000)
+
+        def _do_post():
+            try:
+                import requests
+                from gdrive_sync import DEFAULT_DRIVE_SERVER_URL
+                requests.post(
+                    DEFAULT_DRIVE_SERVER_URL,
+                    json={"action": "save_account", "email": email, "account": acc},
+                    headers={"Content-Type": "text/plain;charset=utf-8"},
+                    timeout=7,
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=_do_post, daemon=True, name="BroadcastPlaybackSession").start()
+
+    def _check_remote_playback_session(self) -> None:
+        def _do_check():
+            try:
+                import requests
+                from gdrive_sync import DEFAULT_DRIVE_SERVER_URL
+                r = requests.get(DEFAULT_DRIVE_SERVER_URL, timeout=8)
+                if r.status_code not in (200, 302):
+                    self.remote_session_dismissed.emit()
+                    return
+                data = r.json()
+                accounts = data.get("accounts", {})
+                email = (self.store.user_account.get("email") or "").strip().lower()
+
+                session = None
+                if email and accounts.get(email, {}).get("playback_session"):
+                    session = accounts[email]["playback_session"]
+                elif accounts.get("global_playback_session", {}).get("playback_session"):
+                    session = accounts["global_playback_session"]["playback_session"]
+                else:
+                    for acc in accounts.values():
+                        if isinstance(acc, dict) and acc.get("playback_session", {}).get("title"):
+                            session = acc["playback_session"]
+                            break
+
+                if not session or not session.get("title"):
+                    self.remote_session_dismissed.emit()
+                    return
+
+                now_ms = time.time() * 1000
+                session_time = session.get("updatedAt") or session.get("updatedAtMs") or 0
+                if not session_time or (now_ms - session_time > 12 * 3600 * 1000):
+                    self.remote_session_dismissed.emit()
+                    return
+
+                if session.get("deviceId") == self.store.device_id or self.engine.is_playing():
+                    self.remote_session_dismissed.emit()
+                    return
+
+                self.remote_session_detected.emit(session)
+            except Exception:
+                self.remote_session_dismissed.emit()
+
+        threading.Thread(target=_do_check, daemon=True, name="CheckRemotePlaybackSession").start()
 
     def _on_volume_changed(self, value: int) -> None:
         self.store.volume = value

@@ -105,6 +105,7 @@ class LibraryStore:
         # Cuenta SpotiLinux vinculada a Drive (username, email, password_hash)
         self.user_account: dict = {}
         self.hidden_track_ids: list[str] = []
+        self.device_id: str = f"sp_desktop_{uuid.uuid4().hex[:12]}"
 
         # Estado del reproductor y ecualizador
         self.volume: int = 80
@@ -215,6 +216,7 @@ class LibraryStore:
                     ("gdrive_config", json.dumps(self.gdrive_config.to_dict())),
                     ("user_account", json.dumps(self.user_account)),
                     ("hidden_track_ids", json.dumps(self.hidden_track_ids)),
+                    ("device_id", self.device_id),
                     ("player_state", json.dumps({
                         "volume": self.volume,
                         "shuffle": self.shuffle,
@@ -259,6 +261,9 @@ class LibraryStore:
             self.google_user = dict(raw.get("google_user", {}))
             self.user_account = dict(raw.get("user_account", {}))
             self.hidden_track_ids = list(raw.get("hidden_track_ids", []))
+            self.device_id = str(raw.get("device_id") or "")
+            if not self.device_id:
+                self.device_id = f"sp_desktop_{uuid.uuid4().hex[:12]}"
             self.volume = int(raw.get("volume", 80))
             self.shuffle = bool(raw.get("shuffle", False))
             self.repeat_mode = str(raw.get("repeat_mode", "off"))
@@ -297,6 +302,7 @@ class LibraryStore:
             "google_user": self.google_user,
             "user_account": self.user_account,
             "hidden_track_ids": self.hidden_track_ids,
+            "device_id": self.device_id,
             "volume": self.volume,
             "shuffle": self.shuffle,
             "repeat_mode": self.repeat_mode,

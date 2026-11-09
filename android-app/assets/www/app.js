@@ -633,7 +633,7 @@ function toggleCrossDeviceSyncSetting() {
 async function broadcastPlaybackSession(force = false) {
   if (!crossDeviceSyncEnabled) return;
   const now = Date.now();
-  if (!force && (now - lastBroadcastTimeMs < 8000)) return; // Throttle 8s
+  if (!force && (now - lastBroadcastTimeMs < 12000)) return; // Throttle 12s
   lastBroadcastTimeMs = now;
 
   const t = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
@@ -647,7 +647,7 @@ async function broadcastPlaybackSession(force = false) {
 
   const sessionObj = {
     deviceId: myDeviceId,
-    deviceType: hasNativeAndroid ? "android" : "web/desktop",
+    deviceType: hasNativeAndroid ? "android" : "desktop",
     trackId: t.id || "",
     driveId: t.driveId || "",
     title: t.title || "MaoMusic",
@@ -658,28 +658,46 @@ async function broadcastPlaybackSession(force = false) {
     posSec: Math.max(0, curSec),
     duration: Math.max(0, durSec),
     isPlaying: isPlaying,
-    updatedAt: now
+    updatedAt: now,
+    updatedAtMs: now
   };
   currentPlaybackSession = sessionObj;
 
+  const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "global_playback_session";
+  if (userAccount) userAccount.playback_session = sessionObj;
+  if (accountsDb && accountsDb[email]) accountsDb[email].playback_session = sessionObj;
+
+  const existingAcc = (accountsDb && accountsDb[email]) || userAccount || {};
+  const accPayload = Object.assign({}, existingAcc, {
+    username: existingAcc.username || (userAccount && userAccount.username) || "Usuario",
+    email: email,
+    playback_session: sessionObj,
+    updatedAt: now,
+    updated_at: now
+  });
+
   try {
-    const wrap = {
-      name: DEFAULT_CLOUD_OBJECT_NAME,
-      data: {
-        playback_session: sessionObj,
-        updatedAt: now
-      }
-    };
-    fetch(DEFAULT_CLOUD_SERVER_URL, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json; charset=UTF-8" },
-      body: JSON.stringify(wrap)
+    fetch(DEFAULT_DRIVE_SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "save_account",
+        email: email,
+        account: accPayload
+      })
     }).catch(() => {});
   } catch (_e) {}
 }
 
+async function uploadTempPlaybackSession(track, currentSec) {
+  return broadcastPlaybackSession(true);
+}
+
+async function deleteTempPlaybackSession() {
+  // Reset de sesión si fuera necesario
+}
+
 async function checkRemotePlaybackSession(isStartup = false) {
-  // Unificado con sincronización temporal (30s trigger + 10min TTL en Drive)
   return checkRemoteTempPlaybackSession();
 }
 
@@ -754,7 +772,7 @@ function resumeRemoteSessionTrack() {
 }
 
 /* ========================================================================= */
-/* FASE 4: SINCRONIZACIÓN TEMPORAL (30s TRIGGER + 10min TTL)                 */
+/* FASE 4: SINCRONIZACIÓN TEMPORAL (AUTO REPRODUCCIÓN EN OTRO DISPOSITIVO)     */
 /* ========================================================================= */
 async function checkRemoteTempPlaybackSession() {
   if (!navigator.onLine) {
@@ -763,31 +781,44 @@ async function checkRemoteTempPlaybackSession() {
   }
   const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "";
   try {
-    const url = `${DEFAULT_DRIVE_SERVER_URL}?action=get_temp_session&email=${encodeURIComponent(email)}`;
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(DEFAULT_DRIVE_SERVER_URL, { cache: "no-store" });
     if (!res.ok) {
       dismissRemoteSessionBanner();
       pendingRemoteSession = null;
       return;
     }
-    const session = await res.json();
-    // Si no hay canción guardada o el estado es not_found/expired, no mostrar ningún mensaje y ocultar el banner
-    if (!session || session.status === "not_found" || session.status === "expired" || !session.title) {
+    const data = await res.json();
+    const accounts = (data && data.accounts) || {};
+    let session = null;
+    if (email && accounts[email] && accounts[email].playback_session) {
+      session = accounts[email].playback_session;
+    } else if (accounts["global_playback_session"] && accounts["global_playback_session"].playback_session) {
+      session = accounts["global_playback_session"].playback_session;
+    } else {
+      for (const k of Object.keys(accounts)) {
+        if (accounts[k] && accounts[k].playback_session && accounts[k].playback_session.title) {
+          session = accounts[k].playback_session;
+          break;
+        }
+      }
+    }
+
+    if (!session || !session.title) {
       dismissRemoteSessionBanner();
       pendingRemoteSession = null;
       return;
     }
 
     const now = Date.now();
-    // Expiración estricta de 10 minutos (TTL 10min)
-    const isExpired = (session.expiresAtMs && session.expiresAtMs < now) ||
-                      (session.updatedAtMs && (now - session.updatedAtMs > 10 * 60 * 1000));
+    const sessionTime = session.updatedAt || session.updatedAtMs || 0;
+    // Expiración estricta de 12 horas (TTL 12h para permitir continuar con calma)
+    const isExpired = !sessionTime || (now - sessionTime > 12 * 3600 * 1000);
     if (isExpired) {
-      deleteTempPlaybackSession();
       dismissRemoteSessionBanner();
       pendingRemoteSession = null;
       return;
     }
+
     // Si la sesión proviene de este mismo dispositivo o ya está reproduciendo, ocultar banner silenciosamente
     if (session.deviceId === myDeviceId || isPlaying) {
       dismissRemoteSessionBanner();
@@ -795,67 +826,12 @@ async function checkRemoteTempPlaybackSession() {
     }
 
     pendingRemoteSession = session;
-    lastCheckedSessionUpdatedAt = session.updatedAtMs || now;
+    lastCheckedSessionUpdatedAt = sessionTime;
     showCrossDeviceBanner(session);
   } catch (_e) {
     dismissRemoteSessionBanner();
     pendingRemoteSession = null;
   }
-}
-
-async function uploadTempPlaybackSession(track, currentSec) {
-  if (!navigator.onLine || !track) return;
-  const now = Date.now();
-  const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "";
-  const sessionObj = {
-    deviceId: myDeviceId,
-    deviceType: hasNativeAndroid ? "android" : "desktop",
-    trackId: track.id || "",
-    driveId: track.driveId || "",
-    title: track.title || "Canción",
-    artist: track.artist || "Artista",
-    album: track.album || "",
-    cover: (track.cover && !String(track.cover).startsWith("file://") && !String(track.cover).startsWith("content://")) ? track.cover : "",
-    src: (track.src && String(track.src).startsWith("http")) ? track.src : (track.driveId ? `https://drive.usercontent.google.com/download?id=${track.driveId}&export=download&confirm=t` : ""),
-    posSec: Math.max(0, currentSec),
-    duration: track.duration || 0,
-    isPlaying: true,
-    updatedAtMs: now,
-    expiresAtMs: now + (10 * 60 * 1000) // 10 minutos TTL
-  };
-
-  try {
-    fetch(DEFAULT_DRIVE_SERVER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "save_temp_session",
-        email: email,
-        session: sessionObj
-      })
-    }).catch(() => {});
-  } catch (_e) {}
-
-  // Reiniciar temporizador de inactividad de 10 minutos
-  if (tempSessionCleanupTimer) clearTimeout(tempSessionCleanupTimer);
-  tempSessionCleanupTimer = setTimeout(() => {
-    deleteTempPlaybackSession();
-  }, 10 * 60 * 1000);
-}
-
-async function deleteTempPlaybackSession() {
-  if (!navigator.onLine) return;
-  const email = (userAccount && userAccount.email) ? userAccount.email.trim().toLowerCase() : "";
-  try {
-    fetch(DEFAULT_DRIVE_SERVER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "delete_temp_session",
-        email: email
-      })
-    }).catch(() => {});
-  } catch (_e) {}
 }
 
 /* ========================================================================= */
@@ -7285,13 +7261,9 @@ function animateLoop(nowMs) {
 
     const posSec = getSmoothPlaybackSec();
 
-    // Sincronización temporal entre dispositivos a los 30 segundos continuos
+    // Sincronización continua de sesión entre dispositivos mientras reproduce
     if (isPlaying && navigator.onLine) {
-      const curT = (activePlaybackQueue && activePlaybackQueue[activeQueueIndex]) || tracks[currentIndex];
-      if (curT && curT.id && posSec >= 30.0 && tempSessionUploadedTrackId !== curT.id) {
-        tempSessionUploadedTrackId = curT.id;
-        uploadTempPlaybackSession(curT, posSec);
-      }
+      broadcastPlaybackSession(false);
     }
 
     const safeBpm = (isFinite(currentBpm) && currentBpm >= 40) ? currentBpm : 116;

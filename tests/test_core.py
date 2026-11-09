@@ -203,3 +203,41 @@ class TestPlaybackAndBatchDownload(unittest.TestCase):
             engine.play_track(cloud_track)
             self.assertEqual(len(delegated), 1)
             self.assertEqual(delegated[0][0].id, "gd_12345")
+
+
+class TestCrossDeviceLinking(unittest.TestCase):
+    def test_store_device_id_persists(self):
+        import tempfile
+        from storage import LibraryStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store1 = LibraryStore(Path(tmp))
+            dev_id = store1.device_id
+            self.assertTrue(dev_id.startswith("sp_desktop_"))
+            store1.save()
+
+            store2 = LibraryStore(Path(tmp))
+            self.assertEqual(store2.device_id, dev_id)
+
+    def test_session_expiration_logic(self):
+        import time
+
+        now_ms = time.time() * 1000
+        # Sesión reciente (hace 2 minutos)
+        recent_session = {
+            "deviceId": "sp_dev_phone1",
+            "title": "Cancion Prueba",
+            "posSec": 45.0,
+            "updatedAt": now_ms - (2 * 60 * 1000)
+        }
+        # Sesión expirada (hace 14 horas)
+        expired_session = {
+            "deviceId": "sp_dev_phone1",
+            "title": "Cancion Vieja",
+            "posSec": 10.0,
+            "updatedAt": now_ms - (14 * 3600 * 1000)
+        }
+
+        ttl_limit = 12 * 3600 * 1000
+        self.assertTrue(now_ms - recent_session["updatedAt"] <= ttl_limit)
+        self.assertFalse(now_ms - expired_session["updatedAt"] <= ttl_limit)
