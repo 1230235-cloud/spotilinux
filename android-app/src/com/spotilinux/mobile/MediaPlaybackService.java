@@ -452,13 +452,37 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
         }
     }
 
+    private final Runnable delayedReleaseLocksRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!isPlaying) {
+                releaseLocks();
+            }
+        }
+    };
+
     private void acquireLocks() {
         try {
+            if (uiSyncHandler != null) {
+                uiSyncHandler.removeCallbacks(delayedReleaseLocksRunnable);
+            }
             if (wakeLock != null && !wakeLock.isHeld()) {
                 wakeLock.acquire(6 * 60 * 60 * 1000L);
             }
             if (wifiLock != null && !wifiLock.isHeld()) {
                 wifiLock.acquire();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void releaseLocks() {
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+            if (wifiLock != null && wifiLock.isHeld()) {
+                wifiLock.release();
             }
         } catch (Exception ignored) {
         }
@@ -634,8 +658,12 @@ public class MediaPlaybackService extends Service implements AudioManager.OnAudi
             }
         }
         isPlaying = false;
-        // Importante: NO liberamos el WakeLock inmediatamente para que los audífonos Bluetooth
-        // puedan reanudar la reproducción incluso tras varios minutos con la pantalla apagada.
+        // Liberamos el WakeLock de forma diferida (60s) para que los audífonos Bluetooth
+        // puedan reanudar la reproducción rápida, pero sin drenar batería si queda en pausa.
+        if (uiSyncHandler != null) {
+            uiSyncHandler.removeCallbacks(delayedReleaseLocksRunnable);
+            uiSyncHandler.postDelayed(delayedReleaseLocksRunnable, 60_000L);
+        }
         syncEverything();
     }
 

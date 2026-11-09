@@ -4,6 +4,7 @@ Almacenamiento persistente de la biblioteca musical, playlists, favoritos,
 cuentas de usuario multi-dispositivo, historial de reproducción y ecualizador.
 """
 
+import contextlib
 import hashlib
 import json
 import os
@@ -119,10 +120,19 @@ class LibraryStore:
         self._init_sqlite()
         self.load()
 
+    @contextlib.contextmanager
+    def _sqlite_conn(self):
+        conn = sqlite3.connect(self.sqlite_path, timeout=20.0)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _init_sqlite(self) -> None:
         """Inicializa el esquema SQLite para almacenamiento ACID indexado."""
         try:
-            with sqlite3.connect(self.sqlite_path) as conn:
+            with self._sqlite_conn() as conn:
                 conn.execute("PRAGMA journal_mode = WAL")
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS tracks (
@@ -163,7 +173,7 @@ class LibraryStore:
     def _sync_to_sqlite(self) -> None:
         """Sincroniza el estado actual en memoria hacia SQLite de forma segura."""
         try:
-            with sqlite3.connect(self.sqlite_path) as conn:
+            with self._sqlite_conn() as conn:
                 # Actualizar pistas
                 now = time.time()
                 track_rows = [

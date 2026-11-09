@@ -33,12 +33,12 @@ class TrackMetadata:
     filepath: str
     title: str
     artist: str
-    album: str
-    genre: str
-    year: str
-    duration: float
-    cover_path: str
-    dominant_color: tuple[int, int, int]
+    album: str = "Álbum desconocido"
+    genre: str = ""
+    year: str = ""
+    duration: float = 0.0
+    cover_path: str = ""
+    dominant_color: tuple[int, int, int] = (29, 185, 84)
     added_at: float = 0.0
     video_url: str = ""
 

@@ -3,6 +3,7 @@
 Pruebas unitarias para el almacenamiento SQLite y JSON de LibraryStore.
 """
 
+import contextlib
 import sys
 import unittest
 import tempfile
@@ -49,7 +50,7 @@ class TestLibraryStoreSqlite(unittest.TestCase):
         self.store.add_track_to_playlist(pl.id, "test_t1")
 
         # Verificar que SQLite tenga la información
-        with sqlite3.connect(self.store.sqlite_path) as conn:
+        with contextlib.closing(sqlite3.connect(self.store.sqlite_path)) as conn:
             cur = conn.cursor()
             cur.execute("SELECT id, title, artist, is_liked FROM tracks WHERE id = ?", ("test_t1",))
             row = cur.fetchone()

@@ -339,7 +339,7 @@ public class MainActivity extends Activity {
                             JSONObject obj = new JSONObject();
                             String stem = fname.replaceFirst("(?i)\\.(mp3|flac|wav|m4a|ogg|opus|aac)$", "");
                             boolean fromDrive = fname.startsWith("gd_");
-                            String canonicalId = "saved_" + Math.abs(f.getAbsolutePath().hashCode());
+                            String canonicalId = "saved_" + (f.getAbsolutePath().hashCode() & 0x7fffffff);
                             String driveId = "";
                             if (fromDrive && stem.contains("__")) {
                                 int sep = stem.indexOf("__");
@@ -361,7 +361,7 @@ public class MainActivity extends Activity {
                             if (!driveId.isEmpty()) {
                                 obj.put("driveId", driveId);
                             }
-                            String localSavedId = "saved_" + Math.abs(f.getAbsolutePath().hashCode());
+                            String localSavedId = "saved_" + (f.getAbsolutePath().hashCode() & 0x7fffffff);
                             obj.put("savedId", localSavedId);
                             obj.put("altId", localSavedId);
                             obj.put("filePath", f.getAbsolutePath());

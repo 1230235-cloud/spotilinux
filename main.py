@@ -4858,6 +4858,11 @@ class SpotiLinuxWindow(QMainWindow):
                 title=remote.get("title", "Canción en Nube"),
                 artist=remote.get("artist", "Google Drive ☁️"),
                 album=remote.get("album", "MaoMusic Stream"),
+                genre="Cloud",
+                year="",
+                duration=float(remote.get("duration", 0.0)),
+                cover_path="",
+                dominant_color=(29, 185, 84),
             )
             self.store.tracks[v_track.id] = v_track
             self.play_track(v_track, None)
@@ -5209,11 +5214,18 @@ def setup_crash_logging(base_dir: Path | str) -> Path:
         )
         app = QApplication.instance()
         if app:
+            msg_text = (
+                f"Ocurrió un error en segundo plano ({thread_name}):\n\n"
+                f"{args.exc_value}\n\nLos detalles se guardaron en:\n{log_path}"
+            )
             try:
-                QMessageBox.critical(
-                    None,
-                    "Error en hilo de fondo — MaoMusic",
-                    f"Ocurrió un error en segundo plano ({thread_name}):\n\n{args.exc_value}\n\nLos detalles se guardaron en:\n{log_path}",
+                QTimer.singleShot(
+                    0,
+                    lambda: QMessageBox.critical(
+                        None,
+                        "Error en hilo de fondo — MaoMusic",
+                        msg_text,
+                    ),
                 )
             except Exception:
                 pass
