@@ -319,7 +319,14 @@ public class MainActivity extends Activity {
     }
 
     private String buildSavedTracksJson() {
-        JSONArray arr = new JSONArray();
+        JSONArray arr = loadSavedMediaStoreTracksArray();
+        java.util.Set<String> seenIds = new java.util.HashSet<>();
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject existingObj = arr.optJSONObject(i);
+            if (existingObj != null) {
+                seenIds.add(existingObj.optString("id", ""));
+            }
+        }
         File folder = getAppMusicFolder();
         File[] files = folder.listFiles();
         if (files != null) {
@@ -349,6 +356,8 @@ public class MainActivity extends Activity {
                             } else if (fromDrive && stem.startsWith("gd_")) {
                                 stem = stem.substring(3);
                             }
+                            if (seenIds.contains(canonicalId)) continue;
+                            seenIds.add(canonicalId);
                             stem = cleanTrackTitle(stem);
                             String artist = fromDrive ? "Google Drive (Descargada) ✔" : "Carpeta SpotiLinux 📱";
                             String title = stem;
@@ -492,52 +501,88 @@ public class MainActivity extends Activity {
         return "";
     }
 
+    private JSONArray loadSavedMediaStoreTracksArray() {
+        File idxFile = new File(getFilesDir(), "mediastore_tracks_index.json");
+        if (!idxFile.exists()) return new JSONArray();
+        try (FileInputStream in = new FileInputStream(idxFile);
+             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            int r;
+            while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
+            String raw = new String(bos.toByteArray(), StandardCharsets.UTF_8).trim();
+            if (raw.startsWith("[")) return new JSONArray(raw);
+        } catch (Exception ignored) {
+        }
+        return new JSONArray();
+    }
+
     private String performDeviceScanAndSave() {
-        File destFolder = getAppMusicFolder();
         ContentResolver resolver = getContentResolver();
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
         String[] projection = new String[]{
                 MediaStore.Audio.Media._ID,
                 MediaStore.Audio.Media.TITLE,
                 MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
                 MediaStore.Audio.Media.DISPLAY_NAME
         };
 
-        try (Cursor cursor = resolver.query(uri, projection, null, null, MediaStore.Audio.Media.DATE_ADDED + " DESC")) {
+        JSONArray scannedArr = new JSONArray();
+        try (Cursor cursor = resolver.query(uri, projection, MediaStore.Audio.Media.IS_MUSIC + " != 0", null, MediaStore.Audio.Media.DATE_ADDED + " DESC")) {
             if (cursor != null) {
                 int idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
                 int titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
                 int artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
+                int albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
                 int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME);
 
-                int count = 0;
-                while (cursor.moveToNext() && count < 150) {
+                while (cursor.moveToNext()) {
                     long id = cursor.getLong(idCol);
-                    String title = cursor.getString(titleCol);
-                    String artist = cursor.getString(artistCol);
+                    String rawTitle = cursor.getString(titleCol);
+                    String rawArtist = cursor.getString(artistCol);
+                    String rawAlbum = cursor.getString(albumCol);
                     String displayName = cursor.getString(nameCol);
 
-                    String ext = ".mp3";
-                    if (displayName != null && displayName.contains(".")) {
-                        ext = displayName.substring(displayName.lastIndexOf('.')).toLowerCase();
-                    }
+                    String stem = (rawTitle != null && !rawTitle.trim().isEmpty())
+                            ? rawTitle.trim()
+                            : (displayName != null ? displayName : ("Track_" + id));
+                    String cleanTitle = cleanTrackTitle(stem);
+                    String cleanArtist = (rawArtist != null && !rawArtist.trim().isEmpty() && !rawArtist.equalsIgnoreCase("<unknown>"))
+                            ? rawArtist.trim()
+                            : "Dispositivo Local 📱";
+                    String cleanAlbum = (rawAlbum != null && !rawAlbum.trim().isEmpty() && !rawAlbum.equalsIgnoreCase("<unknown>"))
+                            ? rawAlbum.trim()
+                            : "Memoria del Teléfono";
 
-                    String baseName;
-                    if (artist != null && !artist.equals("<unknown>") && title != null && !title.isEmpty()) {
-                        baseName = artist + " - " + title + ext;
-                    } else if (displayName != null && !displayName.isEmpty()) {
-                        baseName = displayName;
-                    } else {
-                        baseName = "Track_" + id + ext;
-                    }
+                    Uri trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
+                    String uriStr = trackUri.toString();
+                    String canonicalId = "ms_" + id;
 
-                    File targetFile = new File(destFolder, sanitizeFilename(baseName));
-                    if (!targetFile.exists() || targetFile.length() < 1024) {
-                        Uri trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
-                        copyUriToFile(trackUri, targetFile);
-                    }
-                    count++;
+                    JSONObject obj = new JSONObject();
+                    obj.put("id", canonicalId);
+                    obj.put("savedId", canonicalId);
+                    obj.put("altId", canonicalId);
+                    obj.put("filePath", uriStr);
+                    obj.put("fileName", displayName != null ? displayName : (cleanTitle + ".mp3"));
+                    obj.put("driveName", cleanTitle);
+                    obj.put("title", cleanTitle);
+                    obj.put("artist", cleanArtist);
+                    obj.put("album", cleanAlbum);
+                    obj.put("genre", "Local");
+                    obj.put("src", uriStr);
+                    obj.put("savedPath", uriStr);
+                    obj.put("cloud", false);
+                    obj.put("downloaded", true);
+                    scannedArr.put(obj);
                 }
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            File idxFile = new File(getFilesDir(), "mediastore_tracks_index.json");
+            try (FileOutputStream out = new FileOutputStream(idxFile)) {
+                out.write(scannedArr.toString().getBytes(StandardCharsets.UTF_8));
             }
         } catch (Exception ignored) {
         }

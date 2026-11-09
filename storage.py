@@ -525,7 +525,7 @@ class LibraryStore:
         return added
 
     def auto_scan_device_to_app_folder(self) -> list[TrackMetadata]:
-        """Rastrea automáticamente las carpetas comunes del sistema (Music, Música, Downloads) y guarda las pistas en music_library/."""
+        """Rastrea automáticamente las carpetas comunes del sistema (Music, Música, Downloads) referenciando las pistas directamente sin duplicar archivos en disco."""
         search_dirs = [
             Path.home() / "Music",
             Path.home() / "Música",
@@ -535,7 +535,7 @@ class LibraryStore:
         discovered: list[TrackMetadata] = []
         for d in search_dirs:
             if d.exists():
-                discovered.extend(self.scan_folder(d, max_files=250, copy_to_app_folder=True))
+                discovered.extend(self.scan_folder(d, max_files=1000, copy_to_app_folder=False))
         return discovered
 
     def import_file(

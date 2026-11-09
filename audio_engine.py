@@ -52,9 +52,20 @@ class PCMAnalyzerWorker(QThread):
         self.track_id = track_id
         self.filepath = filepath
         self.sample_rate = sample_rate
+        self._proc: Optional[subprocess.Popen] = None
+        self._cancelled: bool = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
 
     def run(self) -> None:
-        if not self.filepath or self.filepath.startswith("gdrive://") or not Path(self.filepath).is_file():
+        if self._cancelled or not self.filepath or self.filepath.startswith("gdrive://") or not Path(self.filepath).is_file():
             return
         try:
             cmd = [
@@ -68,14 +79,22 @@ class PCMAnalyzerWorker(QThread):
                 "-f", "s16le",
                 "-",
             ]
-            res = subprocess.run(cmd, capture_output=True, timeout=12)
-            if res.returncode == 0 and res.stdout:
-                samples = np.frombuffer(res.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            try:
+                stdout_data, _ = self._proc.communicate(timeout=12)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+                return
+            if self._cancelled:
+                return
+            if self._proc.returncode == 0 and stdout_data:
+                samples = np.frombuffer(stdout_data, dtype=np.int16).astype(np.float32) / 32768.0
                 try:
                     rhythm = analyze_rhythm(samples, self.sample_rate)
                 except Exception:
                     rhythm = {"bpm": 0.0, "confidence": 0.0, "beat_times": np.zeros(0), "env": np.zeros(1), "fps": 86.0}
-                self.finished_pcm.emit(self.track_id, samples, self.sample_rate, rhythm)
+                if not self._cancelled:
+                    self.finished_pcm.emit(self.track_id, samples, self.sample_rate, rhythm)
         except Exception:
             pass
 
@@ -92,8 +111,21 @@ class EQRenderWorker(QThread):
         self.out_path = out_path
         self.gains = gains
         self.resume_pos_ms = resume_pos_ms
+        self._proc: Optional[subprocess.Popen] = None
+        self._cancelled: bool = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
 
     def run(self) -> None:
+        if self._cancelled:
+            return
         try:
             filters = []
             for band, gain in zip(EQ_BANDS, self.gains):
@@ -102,7 +134,8 @@ class EQRenderWorker(QThread):
                         f"equalizer=f={band['freq']}:width_type=h:width={band['width']}:g={gain:.1f}"
                     )
             if not filters:
-                self.finished_eq.emit(self.track_id, self.src_path, self.resume_pos_ms)
+                if not self._cancelled:
+                    self.finished_eq.emit(self.track_id, self.src_path, self.resume_pos_ms)
                 return
 
             af_chain = ",".join(filters)
@@ -117,8 +150,13 @@ class EQRenderWorker(QThread):
                 "-q:a", "3",
                 self.out_path,
             ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=True)
-            if Path(self.out_path).exists():
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                self._proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+                return
+            if not self._cancelled and self._proc.returncode == 0 and Path(self.out_path).exists():
                 self.finished_eq.emit(self.track_id, self.out_path, self.resume_pos_ms)
         except Exception:
             pass
@@ -225,6 +263,8 @@ class AudioEngine(QObject):
 
         # Iniciar decodificación PCM en segundo plano para el visualizador FFT solo si el archivo es local
         if Path(track.filepath).is_file():
+            if self._pcm_worker is not None and self._pcm_worker.isRunning():
+                self._pcm_worker.cancel()
             self._pcm_worker = PCMAnalyzerWorker(track.id, track.filepath)
             self._pcm_worker.finished_pcm.connect(self._on_pcm_ready)
             self._pcm_worker.start()
@@ -429,6 +469,8 @@ class AudioEngine(QObject):
             return out_path
 
         self.eq_status_changed.emit("Aplicando curva EQ...")
+        if self._eq_worker is not None and self._eq_worker.isRunning():
+            self._eq_worker.cancel()
         self._eq_worker = EQRenderWorker(track.id, track.filepath, out_path, list(self.eq_gains), resume_pos_ms)
         self._eq_worker.finished_eq.connect(self._on_eq_rendered)
         self._eq_worker.start()

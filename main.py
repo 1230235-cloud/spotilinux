@@ -4975,9 +4975,13 @@ class SpotiLinuxWindow(QMainWindow):
 
     def _on_volume_changed(self, value: int) -> None:
         self.store.volume = value
-        self.store.save()
         self.engine.set_volume(value)
         self._muted = (value == 0)
+        if not hasattr(self, "_volume_save_timer") or self._volume_save_timer is None:
+            self._volume_save_timer = QTimer(self)
+            self._volume_save_timer.setSingleShot(True)
+            self._volume_save_timer.timeout.connect(self.store.save)
+        self._volume_save_timer.start(400)
         self.btn_mute.setText("")
         icon_name = "volume_mute" if value == 0 else "volume_high"
         self.btn_mute.setIcon(icons.get_icon(icon_name, "#1ed760" if value > 0 else "#a6a6b4", 18))
