@@ -5509,7 +5509,6 @@ function validateRecoveryKey(acc, keyInput) {
   if (email) {
     const rawFallback = sha256Pure(`recovery:${email}`).substring(0, 8).toUpperCase();
     if (cleanInput === `MAO-${rawFallback}` || cleanInput === rawFallback) return true;
-    if (cleanInput === email.toUpperCase()) return true;
   }
   return false;
 }
@@ -6085,27 +6084,6 @@ async function pullCloudDatabaseFromDrive() {
     }
   } catch (_e) {}
 
-  // 3. Consulta de respaldo al Servidor Central REST
-  try {
-    const sRes = await fetch(DEFAULT_CLOUD_SERVER_URL, { cache: "no-store" });
-    if (sRes.ok) {
-      const sData = await sRes.json();
-      const payload = (sData && sData.data && typeof sData.data === "object" && sData.data.accounts) ? sData.data : sData;
-      if (payload.accounts && typeof payload.accounts === "object") {
-        Object.assign(accountsDb, payload.accounts);
-      }
-      applyAccountRecordToState(payload);
-      if (userAccount && userAccount.email && accountsDb[userAccount.email]) {
-        applyAccountRecordToState(accountsDb[userAccount.email]);
-      }
-      savePersistentState();
-      renderHomePlaylists();
-      renderTracks();
-      cachedCloudDbFileId = "cloud_server";
-      return "cloud_server";
-    }
-  } catch (_e) {}
-
   // 3. Si hay token o apiKey, consultar API v3 de Google Drive
   if (!token && !apiKey) return null;
   const headers = token ? { "Authorization": `Bearer ${token}` } : {};
@@ -6217,19 +6195,6 @@ async function uploadPlaylistsToDrive(existingFileId) {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=UTF-8" },
         body: JSON.stringify({ action: "sync_db", db: payload })
-      }).catch(() => {});
-    } catch (_e) {}
-
-    // 3. Sincronizar de respaldo con el Servidor Central REST
-    try {
-      const wrap = {
-        name: DEFAULT_CLOUD_OBJECT_NAME,
-        data: payload
-      };
-      fetch(DEFAULT_CLOUD_SERVER_URL, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json; charset=UTF-8" },
-        body: JSON.stringify(wrap)
       }).catch(() => {});
     } catch (_e) {}
   }

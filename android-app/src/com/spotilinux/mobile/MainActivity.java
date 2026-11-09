@@ -880,11 +880,8 @@ public class MainActivity extends Activity {
                                             try { ef.delete(); } catch (Throwable ignored) {}
                                             break;
                                         }
-                                        String escPath = ef.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
-                                        String escId = fileId.replace("'", "\\'");
                                         String coverUrl = extractAndSaveCover(ef);
-                                        String escCover = coverUrl.replace("\\", "\\\\").replace("'", "\\'");
-                                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, true, '" + escCover + "');");
+                                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded(" + JSONObject.quote(fileId) + ", " + JSONObject.quote(ef.getAbsolutePath()) + ", true, true, " + JSONObject.quote(coverUrl) + ");");
                                         return;
                                     }
                                 }
@@ -897,17 +894,14 @@ public class MainActivity extends Activity {
                         boolean ok = downloadDriveMediaFile(fileId, outFile, authToken, apiKey);
 
                         if (ok && outFile.exists() && outFile.length() > 1024) {
-                            String escPath = outFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
-                            String escId = fileId.replace("'", "\\'");
                             String coverUrl = extractAndSaveCover(outFile);
-                            String escCover = coverUrl.replace("\\", "\\\\").replace("'", "\\'");
-                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + escId + "', '" + escPath + "', true, false, '" + escCover + "');");
+                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded(" + JSONObject.quote(fileId) + ", " + JSONObject.quote(outFile.getAbsolutePath()) + ", true, false, " + JSONObject.quote(coverUrl) + ");");
                         } else {
                             if (outFile.exists()) outFile.delete();
-                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false, false);");
+                            dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded(" + JSONObject.quote(fileId) + ", '', false, false);");
                         }
                     } catch (Exception e) {
-                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded('" + fileId + "', '', false, false);");
+                        dispatchJs("if(window.onDriveTrackDownloaded) window.onDriveTrackDownloaded(" + JSONObject.quote(fileId) + ", '', false, false);");
                     }
                 }
             }).start();
@@ -1173,8 +1167,7 @@ public class MainActivity extends Activity {
             final File vFile = new File(videoDir, "video_" + fileId + ".mp4");
 
             if (vFile.exists() && vFile.length() > 10240) {
-                String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
-                dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId + "', 'file://" + escPath + "');");
+                dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady(" + JSONObject.quote(fileId) + ", " + JSONObject.quote("file://" + vFile.getAbsolutePath()) + ");");
                 return;
             }
 
@@ -1186,8 +1179,7 @@ public class MainActivity extends Activity {
                 public void run() {
                     try {
                         if (downloadDriveMediaFile(fileId, vFile, authToken, apiKey)) {
-                            String escPath = vFile.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
-                            dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady('" + fileId + "', 'file://" + escPath + "');");
+                            dispatchJs("if(window.onDriveVideoReady) window.onDriveVideoReady(" + JSONObject.quote(fileId) + ", " + JSONObject.quote("file://" + vFile.getAbsolutePath()) + ");");
                         }
                     } catch (Exception ignored) {
                     } finally {
@@ -1426,36 +1418,7 @@ public class MainActivity extends Activity {
                     } catch (Exception ignored) {
                     }
 
-                    // 2. Respaldo: Servidor Central REST
-                    try {
-                        URL url = new URL("https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a");
-                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                        conn.setRequestMethod("PUT");
-                        conn.setDoOutput(true);
-                        conn.setConnectTimeout(10000);
-                        conn.setReadTimeout(12000);
-                        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                        
-                        JSONObject wrap = new JSONObject();
-                        wrap.put("name", "spotilinux_database_1EE6aiD_NRvUMf8yyXHAvF2Z3RUCjEpTT");
-                        try {
-                            wrap.put("data", new JSONObject(jsonPayload));
-                        } catch (Exception ex) {
-                            wrap.put("data", jsonPayload);
-                        }
-                        byte[] bytes = wrap.toString().getBytes(StandardCharsets.UTF_8);
-                        conn.setFixedLengthStreamingMode(bytes.length);
-                        try (java.io.OutputStream os = conn.getOutputStream()) {
-                            os.write(bytes);
-                        }
-                        int code = conn.getResponseCode();
-                        if (code >= 200 && code < 300) {
-                            success = true;
-                        }
-                    } catch (Exception ignored) {
-                    }
-
-                    // 3. Respaldo local persistente
+                    // 2. Respaldo local persistente
                     try {
                         File f = new File(getFilesDir(), "spotilinux_cloud_backup.json");
                         try (FileOutputStream out = new FileOutputStream(f)) {
@@ -1484,22 +1447,7 @@ public class MainActivity extends Activity {
                         if (jsonDrive != null && !jsonDrive.trim().isEmpty() && jsonDrive.trim().startsWith("{")) {
                             JSONObject root = new JSONObject(jsonDrive);
                             JSONObject dataObj = root.has("data") ? root.getJSONObject("data") : root;
-                            String safeJson = dataObj.toString().replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-                            dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', 'drive_server');");
-                            return;
-                        }
-                    } catch (Exception ignored) {
-                    }
-
-                    // 2. Respaldo: Servidor Central REST
-                    try {
-                        String sUrl = "https://api.restful-api.dev/objects/ff808181a09d98f701a16e7026147e2a";
-                        String jsonSrv = fetchUrlText(sUrl);
-                        if (jsonSrv != null && !jsonSrv.trim().isEmpty() && jsonSrv.trim().startsWith("{")) {
-                            JSONObject root = new JSONObject(jsonSrv);
-                            JSONObject dataObj = root.has("data") ? root.getJSONObject("data") : root;
-                            String safeJson = dataObj.toString().replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-                            dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', 'cloud_server');");
+                            dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched(" + JSONObject.quote(dataObj.toString()) + ", 'drive_server');");
                             return;
                         }
                     } catch (Exception ignored) {
@@ -1526,8 +1474,7 @@ public class MainActivity extends Activity {
                         if (dbFileId != null) {
                             String jsonContent = fetchUrlText("https://drive.google.com/uc?export=download&id=" + dbFileId + "&confirm=t");
                             if (jsonContent != null && !jsonContent.trim().isEmpty() && jsonContent.trim().startsWith("{")) {
-                                String safeJson = jsonContent.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-                                dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', '" + dbFileId + "');");
+                                dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched(" + JSONObject.quote(jsonContent) + ", " + JSONObject.quote(dbFileId) + ");");
                                 return;
                             }
                         }
@@ -1545,8 +1492,7 @@ public class MainActivity extends Activity {
                                 while ((r = in.read(buf)) > 0) bos.write(buf, 0, r);
                                 String localBkp = new String(bos.toByteArray(), StandardCharsets.UTF_8);
                                 if (localBkp.trim().startsWith("{")) {
-                                    String safeJson = localBkp.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-                                    dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched('" + safeJson + "', 'local_cache');");
+                                    dispatchJs("if(window.onCloudDatabaseFetched) window.onCloudDatabaseFetched(" + JSONObject.quote(localBkp) + ", 'local_cache');");
                                     return;
                                 }
                             }
@@ -1661,8 +1607,7 @@ public class MainActivity extends Activity {
     }
 
     public static void dispatchMediaCommandToWeb(final String command) {
-        String safeCmd = command.replace("'", "\\'");
-        dispatchJs("if (window.onNativeMediaCommand) { window.onNativeMediaCommand('" + safeCmd + "'); }");
+        dispatchJs("if (window.onNativeMediaCommand) { window.onNativeMediaCommand(" + JSONObject.quote(command == null ? "" : command) + "); }");
     }
 
     public static void notifyWebProgress(final long posMs, final long durMs, final boolean playing) {
@@ -1670,8 +1615,7 @@ public class MainActivity extends Activity {
     }
 
     public static void dispatchUpdateStatusToWeb(final String status, final int percent, final long downloaded, final long total, final String error) {
-        String safeErr = error == null ? "" : error.replace("'", "\\'");
-        dispatchJs("if (window.onNativeUpdateProgress) { window.onNativeUpdateProgress('" + status + "', " + percent + ", " + downloaded + ", " + total + ", '" + safeErr + "'); }");
+        dispatchJs("if (window.onNativeUpdateProgress) { window.onNativeUpdateProgress(" + JSONObject.quote(status == null ? "" : status) + ", " + percent + ", " + downloaded + ", " + total + ", " + JSONObject.quote(error == null ? "" : error) + "); }");
     }
 
     private void launchApkInstaller(final File apkFile) {

@@ -130,10 +130,14 @@ class TestSecurityAndAccounts(unittest.TestCase):
         self.assertFalse(validate_recovery_key(acc, "MAO-WRON-GKEY"))
         self.assertFalse(validate_recovery_key(acc, ""))
 
-        # Fallback para cuenta legacy
+        # Fallback determinista para cuenta legacy (y rechazo del correo plano como clave)
+        import hashlib
         legacy_acc = {"email": "legacy@maomusic.com"}
-        self.assertTrue(validate_recovery_key(legacy_acc, "legacy@maomusic.com"))
-        self.assertTrue(validate_recovery_key(legacy_acc, "LEGACY@MAOMUSIC.COM"))
+        expected_legacy_hash = hashlib.sha256(b"recovery:legacy@maomusic.com").hexdigest()[:8].upper()
+        self.assertTrue(validate_recovery_key(legacy_acc, f"MAO-{expected_legacy_hash}"))
+        self.assertTrue(validate_recovery_key(legacy_acc, expected_legacy_hash))
+        self.assertFalse(validate_recovery_key(legacy_acc, "legacy@maomusic.com"))
+        self.assertFalse(validate_recovery_key(legacy_acc, "LEGACY@MAOMUSIC.COM"))
 
 
 class TestPlaylistModel(unittest.TestCase):

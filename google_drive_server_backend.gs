@@ -110,7 +110,7 @@ function doGet(e) {
       return jsonResponse({ status: "ok", count: iList.length, files: iList });
     }
 
-    if (action === "get_temp_session") {
+    if (action === "get_temp_session" || action === "get_playback_session") {
       var emailParam = String(e && e.parameter && e.parameter.email || "").toLowerCase().trim();
       var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
       var sessionFiles = folder.getFilesByName(sessionFileName);
@@ -128,6 +128,18 @@ function doGet(e) {
           }
           return ContentService.createTextOutput(sContent).setMimeType(ContentService.MimeType.JSON);
         } catch(_parseErr) {}
+      }
+      if (action === "get_playback_session" && emailParam) {
+        var dbFiles = folder.getFilesByName(DB_FILENAME);
+        if (dbFiles.hasNext()) {
+          try {
+            var dbObj = JSON.parse(dbFiles.next().getBlob().getDataAsString("UTF-8"));
+            var acc = dbObj && dbObj.accounts && dbObj.accounts[emailParam];
+            if (acc && acc.playback_session) {
+              return jsonResponse({ status: "ok", playback_session: acc.playback_session });
+            }
+          } catch (_dbErr) {}
+        }
       }
       return jsonResponse({ status: "not_found" });
     }
@@ -201,80 +213,111 @@ function doPost(e) {
       });
     }
 
-    // 2. Acción: Guardar o combinar base de datos completa
-    if (data.action === "sync_db" || data.accounts) {
-      var dbPayload = data.db || data;
-      var files = folder.getFilesByName(DB_FILENAME);
-      var file = null;
-      var existingDb = { accounts: {}, drive_catalog: [] };
+    var lock = LockService.getScriptLock();
+    lock.waitLock(15000);
+    try {
+      // 2. Acción: Guardar o combinar base de datos completa
+      if (data.action === "sync_db" || data.accounts) {
+        var dbPayload = data.db || data;
+        var files = folder.getFilesByName(DB_FILENAME);
+        var file = null;
+        var existingDb = { accounts: {}, drive_catalog: [] };
 
-      if (files.hasNext()) {
-        file = files.next();
+        if (files.hasNext()) {
+          file = files.next();
+          try {
+            existingDb = JSON.parse(file.getBlob().getDataAsString("UTF-8")) || {};
+          } catch (_e) {}
+        } else {
+          file = folder.createFile(DB_FILENAME, "{}", MimeType.PLAIN_TEXT);
+        }
+
+        // Combinar cuentas preservando campos críticos
+        var incomingAccounts = dbPayload.accounts || {};
+        var baseAccounts = existingDb.accounts || {};
+        for (var accKey in incomingAccounts) {
+          var incAcc = incomingAccounts[accKey] || {};
+          var prevAcc = baseAccounts[accKey] || {};
+          baseAccounts[accKey] = mergeAccountOnServer(prevAcc, incAcc);
+        }
+        existingDb.accounts = baseAccounts;
+        existingDb.updated_at = new Date().getTime();
+        existingDb.root_folder_id = folderId;
+
+        file.setContent(JSON.stringify(existingDb, null, 2));
+        return jsonResponse({ status: "ok", message: "Base de datos actualizada con éxito en Google Drive" });
+      }
+
+      // 3. Acción: Guardar cuenta individual con merge seguro
+      if (data.action === "save_account") {
+        var email = String(data.email || (data.account && data.account.email) || "").toLowerCase().trim();
+        var files = folder.getFilesByName(DB_FILENAME);
+        var file = files.hasNext() ? files.next() : folder.createFile(DB_FILENAME, "{}", MimeType.PLAIN_TEXT);
+        var currentDb = { accounts: {} };
         try {
-          existingDb = JSON.parse(file.getBlob().getDataAsString("UTF-8")) || {};
+          currentDb = JSON.parse(file.getBlob().getDataAsString("UTF-8")) || { accounts: {} };
         } catch (_e) {}
-      } else {
-        file = folder.createFile(DB_FILENAME, "{}", MimeType.PLAIN_TEXT);
+
+        if (!currentDb.accounts) currentDb.accounts = {};
+        var prevAccount = currentDb.accounts[email] || {};
+        currentDb.accounts[email] = mergeAccountOnServer(prevAccount, data.account || {});
+        currentDb.updated_at = new Date().getTime();
+
+        file.setContent(JSON.stringify(currentDb, null, 2));
+        return jsonResponse({ status: "ok", email: email });
       }
 
-      // Combinar cuentas
-      var incomingAccounts = dbPayload.accounts || {};
-      var baseAccounts = existingDb.accounts || {};
-      for (var accKey in incomingAccounts) {
-        baseAccounts[accKey] = incomingAccounts[accKey];
+      // 4. Acción: Guardar archivo temporal de reproducción (Continuar en otro dispositivo)
+      if (data.action === "save_temp_session") {
+        var emailParam = String(data.email || "").toLowerCase().trim();
+        var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
+        var sessionFiles = folder.getFilesByName(sessionFileName);
+        var sFile = sessionFiles.hasNext() ? sessionFiles.next() : folder.createFile(sessionFileName, "{}", MimeType.PLAIN_TEXT);
+        sFile.setContent(JSON.stringify(data.session || data, null, 2));
+        return jsonResponse({ status: "ok", action: "saved", filename: sessionFileName });
       }
-      existingDb.accounts = baseAccounts;
-      existingDb.updated_at = new Date().getTime();
-      existingDb.root_folder_id = folderId;
 
-      file.setContent(JSON.stringify(existingDb, null, 2));
-      return jsonResponse({ status: "ok", message: "Base de datos actualizada con éxito en Google Drive" });
-    }
-
-    // 2. Acción: Guardar cuenta individual
-    if (data.action === "save_account") {
-      var email = String(data.email || (data.account && data.account.email) || "").toLowerCase().trim();
-      var files = folder.getFilesByName(DB_FILENAME);
-      var file = files.hasNext() ? files.next() : folder.createFile(DB_FILENAME, "{}", MimeType.PLAIN_TEXT);
-      var currentDb = { accounts: {} };
-      try {
-        currentDb = JSON.parse(file.getBlob().getDataAsString("UTF-8")) || { accounts: {} };
-      } catch (_e) {}
-
-      if (!currentDb.accounts) currentDb.accounts = {};
-      currentDb.accounts[email] = data.account;
-      currentDb.updated_at = new Date().getTime();
-
-      file.setContent(JSON.stringify(currentDb, null, 2));
-      return jsonResponse({ status: "ok", email: email });
-    }
-
-    // 4. Acción: Guardar archivo temporal de reproducción (Continuar en otro dispositivo)
-    if (data.action === "save_temp_session") {
-      var emailParam = String(data.email || "").toLowerCase().trim();
-      var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
-      var sessionFiles = folder.getFilesByName(sessionFileName);
-      var sFile = sessionFiles.hasNext() ? sessionFiles.next() : folder.createFile(sessionFileName, "{}", MimeType.PLAIN_TEXT);
-      sFile.setContent(JSON.stringify(data.session || data, null, 2));
-      return jsonResponse({ status: "ok", action: "saved", filename: sessionFileName });
-    }
-
-    // 5. Acción: Eliminar archivo temporal de reproducción
-    if (data.action === "delete_temp_session") {
-      var emailParam = String(data.email || "").toLowerCase().trim();
-      var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
-      var sessionFiles = folder.getFilesByName(sessionFileName);
-      while (sessionFiles.hasNext()) {
-        var sf = sessionFiles.next();
-        try { sf.setTrashed(true); } catch(_e){}
+      // 5. Acción: Eliminar archivo temporal de reproducción
+      if (data.action === "delete_temp_session") {
+        var emailParam = String(data.email || "").toLowerCase().trim();
+        var sessionFileName = emailParam ? ("maomao_temp_session_" + Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, emailParam).map(function(b){return (b<0?b+256:b).toString(16)}).join("") + ".json") : "maomao_temp_session.json";
+        var sessionFiles = folder.getFilesByName(sessionFileName);
+        while (sessionFiles.hasNext()) {
+          var sf = sessionFiles.next();
+          try { sf.setTrashed(true); } catch(_e){}
+        }
+        return jsonResponse({ status: "ok", action: "deleted" });
       }
-      return jsonResponse({ status: "ok", action: "deleted" });
+    } finally {
+      try { lock.releaseLock(); } catch (_lockErr) {}
     }
 
     return jsonResponse({ error: "Acción no reconocida" });
   } catch (err) {
     return jsonResponse({ error: err.toString() });
   }
+}
+
+function mergeAccountOnServer(prevAcc, incAcc) {
+  var merged = {};
+  for (var k in prevAcc) merged[k] = prevAcc[k];
+  for (var k2 in incAcc) {
+    if (incAcc[k2] !== undefined && incAcc[k2] !== null) {
+      merged[k2] = incAcc[k2];
+    }
+  }
+  merged.password_hash = incAcc.password_hash || incAcc.passwordHash || prevAcc.password_hash || prevAcc.passwordHash || "";
+  merged.recovery_key = incAcc.recovery_key || incAcc.recoveryKey || prevAcc.recovery_key || prevAcc.recoveryKey || "";
+  if (!Array.isArray(incAcc.playlists) && Array.isArray(prevAcc.playlists)) {
+    merged.playlists = prevAcc.playlists;
+  }
+  if (!Array.isArray(incAcc.liked_ids) && !Array.isArray(incAcc.likedIds) && Array.isArray(prevAcc.liked_ids)) {
+    merged.liked_ids = prevAcc.liked_ids;
+  }
+  if (!Array.isArray(incAcc.drive_tracks) && Array.isArray(prevAcc.drive_tracks)) {
+    merged.drive_tracks = prevAcc.drive_tracks;
+  }
+  return merged;
 }
 
 function jsonResponse(obj) {
