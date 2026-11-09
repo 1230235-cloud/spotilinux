@@ -40,6 +40,16 @@ class QueueItem:
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+    @property
+    def result(self) -> Dict[str, Any]:
+        if not self.result_json:
+            return {}
+        try:
+            data = json.loads(self.result_json)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
 
 def parse_playlist_txt(content: str, default_playlist_name: str = "") -> List[Tuple[str, str]]:
     """
@@ -195,8 +205,8 @@ class DownloadQueue:
                 existing = cur.fetchone()
                 if existing:
                     skipped += 1
-                    # Si ya estaba en cola pero sin playlist definida y ahora sí se le asigna una, actualizarla
-                    if tgt_pl and not str(existing["target_playlist"] or "").strip():
+                    # Si se indica una playlist destino, actualizarla en el ítem existente para agruparlo
+                    if tgt_pl and str(existing["target_playlist"] or "").strip() != tgt_pl:
                         conn.execute(
                             "UPDATE queue_items SET target_playlist = ? WHERE id = ?",
                             (tgt_pl, existing["id"]),

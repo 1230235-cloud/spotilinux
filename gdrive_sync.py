@@ -1235,11 +1235,24 @@ def download_cloud_database(config: GoogleDriveConfig, local_db_path: Path) -> t
     return base_db, file_id
 
 
+def _normalize_timestamp_sec(val: object) -> float:
+    try:
+        t = float(val or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return t / 1000.0 if t > 1e11 else t
+
+
 def merge_account_records(acc_a: dict, acc_b: dict) -> dict:
     """Combina sin pérdida las playlists, favoritos y pistas de Drive de dos instantáneas de una misma cuenta."""
-    newer = acc_b if float(acc_b.get("updated_at", 0)) >= float(acc_a.get("updated_at", 0)) else acc_a
+    ts_a = _normalize_timestamp_sec(acc_a.get("updated_at") or acc_a.get("updatedAt"))
+    ts_b = _normalize_timestamp_sec(acc_b.get("updated_at") or acc_b.get("updatedAt"))
+    newer = acc_b if ts_b >= ts_a else acc_a
     older = acc_a if newer is acc_b else acc_b
     merged = dict(newer)
+    now_sec = max(ts_a, ts_b, time.time())
+    merged["updated_at"] = now_sec
+    merged["updatedAt"] = int(now_sec * 1000)
 
     # Conservar clave de recuperación
     merged["recovery_key"] = newer.get("recovery_key") or older.get("recovery_key") or ""
@@ -1255,7 +1268,7 @@ def merge_account_records(acc_a: dict, acc_b: dict) -> dict:
             dtracks_by_id[dt["id"]] = dt
     merged["drive_tracks"] = list(dtracks_by_id.values())
 
-    # Unir playlists
+    # Unir playlists preservando metadatos de nube (is_cloud, carátulas, snapshots)
     pl_by_id: dict[str, dict] = {}
     pl_by_name: dict[str, dict] = {}
     for p in list(newer.get("playlists", [])) + list(older.get("playlists", [])):
@@ -1266,13 +1279,39 @@ def merge_account_records(acc_a: dict, acc_b: dict) -> dict:
         target = pl_by_id.get(pid) or pl_by_name.get(pname_low)
         tids = list(p.get("track_ids", p.get("trackIds", [])))
         snaps = list(p.get("tracks_snapshot", []))
+        desc_str = str(p.get("description", p.get("desc", "")) or "")
+        p_is_cloud = bool(
+            p.get("is_cloud")
+            or p.get("isCloud")
+            or "cola de descargas" in desc_str.lower()
+            or "en la nube" in desc_str.lower()
+        )
+        cov_url = str(p.get("cover_url") or p.get("coverUrl") or "")
+        cov_did = str(p.get("cover_drive_id") or p.get("coverDriveId") or "")
+        cov_path = str(p.get("cover_path") or p.get("coverPath") or "")
+
         if target:
             cur_tids = list(target.get("track_ids", target.get("trackIds", [])))
+            has_gd_in_target = any(str(x).startswith("gd_") for x in cur_tids)
             for t_id in tids:
                 if t_id not in cur_tids:
+                    if has_gd_in_target and re.fullmatch(r"[0-9a-f]{16}", str(t_id)):
+                        continue
                     cur_tids.append(t_id)
             target["track_ids"] = cur_tids
             target["trackIds"] = cur_tids
+            target["is_cloud"] = bool(target.get("is_cloud") or target.get("isCloud") or p_is_cloud)
+            target["isCloud"] = target["is_cloud"]
+            if not target.get("description") and desc_str:
+                target["description"] = desc_str
+            if not target.get("cover_url") and cov_url:
+                target["cover_url"] = cov_url
+                target["coverUrl"] = cov_url
+            if not target.get("cover_drive_id") and cov_did:
+                target["cover_drive_id"] = cov_did
+                target["coverDriveId"] = cov_did
+            if not target.get("cover_path") and cov_path:
+                target["cover_path"] = cov_path
             snap_map = {s["id"]: s for s in target.get("tracks_snapshot", []) if isinstance(s, dict) and "id" in s}
             for s in snaps:
                 if isinstance(s, dict) and "id" in s:
@@ -1282,11 +1321,18 @@ def merge_account_records(acc_a: dict, acc_b: dict) -> dict:
             new_p = {
                 "id": pid,
                 "name": p.get("name", "Playlist"),
-                "description": p.get("description", p.get("desc", "")),
+                "description": desc_str,
                 "track_ids": tids,
                 "trackIds": tids,
                 "tracks_snapshot": snaps,
                 "created_at": float(p.get("created_at", time.time())),
+                "is_cloud": p_is_cloud,
+                "isCloud": p_is_cloud,
+                "cover_url": cov_url,
+                "coverUrl": cov_url,
+                "cover_drive_id": cov_did,
+                "coverDriveId": cov_did,
+                "cover_path": cov_path,
             }
             pl_by_id[pid] = new_p
             pl_by_name[pname_low] = new_p

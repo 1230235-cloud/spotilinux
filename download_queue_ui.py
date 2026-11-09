@@ -36,6 +36,7 @@ class QueueSignals(QObject):
     item_changed = pyqtSignal(int)
     summary_changed = pyqtSignal()
     item_completed_for_playlist = pyqtSignal(int, str, str, dict)  # item_id, query, target_playlist, result_dict
+    playlist_enqueued = pyqtSignal(str, list, bool)  # playlist_name, queries, keep_local
 
 
 class DownloadQueuePanel(QDialog):
@@ -272,18 +273,36 @@ class DownloadQueuePanel(QDialog):
         from main import YouTubeBatchDownloadDialog
         dlg = YouTubeBatchDownloadDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            queries = dlg.get_queries()
             keep_local = dlg.should_keep_local()
             tgt_pl = getattr(dlg, "get_target_playlist", lambda: "")()
-            if queries:
-                added, skipped = self.queue.add(queries, keep_local=keep_local, target_playlist=tgt_pl)
+            raw_text = dlg.txt_list.toPlainText() if hasattr(dlg, "txt_list") else ""
+            entries = parse_playlist_txt(raw_text, default_playlist_name=tgt_pl) if raw_text else []
+            if not entries:
+                queries = dlg.get_queries()
+                entries = [(q, tgt_pl) for q in queries]
+            if entries:
+                grouped: dict[str, list[str]] = {}
+                for q, pl_name in entries:
+                    grouped.setdefault(pl_name, []).append(q)
+                total_added = 0
+                total_skipped = 0
+                for pl_name, qs in grouped.items():
+                    added, skipped = self.queue.add(qs, keep_local=keep_local, target_playlist=pl_name)
+                    total_added += added
+                    total_skipped += skipped
+                    if pl_name:
+                        self.signals.playlist_enqueued.emit(pl_name, qs, keep_local)
                 self._refresh_table()
-                pl_info = f" en la playlist «{tgt_pl}»" if tgt_pl else ""
-                if skipped > 0 or added > 0:
+                self.signals.summary_changed.emit()
+                pl_names = [p for p in grouped.keys() if p]
+                pl_info = f" en la playlist en la nube «{', '.join(pl_names)}»" if pl_names else ""
+                if total_skipped > 0 or total_added > 0:
                     QMessageBox.information(
                         self,
-                        "Descargas encoladas",
-                        f"Se agregaron {added} canciones a la cola{pl_info}.\n(Omitidas por estar ya registradas: {skipped})",
+                        "Descargas y Playlist en la Nube",
+                        f"✔ Se procesaron {total_added + total_skipped} canciones{pl_info}.\n"
+                        f"• Encoladas para descarga: {total_added}\n"
+                        f"• Vinculadas de descargas existentes: {total_skipped}",
                     )
 
     def _import_txt_file(self) -> None:
@@ -305,7 +324,7 @@ class DownloadQueuePanel(QDialog):
             pl_name, ok = QInputDialog.getText(
                 self,
                 "Crear Playlist desde .txt",
-                "Nombre de la Playlist a crear con estas canciones:",
+                "Nombre de la Playlist en la Nube a crear con estas canciones:",
                 text=default_name,
             )
             if not ok or not pl_name.strip():
@@ -317,19 +336,27 @@ class DownloadQueuePanel(QDialog):
                 QMessageBox.information(self, "Lista vacía", "No se encontraron canciones válidas en el archivo .txt.")
                 return
 
+            grouped: dict[str, list[str]] = {}
+            for q, pl in entries:
+                grouped.setdefault(pl or pl_name, []).append(q)
+
             total_added = 0
             total_skipped = 0
-            for q, pl in entries:
-                a, s = self.queue.add([q], keep_local=True, target_playlist=pl)
+            for target_pl, qs in grouped.items():
+                a, s = self.queue.add(qs, keep_local=True, target_playlist=target_pl)
                 total_added += a
                 total_skipped += s
+                if target_pl:
+                    self.signals.playlist_enqueued.emit(target_pl, qs, True)
 
             self._refresh_table()
+            self.signals.summary_changed.emit()
             QMessageBox.information(
                 self,
-                "Importación Exitosa",
-                f"✔ Se importaron {total_added} canciones asignadas a la playlist «{pl_name}».\n"
-                f"(Omitidas por duplicado: {total_skipped})",
+                "Playlist en la Nube Creada",
+                f"✔ Se agrupó la playlist en la nube «{', '.join(grouped.keys())}».\n"
+                f"• Descargas nuevas encoladas: {total_added}\n"
+                f"• Canciones existentes vinculadas a la playlist: {total_skipped}",
             )
         except Exception as exc:
             QMessageBox.warning(self, "Error al importar", f"No se pudo leer el archivo:\n{exc}")

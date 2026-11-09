@@ -1824,6 +1824,8 @@ class SpotiLinuxWindow(QMainWindow):
         self._library_rescan_timer.timeout.connect(self.rescan_local_library)
         self.queue_signals.summary_changed.connect(self._update_download_badge)
         self.queue_signals.item_completed_for_playlist.connect(self._on_queue_item_completed)
+        self.queue_signals.playlist_enqueued.connect(self._on_playlist_enqueued_from_panel)
+        self._reconcile_completed_queue_playlists()
         self.queue_runner.start()
 
         # Estado de navegación actual
@@ -2944,29 +2946,164 @@ class SpotiLinuxWindow(QMainWindow):
         elif ev_type in ("item_started", "item_error", "item_cancelled", "summary_changed", "state_changed"):
             self.queue_signals.summary_changed.emit()
 
-    def _on_queue_item_completed(self, item_id: int, query: str, target_playlist: str, result: dict) -> None:
-        """Asocia la canción descargada a su playlist destino en el hilo principal de Qt."""
-        if not target_playlist:
-            return
-        audio_file = result.get("audio_file")
-        title = result.get("title", "")
-        track = None
+    def _resolve_or_import_queue_track(self, query: str, target_playlist: str, result: dict) -> Optional[TrackMetadata]:
+        """Importa o vincula una canción descargada usando su ID canónico de Google Drive (gd_<audio_file_id>) cuando existe."""
+        audio_file = str(result.get("audio_file") or "").strip()
+        title = str(result.get("title") or "").strip()
+        artist = str(result.get("artist") or "").strip()
+        sync_info = result.get("sync") if isinstance(result.get("sync"), dict) else {}
+        audio_fid = str(sync_info.get("audio_file_id") or "").strip()
+        forced_id = f"gd_{audio_fid}" if audio_fid else ""
+
+        track: Optional[TrackMetadata] = None
         if audio_file:
             full_path = self.store.music_library_dir / audio_file
             if full_path.exists():
-                track = self.store.import_file(full_path, save_immediately=False)
+                track = self.store.import_file(full_path, save_immediately=False, forced_id=forced_id)
+
         if not track:
             track = self.store.find_track_by_query_or_filename(
-                audio_filename=audio_file or "",
+                audio_filename=audio_file,
                 title=title,
                 query=query,
+                prefer_real=True,
             )
+            if track and forced_id and track.id != forced_id and not track.filepath.startswith("cloud://pending"):
+                old_id = track.id
+                track.id = forced_id
+                if track.genre == "Desconocido":
+                    track.genre = "Cloud Music"
+                self.store.tracks[forced_id] = track
+                if old_id in self.store.tracks:
+                    del self.store.tracks[old_id]
+                self.store.reconcile_playlist_track_ids(old_id, forced_id)
+
+        if not track and forced_id:
+            # Descarga solo en la nube (keep_local=False) pero subida a Google Drive con éxito
+            cov_path = self.store.covers_dir / f"{forced_id}.jpg"
+            if not cov_path.exists():
+                cov_path = self.store.covers_dir / f"cover_{forced_id[:16]}.png"
+                if not cov_path.exists():
+                    generate_fallback_cover(title or query, artist or "Google Drive Cloud", cov_path, forced_id)
+            dom_rgb = compute_dominant_color(cov_path)
+            track = TrackMetadata(
+                id=forced_id,
+                filepath=f"gdrive://{audio_fid}",
+                title=title or query,
+                artist=artist or "Google Drive Cloud",
+                album=target_playlist or "Google Drive (Online)",
+                genre="Cloud Music",
+                year="Cloud",
+                duration=float(result.get("duration") or 180.0),
+                cover_path=str(cov_path),
+                dominant_color=dom_rgb,
+                added_at=time.time(),
+            )
+            self.store.tracks[forced_id] = track
+
+        if track:
+            if target_playlist and track.album in ("", "Desconocido"):
+                track.album = target_playlist
+            if forced_id and track.genre in ("", "Desconocido"):
+                track.genre = "Cloud Music"
+        return track
+
+    def _reconcile_completed_queue_playlists(self) -> bool:
+        """Asegura que todas las canciones descargadas en la cola con target_playlist estén agrupadas en su Playlist en la Nube con ID canónico gd_..."""
+        changed = False
+        try:
+            done_items = self.download_queue.list(status="done")
+        except Exception:
+            done_items = []
+
+        for item in done_items:
+            tgt_pl = str(item.target_playlist or "").strip()
+            if not tgt_pl:
+                continue
+            try:
+                res = json.loads(item.result_json) if getattr(item, "result_json", "") else {}
+            except Exception:
+                res = {}
+            if not isinstance(res, dict):
+                res = {}
+            track = self._resolve_or_import_queue_track(item.query, tgt_pl, res)
+            pl = self.store.get_or_create_playlist_by_name(
+                tgt_pl,
+                description="Playlist generada desde cola de descargas (en la Nube)",
+                is_cloud=True,
+            )
+            if not pl.is_cloud:
+                pl.is_cloud = True
+                changed = True
+            if track:
+                for tid in list(pl.track_ids):
+                    old_t = self.store.tracks.get(tid)
+                    if old_t and old_t.filepath.startswith("cloud://pending") and (
+                        normalize_track_key(old_t.title) == normalize_track_key(track.title)
+                        or normalize_track_key(old_t.title) == normalize_track_key(item.query)
+                    ):
+                        self.store.reconcile_playlist_track_ids(tid, track.id)
+                        if tid in self.store.tracks:
+                            del self.store.tracks[tid]
+                        changed = True
+                        break
+                if track.id not in pl.track_ids:
+                    pl.track_ids.append(track.id)
+                    changed = True
+
+        deduped = self.store.deduplicate_library()
+        if deduped > 0:
+            changed = True
+        if changed:
+            self.store.save()
+        return changed
+
+    def _on_playlist_enqueued_from_panel(self, pl_name: str, queries: list, _keep_local: bool) -> None:
+        """Crea o actualiza de inmediato la Playlist en la Nube cuando se encola desde el panel de descargas."""
+        if not pl_name:
+            return
+        self.store.populate_cloud_playlist_from_queries(
+            pl_name,
+            list(queries),
+            description="Playlist generada desde cola de descargas (en la Nube)",
+        )
+        self._reconcile_completed_queue_playlists()
+        self.store.save()
+        if hasattr(self, "_sync_playlists_to_cloud"):
+            try:
+                self._sync_playlists_to_cloud(notify=False)
+            except Exception:
+                pass
+        self._refresh_playlist_sidebar()
+        self._rebuild_playlists_menu_bar()
+        self._update_download_badge()
+        if self.current_view == "home":
+            self._rebuild_quick_access_cards()
+        else:
+            self._refresh_track_table()
+
+    def _on_queue_item_completed(self, item_id: int, query: str, target_playlist: str, result: dict) -> None:
+        """Asocia la canción descargada a su playlist destino en el hilo principal de Qt."""
+        track = self._resolve_or_import_queue_track(query, target_playlist, result)
+        if not target_playlist:
+            if track:
+                self.store.deduplicate_library()
+                self.store.save()
+                if hasattr(self, "_sync_playlists_to_cloud"):
+                    try:
+                        self._sync_playlists_to_cloud(notify=False)
+                    except Exception:
+                        pass
+                self._refresh_track_table()
+            return
+
         if track:
             pl = self.store.get_or_create_playlist_by_name(
                 target_playlist,
-                description="Playlist generada desde cola de descargas",
+                description="Playlist generada desde cola de descargas (en la Nube)",
                 is_cloud=True,
             )
+            pl.is_cloud = True
             # Reconciliar placeholder pendiente si existía
             for tid in list(pl.track_ids):
                 old_t = self.store.tracks.get(tid)
@@ -2979,6 +3116,7 @@ class SpotiLinuxWindow(QMainWindow):
                         del self.store.tracks[tid]
                     break
             self.store.add_track_to_playlist(pl.id, track.id)
+            self.store.deduplicate_library()
             self.store.save()
             if hasattr(self, "_sync_playlists_to_cloud"):
                 try:
@@ -2987,7 +3125,9 @@ class SpotiLinuxWindow(QMainWindow):
                     pass
             self._refresh_playlist_sidebar()
             self._rebuild_playlists_menu_bar()
-            if self.current_view in ("playlists_hub", "playlists_cloud", f"playlist:{pl.id}"):
+            if self.current_view == "home":
+                self._rebuild_quick_access_cards()
+            else:
                 self._refresh_track_table()
 
     def _rebuild_playlists_menu_bar(self) -> None:
@@ -3730,8 +3870,7 @@ class SpotiLinuxWindow(QMainWindow):
             )
 
         if self.current_view == "playlists_hub":
-            local_pls = [pl for pl in self.store.playlists.values() if not pl.is_cloud]
-            pls_to_show = local_pls if local_pls else list(self.store.playlists.values())
+            pls_to_show = list(self.store.playlists.values())
             pl_track_ids = []
             seen = set()
             for pl in pls_to_show:
@@ -3740,10 +3879,12 @@ class SpotiLinuxWindow(QMainWindow):
                         seen.add(tid)
                         pl_track_ids.append(tid)
             tracks = [self.store.tracks[tid] for tid in pl_track_ids]
+            cloud_c = sum(1 for p in pls_to_show if p.is_cloud)
+            local_c = len(pls_to_show) - cloud_c
             return (
-                "MIS PLAYLISTS",
-                "Tus Playlists Locales",
-                f"{len(local_pls)} playlist(s) creadas localmente en tu biblioteca",
+                "TODAS LAS PLAYLISTS • LOCAL & NUBE ☁️",
+                "Tus Playlists Agrupadas",
+                f"{len(pls_to_show)} playlist(s) disponibles ({cloud_c} en la nube ☁️, {local_c} locales)",
                 tracks,
                 False,
             )
@@ -3815,8 +3956,9 @@ class SpotiLinuxWindow(QMainWindow):
         elif self.current_view == "playlists_hub":
             banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="🎵", colors=((30, 215, 96), (18, 140, 70), (24, 24, 32)))
             banner_rgb = (30, 215, 96)
-            local_count = len([p for p in self.store.playlists.values() if not p.is_cloud])
-            stats_text = f"{local_count} playlists locales  •  {len(tracks)} canciones"
+            total_pls = len(self.store.playlists)
+            cloud_count = len([p for p in self.store.playlists.values() if p.is_cloud])
+            stats_text = f"{total_pls} playlists ({cloud_count} en la nube ☁️)  •  {len(tracks)} canciones"
         elif self.current_view == "playlists_cloud":
             banner_pix = make_liked_cover_pixmap(138, radius=10, symbol="☁️", colors=((20, 160, 120), (14, 90, 80), (18, 24, 30)))
             banner_rgb = (20, 160, 120)
@@ -3874,9 +4016,7 @@ class SpotiLinuxWindow(QMainWindow):
             if self.current_view == "playlists_cloud":
                 source_pls = {pid: pl for pid, pl in self.store.playlists.items() if pl.is_cloud}
             else:
-                source_pls = {pid: pl for pid, pl in self.store.playlists.items() if not pl.is_cloud}
-                if not source_pls:
-                    source_pls = self.store.playlists
+                source_pls = dict(self.store.playlists)
 
             for pid, pl in source_pls.items():
                 p_tracks = [self.store.tracks[tid] for tid in pl.track_ids if tid in self.store.tracks]
@@ -3889,9 +4029,10 @@ class SpotiLinuxWindow(QMainWindow):
                     p_tracks = [t for t in p_tracks if query in t.title.lower() or query in t.artist.lower() or query in t.album.lower() or query in t.genre.lower()]
 
                 if p_tracks:
-                    rows_data.append(("header", None, f"playlist:{pid}:{pl.name}:{len(p_tracks)}"))
+                    pl_label = f"☁️ {pl.name}" if pl.is_cloud else pl.name
+                    rows_data.append(("header", None, f"playlist:{pid}:{pl_label}:{len(p_tracks)}"))
                     for t in p_tracks:
-                        rows_data.append(("track", t, pl.name))
+                        rows_data.append(("track", t, pl_label))
 
             self.track_table.setRowCount(len(rows_data))
             for row, (kind, track, extra) in enumerate(rows_data):
@@ -4354,6 +4495,29 @@ class SpotiLinuxWindow(QMainWindow):
                 )
         return items
 
+    def _serialize_playlist_for_cloud(self, pl: Playlist) -> dict:
+        d = pl.to_dict()
+        d["trackIds"] = list(pl.track_ids)
+        d["isCloud"] = bool(pl.is_cloud)
+        snapshots: list[dict] = []
+        for tid in pl.track_ids:
+            t = self.store.tracks.get(tid)
+            if t and not t.filepath.startswith("cloud://pending"):
+                fid = t.filepath.replace("gdrive://", "") if t.filepath.startswith("gdrive://") else (t.id[3:] if t.id.startswith("gd_") else "")
+                snapshots.append(
+                    {
+                        "id": t.id,
+                        "driveId": fid,
+                        "file_id": fid,
+                        "title": t.title,
+                        "artist": t.artist,
+                        "album": t.album,
+                        "duration": t.duration,
+                    }
+                )
+        d["tracks_snapshot"] = snapshots
+        return d
+
     def _sync_playlists_to_cloud(self, notify: bool = False) -> None:
         token = self.store.gdrive_config.access_token
         payload = {
@@ -4362,7 +4526,7 @@ class SpotiLinuxWindow(QMainWindow):
             "updatedAt": time.time(),
             "user": self.store.google_user,
             "account": self.store.user_account,
-            "playlists": [pl.to_dict() for pl in self.store.playlists.values()],
+            "playlists": [self._serialize_playlist_for_cloud(pl) for pl in self.store.playlists.values()],
             "likedIds": list(self.store.liked_ids),
             "drive_tracks": self._collect_drive_tracks_for_account(),
         }
@@ -4373,7 +4537,7 @@ class SpotiLinuxWindow(QMainWindow):
         changed = False
         # Restaurar canciones de Drive que vengan en la cuenta o en el archivo sincronizado
         acc_block = merged.get("account") if isinstance(merged.get("account"), dict) else {}
-        if acc_block or merged.get("drive_tracks"):
+        if acc_block or merged.get("drive_tracks") or merged.get("playlists"):
             fake_acc = {
                 "drive_tracks": merged.get("drive_tracks") or acc_block.get("drive_tracks", []),
                 "playlists": merged.get("playlists", []),
@@ -4391,10 +4555,20 @@ class SpotiLinuxWindow(QMainWindow):
                 continue
             pid = cp.get("id")
             pname = cp.get("name", "")
+            desc_str = str(cp.get("description", cp.get("desc", "")) or "")
+            cp_is_cloud = bool(
+                cp.get("is_cloud")
+                or cp.get("isCloud")
+                or "cola de descargas" in desc_str.lower()
+                or "en la nube" in desc_str.lower()
+            )
             local_pl = self.store.playlists.get(pid) or next(
                 (p for p in self.store.playlists.values() if p.name.lower() == pname.lower()), None
             )
             if local_pl:
+                if cp_is_cloud and not local_pl.is_cloud:
+                    local_pl.is_cloud = True
+                    changed = True
                 for tid in cp.get("track_ids", cp.get("trackIds", [])):
                     if tid in self.store.tracks and tid not in local_pl.track_ids:
                         local_pl.track_ids.append(tid)
@@ -4403,9 +4577,13 @@ class SpotiLinuxWindow(QMainWindow):
                 new_pl = Playlist(
                     id=pid or str(uuid.uuid4())[:8],
                     name=pname or "Playlist Cloud",
-                    description=cp.get("description", ""),
+                    description=desc_str,
                     track_ids=[t for t in cp.get("track_ids", cp.get("trackIds", [])) if t in self.store.tracks],
                     created_at=float(cp.get("created_at", time.time())),
+                    cover_url=str(cp.get("cover_url") or cp.get("coverUrl") or ""),
+                    cover_drive_id=str(cp.get("cover_drive_id") or cp.get("coverDriveId") or ""),
+                    cover_path=str(cp.get("cover_path") or cp.get("coverPath") or ""),
+                    is_cloud=cp_is_cloud,
                 )
                 self.store.playlists[new_pl.id] = new_pl
                 changed = True

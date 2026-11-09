@@ -5641,19 +5641,62 @@ function applyAccountRecordToState(acc) {
     : (acc.playlists && typeof acc.playlists === "object" ? Object.values(acc.playlists) : []);
   cloudPls.forEach(cPl => {
     if (!cPl) return;
+    if (Array.isArray(cPl.tracks_snapshot)) {
+      cPl.tracks_snapshot.forEach(snap => {
+        if (!snap) return;
+        const fid = snap.driveId || snap.file_id || String(snap.id || "").replace(/^gd_/, "");
+        if (!fid) return;
+        const cid = "gd_" + fid;
+        const cleanTitle = cleanTrackTitle(snap.title || "");
+        const normKey = normalizeFullTitle(cleanTitle);
+        const existing = tracks.find(x =>
+          x.id === cid ||
+          x.driveId === fid ||
+          (normKey && normalizeFullTitle(x.title) === normKey)
+        );
+        if (!existing) {
+          tracks.unshift({
+            id: cid,
+            altId: snap.id || cid,
+            driveId: fid,
+            title: cleanTitle || ("Canción Drive " + fid.substring(0, 6)),
+            artist: snap.artist || "Google Drive Cloud ☁️",
+            album: snap.album || cPl.name || "Google Drive (Musica)",
+            genre: "Cloud",
+            src: `https://drive.google.com/uc?export=download&id=${fid}`,
+            liked: false,
+            cloud: true,
+            downloaded: false,
+            color: "#00d2ff"
+          });
+        }
+      });
+    }
     const tIds = cPl.trackIds || cPl.track_ids || [];
     const localPl = playlists.find(p => p.id === cPl.id || (p.name && cPl.name && p.name.toLowerCase() === cPl.name.toLowerCase()));
+    const covUrl = cPl.coverUrl || cPl.cover_url || "";
+    const covDid = cPl.coverDriveId || cPl.cover_drive_id || "";
+    const isCloudFlag = Boolean(cPl.isCloud || cPl.is_cloud);
     if (localPl) {
       localPl.trackIds = Array.from(new Set([...localPl.trackIds, ...tIds]));
+      if (covUrl && !localPl.coverUrl) localPl.coverUrl = covUrl;
+      if (covDid && !localPl.coverDriveId) localPl.coverDriveId = covDid;
+      if (isCloudFlag) localPl.isCloud = true;
     } else {
       playlists.push({
         id: cPl.id || ("pl_" + Date.now()),
         name: cPl.name || "Playlist Sincronizada",
         desc: cPl.desc || cPl.description || "Sincronizada desde tu cuenta MaoMusic",
-        trackIds: tIds
+        trackIds: tIds,
+        coverUrl: covUrl,
+        coverDriveId: covDid,
+        isCloud: isCloudFlag
       });
     }
   });
+  if (typeof invalidatePlaylistTracksIndex === "function") {
+    invalidatePlaylistTracksIndex();
+  }
   if (userAccount) {
     userAccount.playlists = playlists;
   }

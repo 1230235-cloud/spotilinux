@@ -332,6 +332,65 @@ Opening 2 - Aimer
         t = store.find_track_by_query_or_filename(title="NonExistentTrack")
         self.assertIsNone(t)
 
+    def test_cloud_playlist_grouping_and_drive_sync_preservation(self):
+        from gdrive_sync import merge_account_records
+
+        store_dir = Path(self.temp_dir.name) / "app_root"
+        store_dir.mkdir(parents=True, exist_ok=True)
+        store = LibraryStore(store_dir)
+
+        pl, linked, pending = store.populate_cloud_playlist_from_queries(
+            "Huntrix",
+            ["Huntrix - GOLDEN"],
+        )
+        self.assertTrue(pl.is_cloud)
+        self.assertEqual(pending, 1)
+
+        # Simular fusión con registro de cuenta que tenía timestamp en milisegundos de Android
+        old_android_acc = {
+            "updated_at": 1794249502408,  # ms
+            "playlists": [],
+            "drive_tracks": [],
+        }
+        new_desktop_acc = {
+            "updated_at": 1794253796.57,  # sec (posterior a old_android_acc)
+            "playlists": [
+                {
+                    "id": pl.id,
+                    "name": "Huntrix",
+                    "description": "Playlist generada desde cola de descargas (en la Nube)",
+                    "is_cloud": True,
+                    "isCloud": True,
+                    "track_ids": ["gd_1aOyIm8DNs69HMDpJ5W5B3fu7XeEcopEr"],
+                    "trackIds": ["gd_1aOyIm8DNs69HMDpJ5W5B3fu7XeEcopEr"],
+                    "tracks_snapshot": [
+                        {
+                            "id": "gd_1aOyIm8DNs69HMDpJ5W5B3fu7XeEcopEr",
+                            "driveId": "1aOyIm8DNs69HMDpJ5W5B3fu7XeEcopEr",
+                            "title": "GOLDEN",
+                            "artist": "Huntrix",
+                            "album": "Huntrix",
+                        }
+                    ],
+                }
+            ],
+            "drive_tracks": [],
+        }
+        merged = merge_account_records(old_android_acc, new_desktop_acc)
+        self.assertEqual(len(merged["playlists"]), 1)
+        self.assertTrue(merged["playlists"][0]["is_cloud"])
+        self.assertEqual(merged["playlists"][0]["track_ids"], ["gd_1aOyIm8DNs69HMDpJ5W5B3fu7XeEcopEr"])
+
+        # Aplicar en una tienda limpia y verificar que la playlist en la nube conserva su pista gd_... y su bandera is_cloud
+        store2_dir = Path(self.temp_dir.name) / "app_root_2"
+        store2_dir.mkdir(parents=True, exist_ok=True)
+        store2 = LibraryStore(store2_dir)
+        store2.apply_account_record(merged)
+        restored_pl = store2.playlists.get(pl.id)
+        self.assertIsNotNone(restored_pl)
+        self.assertTrue(restored_pl.is_cloud)
+        self.assertIn("gd_1aOyIm8DNs69HMDpJ5W5B3fu7XeEcopEr", restored_pl.track_ids)
+
 
 class TestErrorClassificationAndWorker(unittest.TestCase):
     def test_classify_error(self):

@@ -250,12 +250,15 @@ class LibraryStore:
             raw = json.loads(self.db_path.read_text(encoding="utf-8"))
             for tid, tdata in raw.get("tracks", {}).items():
                 fp = str(tdata.get("filepath", ""))
-                if fp.startswith("gdrive://") or Path(fp).exists():
+                if fp.startswith("gdrive://") or fp.startswith("cloud://pending") or Path(fp).exists():
                     self.tracks[tid] = TrackMetadata.from_dict(tdata)
 
             self.liked_ids = [tid for tid in raw.get("liked_ids", []) if tid in self.tracks]
             for pid, pdata in raw.get("playlists", {}).items():
                 pl = Playlist.from_dict(pdata)
+                desc_low = str(pl.description or "").lower()
+                if "cola de descargas" in desc_low or "en la nube" in desc_low:
+                    pl.is_cloud = True
                 pl.track_ids = [tid for tid in pl.track_ids if tid in self.tracks]
                 self.playlists[pid] = pl
 
@@ -324,6 +327,20 @@ class LibraryStore:
         self.db_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         self._sync_to_sqlite()
 
+    @staticmethod
+    def _candidate_norm_keys(track: TrackMetadata) -> list[str]:
+        keys: list[str] = []
+        raw_candidates = [track.title]
+        if not track.filepath.startswith(("gdrive://", "cloud://pending")):
+            raw_candidates.append(Path(track.filepath).stem)
+        if track.artist and not any(g in track.artist for g in ("Desconocido", "Google Drive", "En la Nube")):
+            raw_candidates.append(f"{track.artist} {track.title}")
+        for raw in raw_candidates:
+            k = normalize_track_key(raw)
+            if k and k not in keys:
+                keys.append(k)
+        return keys
+
     def deduplicate_library(self) -> int:
         """
         Fusiona pistas duplicadas (por ejemplo, una pista online gdrive://<id> y su
@@ -341,27 +358,44 @@ class LibraryStore:
             key=lambda kv: (kv[1].filepath.startswith("gdrive://"), kv[0]),
         )
         for tid, track in sorted_items:
-            key = normalize_track_key(track.title) or normalize_track_key(Path(track.filepath).name)
-            if not key:
+            keys = self._candidate_norm_keys(track)
+            if not keys:
                 continue
-            if key in by_norm_key:
-                keep_id = by_norm_key[key]
+            matched_keep_id = next((by_norm_key[k] for k in keys if k in by_norm_key), None)
+            if matched_keep_id:
+                keep_id = remap.get(matched_keep_id, matched_keep_id)
                 if keep_id != tid:
                     keep_track = self.tracks.get(keep_id)
-                    # Si uno de los dos tiene ID canónico gd_..., conservar ese ID si ambos son de Drive
+                    # Si uno de los dos tiene ID canónico gd_..., conservar ese ID canónico
                     if tid.startswith("gd_") and keep_track and not keep_track.filepath.startswith("gdrive://"):
                         keep_track.id = tid
+                        if "Drive" not in keep_track.album and keep_track.album == "Desconocido":
+                            keep_track.album = track.album or "Google Drive (Online)"
+                        if keep_track.genre == "Desconocido":
+                            keep_track.genre = "Cloud Music"
                         self.tracks[tid] = keep_track
-                        del self.tracks[keep_id]
-                        by_norm_key[key] = tid
+                        if keep_id in self.tracks:
+                            del self.tracks[keep_id]
+                        for k in keys + self._candidate_norm_keys(keep_track):
+                            by_norm_key[k] = tid
                         remap[keep_id] = tid
                     else:
                         remap[tid] = keep_id
+                        for k in keys:
+                            by_norm_key.setdefault(k, keep_id)
             else:
-                by_norm_key[key] = tid
+                for k in keys:
+                    by_norm_key[k] = tid
 
         if not remap:
             return 0
+
+        # Resolver cadenas transitivas en remap
+        for k in list(remap.keys()):
+            target = remap[k]
+            while target in remap and remap[target] != target:
+                target = remap[target]
+            remap[k] = target
 
         for old_id, new_id in remap.items():
             if old_id in self.tracks and old_id != new_id:
@@ -445,11 +479,59 @@ class LibraryStore:
         for pid, pdata in iterable:
             if not isinstance(pdata, dict):
                 continue
-            valid_tids = [t for t in pdata.get("track_ids", []) if t in self.tracks]
+            # Si la playlist trae snapshots o IDs gd_... que aún no están en self.tracks, registrarlos como pistas remotas
+            snap_by_id = {
+                str(s.get("id", "")): s
+                for s in pdata.get("tracks_snapshot", [])
+                if isinstance(s, dict) and s.get("id")
+            }
+            raw_tids = list(pdata.get("track_ids", pdata.get("trackIds", [])))
+            for tid in raw_tids:
+                if tid not in self.tracks and (str(tid).startswith("gd_") or tid in snap_by_id):
+                    snap = snap_by_id.get(tid, {})
+                    fid = str(snap.get("driveId") or snap.get("file_id") or (tid[3:] if str(tid).startswith("gd_") else ""))
+                    if fid:
+                        title = str(snap.get("title") or f"Canción Drive {fid[:6]}")
+                        artist = str(snap.get("artist") or "Google Drive Cloud")
+                        album = str(snap.get("album") or pdata.get("name", "Google Drive (Online)"))
+                        cover_path = self.covers_dir / f"cover_{tid[:16]}.png"
+                        if not cover_path.exists():
+                            generate_fallback_cover(title, artist, cover_path, tid)
+                        dom_rgb = compute_dominant_color(cover_path)
+                        self.tracks[tid] = TrackMetadata(
+                            id=tid,
+                            filepath=f"gdrive://{fid}",
+                            title=title,
+                            artist=artist,
+                            album=album,
+                            genre="Cloud Music",
+                            year="Cloud",
+                            duration=float(snap.get("duration", 180.0)),
+                            cover_path=str(cover_path),
+                            dominant_color=dom_rgb,
+                            added_at=time.time(),
+                        )
+                        drive_added += 1
+
+            valid_tids = [t for t in raw_tids if t in self.tracks]
+            desc_str = str(pdata.get("description", pdata.get("desc", "")) or "")
+            p_is_cloud = bool(
+                pdata.get("is_cloud")
+                or pdata.get("isCloud")
+                or "cola de descargas" in desc_str.lower()
+                or "en la nube" in desc_str.lower()
+            )
             if pid in self.playlists:
                 existing = self.playlists[pid]
                 existing.name = pdata.get("name", existing.name)
-                existing.description = pdata.get("description", existing.description)
+                existing.description = desc_str or existing.description
+                existing.is_cloud = existing.is_cloud or p_is_cloud
+                if not existing.cover_url and (pdata.get("cover_url") or pdata.get("coverUrl")):
+                    existing.cover_url = str(pdata.get("cover_url") or pdata.get("coverUrl"))
+                if not existing.cover_drive_id and (pdata.get("cover_drive_id") or pdata.get("coverDriveId")):
+                    existing.cover_drive_id = str(pdata.get("cover_drive_id") or pdata.get("coverDriveId"))
+                if not existing.cover_path and (pdata.get("cover_path") or pdata.get("coverPath")):
+                    existing.cover_path = str(pdata.get("cover_path") or pdata.get("coverPath"))
                 for t in valid_tids:
                     if t not in existing.track_ids:
                         existing.track_ids.append(t)
@@ -457,9 +539,13 @@ class LibraryStore:
                 self.playlists[pid] = Playlist(
                     id=pid,
                     name=pdata.get("name", "Playlist Sincronizada"),
-                    description=pdata.get("description", "Sincronizada desde tu cuenta SpotiLinux"),
+                    description=desc_str or "Sincronizada desde tu cuenta SpotiLinux",
                     track_ids=valid_tids,
                     created_at=float(pdata.get("created_at", time.time())),
+                    cover_url=str(pdata.get("cover_url") or pdata.get("coverUrl") or ""),
+                    cover_drive_id=str(pdata.get("cover_drive_id") or pdata.get("coverDriveId") or ""),
+                    cover_path=str(pdata.get("cover_path") or pdata.get("coverPath") or ""),
+                    is_cloud=p_is_cloud,
                 )
             pl_restored += 1
 
@@ -559,21 +645,35 @@ class LibraryStore:
             except Exception:
                 pass
 
-        # Si ya existe en la biblioteca y su portada existe, devolver rápido
-        for existing in self.tracks.values():
+        gd_canonical = forced_id or extract_gd_id_from_filename(filepath.name)
+
+        # Si ya existe en la biblioteca y su portada existe, devolver rápido (actualizando a gd_canonical si aplica)
+        for existing_id, existing in list(self.tracks.items()):
             if existing.filepath == str(filepath) and Path(existing.cover_path).exists():
+                if gd_canonical and existing.id != gd_canonical:
+                    old_id = existing.id
+                    existing.id = gd_canonical
+                    if existing.genre == "Desconocido":
+                        existing.genre = "Cloud Music"
+                    self.tracks[gd_canonical] = existing
+                    if old_id in self.tracks:
+                        del self.tracks[old_id]
+                    self.reconcile_playlist_track_ids(old_id, gd_canonical)
+                    if save_immediately:
+                        self.save()
                 return existing
 
         meta = extract_metadata(filepath, self.covers_dir)
-        gd_canonical = forced_id or extract_gd_id_from_filename(filepath.name)
         if gd_canonical:
             meta.id = gd_canonical
+            if meta.genre == "Desconocido":
+                meta.genre = "Cloud Music"
 
-        # Verificación de duplicados por título normalizado si ya existe como gdrive://
-        norm_title = normalize_track_key(meta.title)
+        # Verificación de duplicados por claves normalizadas si ya existe como gdrive://
+        meta_keys = self._candidate_norm_keys(meta)
         for existing_id, existing_track in list(self.tracks.items()):
-            if existing_id != meta.id and normalize_track_key(existing_track.title) == norm_title and norm_title:
-                if existing_track.filepath.startswith("gdrive://"):
+            if existing_id != meta.id and existing_track.filepath.startswith("gdrive://"):
+                if any(k in meta_keys for k in self._candidate_norm_keys(existing_track)):
                     meta.id = existing_id
                     break
 

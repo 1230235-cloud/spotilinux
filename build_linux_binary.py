@@ -18,12 +18,17 @@ MODULES = [
     "main.py",
     "app_version.py",
     "binaries.py",
+    "cloud_service.py",
+    "crash_logging.py",
     "doctor.py",
     "download_queue.py",
     "download_queue_ui.py",
+    "icons.py",
     "media_sync_worker.py",
     "audio_engine.py",
     "rhythm.py",
+    "update_checker.py",
+    "vinyl_view.py",
     "visualizer_widget.py",
     "maomao_widget.py",
     "gdrive_sync.py",
@@ -73,7 +78,8 @@ def build_elf_executable() -> Path:
     zip_path = DIST_DIR / "spotilinux_payload.zip"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for mod in MODULES:
-            zf.write(BASE_DIR / mod, arcname=mod)
+            if (BASE_DIR / mod).exists():
+                zf.write(BASE_DIR / mod, arcname=mod)
 
     payload_b64 = base64.b64encode(zip_path.read_bytes()).decode("ascii")
     zip_path.unlink(missing_ok=True)

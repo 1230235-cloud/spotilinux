@@ -540,7 +540,7 @@ class MediaDownloaderWorker:
 
             headers = {"Authorization": f"Bearer {self.config.access_token}"}
 
-            def _upload_file_to_drive(file_path: Path, parent_id: str, mime: str) -> bool:
+            def _upload_file_to_drive(file_path: Path, parent_id: str, mime: str) -> Optional[str]:
                 try:
                     boundary = "-------MaoMusicWorkerBoundary"
                     metadata = {"name": file_path.name, "parents": [parent_id]}
@@ -555,21 +555,32 @@ class MediaDownloaderWorker:
                         data=body,
                         timeout=120,
                     )
-                    return r.status_code in (200, 201)
+                    if r.status_code in (200, 201):
+                        try:
+                            return str(r.json().get("id") or "")
+                        except Exception:
+                            return "uploaded"
+                    return None
                 except Exception as e:
                     logger.error(f"Error subiendo {file_path.name} a Drive: {e}")
-                    return False
+                    return None
 
             if progress_cb:
                 progress_cb("upload", 86.0, "Subiendo audio a Google Drive...")
-            results["audio_synced"] = _upload_file_to_drive(media.audio_path, musica_folder_id, "audio/mpeg")
+            afid = _upload_file_to_drive(media.audio_path, musica_folder_id, "audio/mpeg")
+            results["audio_synced"] = bool(afid)
+            if afid and afid != "uploaded":
+                results["audio_file_id"] = afid
 
             if cancel_event and cancel_event.is_set():
                 raise InterruptedError("Operación cancelada por el usuario")
 
             if progress_cb:
                 progress_cb("upload", 94.0, "Subiendo video a Google Drive...")
-            results["video_synced"] = _upload_file_to_drive(media.video_path, videos_folder_id, "video/mp4")
+            vfid = _upload_file_to_drive(media.video_path, videos_folder_id, "video/mp4")
+            results["video_synced"] = bool(vfid)
+            if vfid and vfid != "uploaded":
+                results["video_file_id"] = vfid
             results["method"] = "gdrive_api"
             return results
 
@@ -636,6 +647,9 @@ class MediaDownloaderWorker:
                         covers_cache_dir = BASE_DIR / "data" / "covers_cache"
                         covers_cache_dir.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(media.thumbnail_path, covers_cache_dir / f"{tid}.jpg")
+                        afid = (sync_status or {}).get("audio_file_id")
+                        if afid:
+                            shutil.copy2(media.thumbnail_path, covers_cache_dir / f"gd_{afid}.jpg")
                     except Exception as e:
                         logger.warning(f"No se pudo indexar carátula en caché: {e}")
                     logger.info(f"Carátula guardada en: {dest_cover}")

@@ -1,17 +1,17 @@
 {
-  "versionCode": 35,
-  "versionName": "2.16.0",
+  "versionCode": 36,
+  "versionName": "2.16.1",
   "releaseDate": "2026-11-09",
   "minAndroidSdk": 24,
   "apkUrl": "https://raw.githubusercontent.com/1230235-cloud/spotilinux/main/dist/MaoMusic.apk",
   "desktop": {
-    "version": "2.16.0",
+    "version": "2.16.1",
     "gitRepo": "https://github.com/1230235-cloud/spotilinux.git",
     "updateCommand": "git pull origin main"
   },
   "changelog": [
+    "Agrupación automática de canciones descargadas en Playlists en la Nube con ID canónico de Google Drive (gd_<file_id>) y sincronización de snapshots entre Escritorio y Android",
     "Optimización integral pre-mercado: 0 duplicación de archivos al escanear música local, liberación diferida de WakeLock y cierre limpio de conexiones SQLite",
-    "Seguridad y concurrencia en la nube: LockService en Google Apps Script, merge seguro de cuentas y sanitización de puente JS en Android",
-    "Mejoras UX: configuración avanzada de Google Drive colapsable y auto-scroll al arrastrar canciones con el tirador de 3 barras (≡)"
+    "Seguridad y concurrencia en la nube: LockService en Google Apps Script, merge seguro de cuentas y sanitización de puente JS en Android"
   ]
 }
