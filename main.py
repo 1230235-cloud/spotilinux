@@ -104,6 +104,7 @@ from gdrive_sync import (
     generate_recovery_key,
     hash_password,
     merge_account_records,
+    normalize_track_key,
     sync_cloud_playlists_with_drive,
     upload_cloud_database,
     validate_recovery_key,
