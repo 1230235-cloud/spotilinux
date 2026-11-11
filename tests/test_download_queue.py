@@ -391,6 +391,17 @@ Opening 2 - Aimer
         self.assertTrue(restored_pl.is_cloud)
         self.assertIn("gd_1aOyIm8DNs69HMDpJ5W5B3fu7XeEcopEr", restored_pl.track_ids)
 
+    def test_set_target_playlist_in_queue(self):
+        added, _ = self.queue.add(["Song Without Playlist"])
+        self.assertEqual(added, 1)
+        item = self.queue.get(1)
+        self.assertEqual(item.target_playlist, "")
+
+        ok = self.queue.set_target_playlist(1, "Morat Nube")
+        self.assertTrue(ok)
+        updated_item = self.queue.get(1)
+        self.assertEqual(updated_item.target_playlist, "Morat Nube")
+
 
 class TestErrorClassificationAndWorker(unittest.TestCase):
     def test_classify_error(self):

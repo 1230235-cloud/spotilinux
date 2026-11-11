@@ -371,6 +371,16 @@ class DownloadQueue:
             cur = conn.execute("DELETE FROM queue_items WHERE id = ?", (item_id,))
             return cur.rowcount > 0
 
+    def set_target_playlist(self, item_id: int, target_playlist: str) -> bool:
+        """Actualiza la playlist destino de un ítem en la cola."""
+        tgt = str(target_playlist or "").strip()
+        with self._lock, self._connection() as conn:
+            cur = conn.execute(
+                "UPDATE queue_items SET target_playlist = ? WHERE id = ?",
+                (tgt, item_id),
+            )
+            return cur.rowcount > 0
+
     def clear_finished(self) -> int:
         with self._lock, self._connection() as conn:
             cur = conn.execute("DELETE FROM queue_items WHERE status IN ('done', 'cancelled')")

@@ -211,6 +211,11 @@ class DownloadQueuePanel(QDialog):
         self.btn_add.clicked.connect(self._open_add_dialog)
         actions_row.addWidget(self.btn_add)
 
+        self.btn_add_to_cloud = QPushButton("☁️ Añadir a Playlist en la Nube...", self)
+        self.btn_add_to_cloud.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_add_to_cloud.clicked.connect(self._add_selected_to_cloud_playlist)
+        actions_row.addWidget(self.btn_add_to_cloud)
+
         self.btn_import = QPushButton("📂 Subir .txt a Playlist...", self)
         self.btn_import.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_import.clicked.connect(self._import_txt_file)
@@ -526,6 +531,120 @@ class DownloadQueuePanel(QDialog):
         self.queue.remove(item_id)
         self._refresh_table()
 
+    def _get_main_window_and_store(self):
+        parent = self.parent()
+        win = parent if hasattr(parent, "store") else getattr(self.window(), "store", None)
+        store = getattr(parent, "store", None) or getattr(win, "store", None)
+        if not store and hasattr(self, "window") and hasattr(self.window(), "store"):
+            win = self.window()
+            store = win.store
+        return win, store
+
+    def _add_selected_to_cloud_playlist(self) -> None:
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(
+                self,
+                "Seleccionar Canción",
+                "Por favor, selecciona primero una canción en la tabla para agregarla a una Playlist en la Nube.",
+            )
+            return
+
+        id_item = self.table.item(row, 0)
+        if not id_item:
+            return
+        item_id = int(id_item.text())
+
+        win, store = self._get_main_window_and_store()
+        cloud_pls = []
+        if store and hasattr(store, "playlists"):
+            cloud_pls = [p.name for p in store.playlists.values() if getattr(p, "is_cloud", False)]
+
+        options = [f"☁️ {p}" for p in sorted(set(cloud_pls), key=str.lower)]
+        options.append("✨ Crear nueva Playlist en la Nube...")
+
+        chosen, ok = QInputDialog.getItem(
+            self,
+            "Añadir a Playlist en la Nube",
+            "Selecciona la Playlist en la Nube de destino:",
+            options,
+            0,
+            False,
+        )
+        if not ok or not chosen:
+            return
+
+        if chosen == "✨ Crear nueva Playlist en la Nube...":
+            self._prompt_new_cloud_playlist_for_item(item_id)
+        else:
+            pl_name = chosen.replace("☁️", "").strip()
+            self._assign_item_to_cloud_playlist(item_id, pl_name)
+
+    def _prompt_new_cloud_playlist_for_item(self, item_id: int) -> None:
+        name, ok = QInputDialog.getText(
+            self,
+            "Nueva Playlist en la Nube",
+            "Nombre de la nueva Playlist en la Nube:",
+        )
+        if ok and name.strip():
+            self._assign_item_to_cloud_playlist(item_id, name.strip())
+
+    def _assign_item_to_cloud_playlist(self, item_id: int, pl_name: str) -> None:
+        pl_name = pl_name.strip()
+        if not pl_name:
+            return
+        q_item = self.queue.get(item_id)
+        if not q_item:
+            return
+
+        # 1. Actualizar target_playlist en la base de datos de la cola
+        self.queue.set_target_playlist(item_id, pl_name)
+
+        # 2. Localizar ventana principal y store
+        win, store = self._get_main_window_and_store()
+        if store:
+            pl = store.get_or_create_playlist_by_name(
+                pl_name,
+                description="Playlist en la Nube",
+                is_cloud=True,
+            )
+            pl.is_cloud = True
+
+            if q_item.status == "done":
+                res = q_item.result
+                track = None
+                if hasattr(win, "_resolve_or_import_queue_track"):
+                    track = win._resolve_or_import_queue_track(q_item.query, pl_name, res)
+                if not track:
+                    track = store.find_track_by_query_or_filename(
+                        audio_filename=res.get("audio_file", ""),
+                        title=res.get("title", ""),
+                        query=q_item.query,
+                        prefer_real=True,
+                    )
+                if track:
+                    store.add_track_to_playlist(pl.id, track.id)
+            else:
+                store.populate_cloud_playlist_from_queries(pl_name, [q_item.query])
+
+            store.save()
+            if hasattr(win, "_sync_playlists_to_cloud"):
+                try:
+                    win._sync_playlists_to_cloud(notify=False)
+                except Exception:
+                    pass
+            if hasattr(win, "_refresh_playlist_sidebar"):
+                win._refresh_playlist_sidebar()
+            if hasattr(win, "_rebuild_playlists_menu_bar"):
+                win._rebuild_playlists_menu_bar()
+
+        self._refresh_table()
+        QMessageBox.information(
+            self,
+            "Playlist en la Nube",
+            f"✔ «{q_item.query}» ha sido agregada a la playlist en la nube «{pl_name}».",
+        )
+
     def _show_context_menu(self, pos) -> None:
         item = self.table.itemAt(pos)
         if not item:
@@ -542,6 +661,23 @@ class DownloadQueuePanel(QDialog):
             return
 
         menu = QMenu(self)
+
+        # ☁️ AGREGAR A PLAYLIST EN LA NUBE
+        cloud_menu = menu.addMenu("☁️ Añadir a Playlist en la Nube")
+        win, store = self._get_main_window_and_store()
+        cloud_pls = []
+        if store and hasattr(store, "playlists"):
+            cloud_pls = [p for p in store.playlists.values() if getattr(p, "is_cloud", False)]
+
+        for pl in sorted(cloud_pls, key=lambda p: p.name.lower()):
+            act_p = cloud_menu.addAction(f"☁️ {pl.name}")
+            act_p.triggered.connect(lambda _, p_name=pl.name: self._assign_item_to_cloud_playlist(item_id, p_name))
+
+        cloud_menu.addSeparator()
+        act_new_pl = cloud_menu.addAction("✨ Crear nueva Playlist en la Nube...")
+        act_new_pl.triggered.connect(lambda: self._prompt_new_cloud_playlist_for_item(item_id))
+
+        menu.addSeparator()
 
         if q_item.status in ("pending", "running"):
             act_cancel = menu.addAction("⏹ Cancelar descarga")

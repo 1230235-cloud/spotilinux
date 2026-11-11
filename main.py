@@ -1652,14 +1652,32 @@ class YouTubeBatchDownloadDialog(QDialog):
         header.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
         layout.addWidget(header)
 
-        # Destino de Playlist opcional o auto-nombrada desde .txt
+        # Destino de Playlist: permite seleccionar una Playlist en la Nube existente o escribir una nueva
         pl_row = QHBoxLayout()
-        lbl_pl = QLabel("Playlist:")
+        lbl_pl = QLabel("Playlist en la Nube:")
         lbl_pl.setStyleSheet("color: #E4E4E7; font-size: 12px; font-weight: 700;")
-        self.txt_playlist_name = QLineEdit()
-        self.txt_playlist_name.setPlaceholderText("Nombre de Playlist a crear (opcional o auto de .txt)")
-        self.txt_playlist_name.setStyleSheet("""
-            QLineEdit {
+
+        # Obtener playlists existentes (priorizando las que están en la nube)
+        cloud_pls: list[str] = []
+        other_pls: list[str] = []
+        try:
+            target_store = getattr(parent, "store", None)
+            if not target_store and hasattr(parent, "window"):
+                target_store = getattr(parent.window(), "store", None)
+            if target_store and hasattr(target_store, "playlists"):
+                for p in target_store.playlists.values():
+                    if getattr(p, "is_cloud", False):
+                        cloud_pls.append(p.name)
+                    else:
+                        other_pls.append(p.name)
+        except Exception:
+            pass
+
+        self.cmb_playlist = QComboBox()
+        self.cmb_playlist.setEditable(True)
+        self.cmb_playlist.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.cmb_playlist.setStyleSheet("""
+            QComboBox {
                 background-color: #18181B;
                 color: #FAFAFA;
                 border: 1px solid #3F3F46;
@@ -1667,10 +1685,36 @@ class YouTubeBatchDownloadDialog(QDialog):
                 padding: 6px 14px;
                 font-size: 12px;
             }
-            QLineEdit:focus {
+            QComboBox:focus {
                 border: 1px solid #10B981;
             }
+            QComboBox::drop-down {
+                border: none;
+                width: 22px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #18181B;
+                color: #FAFAFA;
+                selection-background-color: #27272A;
+                selection-color: #10B981;
+                border: 1px solid #3F3F46;
+                padding: 4px;
+            }
         """)
+
+        # Mantener retrocompatibilidad con self.txt_playlist_name
+        self.txt_playlist_name = self.cmb_playlist.lineEdit()
+        self.txt_playlist_name.setPlaceholderText("Elegir Playlist en la Nube o escribir nombre nuevo...")
+
+        self.cmb_playlist.addItem("➕ (Ninguna / Solo Descargas)")
+        for cp in sorted(set(cloud_pls), key=str.lower):
+            self.cmb_playlist.addItem(f"☁️ {cp}")
+        for op in sorted(set(other_pls), key=str.lower):
+            if op not in cloud_pls:
+                self.cmb_playlist.addItem(f"🎵 {op}")
+
+        self.cmb_playlist.setCurrentIndex(0)
+        self.txt_playlist_name.clear()
 
         self.btn_load_txt = QPushButton("📂 Cargar .txt")
         self.btn_load_txt.setObjectName("BtnCancel")
@@ -1678,7 +1722,7 @@ class YouTubeBatchDownloadDialog(QDialog):
         self.btn_load_txt.clicked.connect(self._load_txt_file)
 
         pl_row.addWidget(lbl_pl)
-        pl_row.addWidget(self.txt_playlist_name, stretch=1)
+        pl_row.addWidget(self.cmb_playlist, stretch=1)
         pl_row.addWidget(self.btn_load_txt)
         layout.addLayout(pl_row)
 
@@ -1742,7 +1786,14 @@ class YouTubeBatchDownloadDialog(QDialog):
         return [line.strip() for line in raw.splitlines() if line.strip() and not line.strip().startswith("#")]
 
     def get_target_playlist(self) -> str:
-        return self.txt_playlist_name.text().strip()
+        raw = self.txt_playlist_name.text().strip()
+        if not raw or raw.startswith("➕") or raw.startswith("(Ninguna"):
+            return ""
+        if raw.startswith("☁️"):
+            return raw[2:].strip()
+        if raw.startswith("🎵"):
+            return raw[2:].strip()
+        return raw
 
     def should_keep_local(self) -> bool:
         return self.chk_local.isChecked()
